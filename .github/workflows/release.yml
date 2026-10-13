@@ -1,0 +1,98 @@
+name: release
+
+# Tag vX.Y.Z (matching Cargo.toml) to build packages and open a DRAFT release.
+# Nothing is published until you press "Publish release" in GitHub.
+# Run by hand (workflow_dispatch) to build the packages as workflow artifacts only.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned and checksummed: appimagetool 1.9.1.
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1
+  APPIMAGETOOL_SHA256_X86_64: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+  APPIMAGETOOL_SHA256_AARCH64: f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches the crate version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != Cargo.toml version v$v"; exit 1; }
+      - run: cargo test --workspace
+
+  package:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04 (glibc 2.35) keeps the glibc floor low so the binaries run on
+          # Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 9+.
+          - { runner: ubuntu-22.04,     arch: x86_64 }
+          - { runner: ubuntu-22.04-arm, arch: aarch64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools for rpm and AppImage
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm binutils
+
+      - name: Fetch appimagetool (pinned, checksummed)
+        run: |
+          if [ "${{ matrix.arch }}" = x86_64 ]; then sum=$APPIMAGETOOL_SHA256_X86_64; else sum=$APPIMAGETOOL_SHA256_AARCH64; fi
+          f=appimagetool-${{ matrix.arch }}.AppImage
+          curl -fsSL -o "$RUNNER_TEMP/$f" "$APPIMAGETOOL_URL/$f"
+          echo "$sum  $RUNNER_TEMP/$f" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/$f"
+          echo "APPIMAGETOOL=$RUNNER_TEMP/$f" >> "$GITHUB_ENV"
+
+      - name: Build packages
+        run: packaging/build.sh
+
+      - name: Smoke test the tarball install
+        run: |
+          sh packaging/install.sh --tarball dist/proxy-*-linux-${{ matrix.arch }}.tar.gz --prefix "$RUNNER_TEMP/prefix"
+          "$RUNNER_TEMP/prefix/bin/proxyd" --help
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+
+  release:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          pattern: packages-*
+          merge-multiple: true
+      - name: Checksums and draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd assets
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+          gh release create "${GITHUB_REF_NAME}" --repo "$GITHUB_REPOSITORY" \
+            --draft --generate-notes --title "${GITHUB_REF_NAME}" *
