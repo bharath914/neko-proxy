@@ -1,0 +1,401 @@
+<title>Open Proxy Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column, layered architecture diagram first, then reference sections.
+   Color roles: core (Rust) = rust orange, apps (CMP) = indigo, AI/MCP = teal. */
+:root{
+  --bg:#F4F5F2; --surface:#FFFFFF; --surface2:#ECEEEA; --fg:#14191C; --muted:#56626B; --line:#D3D9D5;
+  --core:#B8420F; --core-bg:#FBEBE2;
+  --app:#3A4FC4; --app-bg:#E8EBFA;
+  --ai:#0B7A6B; --ai-bg:#DDF2EE;
+  --code-bg:#101518; --code-fg:#DCE4E6;
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1113; --surface:#161B1E; --surface2:#1D2327; --fg:#E7EBEC; --muted:#93A1A9; --line:#2A3338;
+    --core:#F28F63; --core-bg:#2D1B12;
+    --app:#93A3F7; --app-bg:#1A2040;
+    --ai:#5FCDBA; --ai-bg:#12302A;
+    --code-bg:#0A0D0F; --code-fg:#DCE4E6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1113; --surface:#161B1E; --surface2:#1D2327; --fg:#E7EBEC; --muted:#93A1A9; --line:#2A3338;
+  --core:#F28F63; --core-bg:#2D1B12;
+  --app:#93A3F7; --app-bg:#1A2040;
+  --ai:#5FCDBA; --ai-bg:#12302A;
+  --code-bg:#0A0D0F; --code-fg:#DCE4E6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:400 15px/1.6 var(--f-body);padding-inline:16px;padding-block:32px 72px}
+.wrap{max-width:980px;margin-inline:auto;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5.5vw,48px);font-weight:700;letter-spacing:-.02em}
+h2{font-size:clamp(22px,3.2vw,28px);font-weight:700;letter-spacing:-.01em}
+h3{font-size:16px;font-weight:700}
+p{margin:0}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lead{font-size:17px;max-width:64ch;color:var(--fg)}
+.muted{color:var(--muted)}
+header{display:flex;flex-direction:column;gap:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:500 12px/1 var(--f-mono);padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+section{display:flex;flex-direction:column;gap:20px}
+section>p{max-width:68ch}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+p code,td code,li code{background:var(--surface2);padding:1px 5px;border-radius:3px}
+
+/* Architecture stack */
+.stack{display:flex;flex-direction:column;gap:0}
+.layer{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:12px}
+.layer-label{font:500 12px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.layer.apps .layer-label{color:var(--app)}
+.layer.shared .layer-label{color:var(--app)}
+.layer.core .layer-label{color:var(--core)}
+.layer.world .layer-label{color:var(--muted)}
+.layer.apps{border-color:var(--app)}
+.layer.core{border-color:var(--core)}
+.nodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px}
+.node{border-radius:6px;padding:10px 12px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.node b{font-weight:600;font-size:14px}
+.node small{color:var(--muted);font-size:12.5px;line-height:1.4}
+.node.app{background:var(--app-bg)}
+.node.core{background:var(--core-bg)}
+.node.ai{background:var(--ai-bg)}
+.node.plain{background:var(--surface2)}
+.wire{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 12px;font:400 12px/1.4 var(--f-mono);color:var(--muted);text-align:center;flex-wrap:wrap}
+.wire::before,.wire::after{content:"";flex:1 1 24px;min-width:24px;height:0;border-top:1px dashed var(--line)}
+.wire span{flex:0 1 auto}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+/* Lifecycle steps */
+ol.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:10px;counter-reset:s}
+ol.steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+ol.steps li::before{content:counter(s);font:500 12px/1 var(--f-mono);color:var(--core)}
+ol.steps b{font-weight:600}
+ol.steps span{color:var(--muted);font-size:13.5px;line-height:1.45}
+
+/* Tables */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 12px/1.2 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--surface2)}
+tr:last-child td{border-bottom:0}
+td.num,th.num{font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font:500 11px/1 var(--f-mono);padding:4px 6px;border-radius:3px;white-space:nowrap}
+.tag.read{background:var(--ai-bg);color:var(--ai)}
+.tag.write{background:var(--core-bg);color:var(--core)}
+
+/* Code */
+pre{margin:0;background:var(--code-bg);color:var(--code-fg);border-radius:6px;padding:14px 16px;overflow-x:auto;font:400 13px/1.55 var(--f-mono);tab-size:2}
+
+/* Two-col text blocks */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.card p{font-size:14px;color:var(--muted)}
+.decision{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;padding:14px 0;border-top:1px solid var(--line)}
+.decision:last-child{border-bottom:1px solid var(--line)}
+.decision b{font-family:var(--f-display);font-size:16px}
+.decision p{color:var(--muted);font-size:14px;max-width:72ch}
+a:focus-visible,button:focus-visible{outline:2px solid var(--app);outline-offset:2px}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">System design · v0.1 · 12 Oct 2026</span>
+  <h1>A fast, open-source traffic inspector that AI can drive</h1>
+  <p class="lead">One Rust core does all the work: proxying, TLS, storage, search, rules. Compose Multiplatform apps on desktop, Android and iOS are thin clients. Claude and any other MCP client connect to the same core.</p>
+  <div class="chips">
+    <span class="chip">Rust core</span>
+    <span class="chip">Compose Multiplatform apps</span>
+    <span class="chip">Built-in MCP server</span>
+    <span class="chip">MIT / Apache-2.0</span>
+  </div>
+</header>
+
+<section>
+  <h2>Architecture</h2>
+  <div class="stack" role="img" aria-label="Layered architecture: apps over shared Kotlin over a WebSocket API over the Rust core over network traffic">
+    <div class="layer apps">
+      <span class="layer-label">Apps · Compose Multiplatform</span>
+      <div class="nodes">
+        <div class="node app"><b>Desktop</b><small>macOS · Linux · Windows. Full inspector UI</small></div>
+        <div class="node app"><b>Android companion</b><small>QR pairing, cert guide, quick look, VPN capture</small></div>
+        <div class="node app"><b>iOS companion</b><small>QR pairing, profile install guide, quick look</small></div>
+        <div class="node ai"><b>AI clients</b><small>Claude Code, Claude Desktop, any MCP client</small></div>
+      </div>
+    </div>
+    <div class="layer shared" style="margin-top:10px">
+      <span class="layer-label">Shared Kotlin module</span>
+      <div class="nodes">
+        <div class="node app"><b>State &amp; view-models</b><small>Flow list paging, filters, selection</small></div>
+        <div class="node app"><b>API client</b><small>Ktor WebSocket + protobuf, all targets</small></div>
+        <div class="node app"><b>Design system</b><small>Tokens, flow table, body viewers</small></div>
+      </div>
+    </div>
+    <div class="wire"><span>WebSocket + protobuf · Unix socket / named pipe on desktop · LAN with token for phones</span></div>
+    <div class="layer core">
+      <span class="layer-label">Rust core · proxyd (also the headless CLI)</span>
+      <div class="nodes">
+        <div class="node core"><b>Listener</b><small>HTTP proxy, CONNECT, SOCKS5, transparent</small></div>
+        <div class="node core"><b>TLS &amp; CA</b><small>Per-install CA, cached leaf certs</small></div>
+        <div class="node core"><b>Pipeline</b><small>Parse → rules → forward → rules</small></div>
+        <div class="node core"><b>Rules</b><small>Mock, map, rewrite, breakpoint, throttle</small></div>
+        <div class="node core"><b>Store</b><small>SQLite metadata, blob bodies, search index</small></div>
+        <div class="node core"><b>API &amp; MCP</b><small>One event bus feeds every client</small></div>
+      </div>
+    </div>
+    <div class="wire"><span>proxied traffic</span></div>
+    <div class="layer world">
+      <span class="layer-label">Traffic</span>
+      <div class="nodes">
+        <div class="node plain"><b>Apps and browsers</b><small>Phones via Wi-Fi proxy or VPN, desktop apps via system proxy</small></div>
+        <div class="node plain"><b>Upstream servers</b><small>HTTP/1.1, HTTP/2, WebSocket. HTTP/3 later</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--core)"></i>Rust</span>
+    <span><i style="background:var(--app)"></i>Kotlin / Compose</span>
+    <span><i style="background:var(--ai)"></i>MCP</span>
+  </div>
+</section>
+
+<section>
+  <h2>Request lifecycle</h2>
+  <p>The data path never waits on the UI or the disk. Persistence and publishing happen after the bytes are already moving.</p>
+  <ol class="steps">
+    <li><b>Accept</b><span>Listener takes a CONNECT, SOCKS5 or transparent connection.</span></li>
+    <li><b>Intercept TLS</b><span>Mint a leaf cert for the host (cached) and terminate TLS. If the app pins, tunnel it and flag the flow.</span></li>
+    <li><b>Parse</b><span>hyper and h2 turn bytes into a Flow with an id.</span></li>
+    <li><b>Request rules</b><span>Breakpoint, map local or remote, mock, rewrite, in that order.</span></li>
+    <li><b>Forward</b><span>Connect upstream through the throttle. Record DNS, connect, TLS and first-byte timings.</span></li>
+    <li><b>Response rules</b><span>Same chain on the way back, including response breakpoints.</span></li>
+    <li><b>Persist</b><span>Async write: metadata to SQLite, body to the blob store.</span></li>
+    <li><b>Publish</b><span>Send a delta event to the desktop app, phones and MCP subscribers.</span></li>
+  </ol>
+</section>
+
+<section>
+  <h2>Rust core</h2>
+  <p>A Cargo workspace. Each crate has one job and no UI knowledge.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Crate</th><th>Responsibility</th><th>Built on</th></tr></thead>
+      <tbody>
+        <tr><td><code>net</code></td><td>Listeners, CONNECT, SOCKS5, transparent mode, HTTP/1.1, HTTP/2, WebSocket frames</td><td>tokio, hyper, h2</td></tr>
+        <tr><td><code>tls</code></td><td>CA generation, leaf cert cache, pinning detection</td><td>rustls, rcgen</td></tr>
+        <tr><td><code>flow</code></td><td>Flow model, state machine, interceptor pipeline</td><td>none</td></tr>
+        <tr><td><code>rules</code></td><td>Rule engine loaded from YAML or JSON, hot reload</td><td>serde</td></tr>
+        <tr><td><code>store</code></td><td>SQLite in WAL mode, content-addressed zstd blobs, full-text index</td><td>rusqlite, zstd</td></tr>
+        <tr><td><code>decode</code></td><td>gzip, br, zstd, JSON, form, protobuf, GraphQL, images</td><td>prost, flate2</td></tr>
+        <tr><td><code>api</code></td><td>WebSocket server, protobuf schema, subscriptions</td><td>axum, prost</td></tr>
+        <tr><td><code>mcp</code></td><td>MCP server, redaction, permission tiers</td><td>rmcp</td></tr>
+        <tr><td><code>cli</code></td><td>Headless run, HAR import and export, CI assertions</td><td>clap</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Data model</h2>
+  <p>Metadata is small and queryable. Bodies are big and loaded only when a flow is opened.</p>
+  <pre>flow(
+  id, started_at, duration_ms,
+  scheme, host, method, path, query,
+  status, protocol,          -- h1 | h2 | ws | sse
+  app,                       -- process or bundle id when known
+  req_size, res_size,
+  req_blob, res_blob,        -- sha256 of zstd body, stored on disk
+  timings_json,              -- dns, connect, tls, ttfb, download
+  flags,                     -- pinned, mocked, edited, breakpointed
+  tags
+)
+flow_fts(host, path, req_headers, res_headers, body_text)</pre>
+</section>
+
+<section>
+  <h2>Client API</h2>
+  <p>Every client uses the same messages. The desktop app gets no private shortcuts, so phones and AI tools can do everything it can.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Call</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>subscribe(filter)</code></td><td>Stream of flow deltas, batched every 16 ms for the UI</td></tr>
+        <tr><td><code>get_flow(id, parts)</code></td><td>Headers, body, timings, fetched lazily</td></tr>
+        <tr><td><code>search(query, range)</code></td><td>Flow ids, backed by the index</td></tr>
+        <tr><td><code>put_rule / remove_rule / list_rules</code></td><td>Manage mocks, rewrites, throttles</td></tr>
+        <tr><td><code>breakpoint.resume(id, edits)</code></td><td>Continue or abort a paused flow with edits</td></tr>
+        <tr><td><code>replay(id, edits)</code></td><td>Edit and resend a captured request</td></tr>
+        <tr><td><code>capture.start / stop / status</code></td><td>Control the proxy</td></tr>
+        <tr><td><code>export(kind, ids)</code></td><td>HAR, curl, OpenAPI, WireMock</td></tr>
+        <tr><td><code>pair.begin()</code></td><td>Returns the QR payload for a phone</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Phone pairing and certificate setup</h2>
+  <p>The QR payload carries everything the phone needs: <code>{ host, port, token, ca_sha256 }</code>. The companion app checks the CA fingerprint it later downloads against that value.</p>
+  <div class="cols">
+    <div class="card">
+      <h3>Android</h3>
+      <ul>
+        <li>Scan QR, then the app opens the Wi-Fi proxy screen with values to paste</li>
+        <li>Or turn on VPN mode: the app routes traffic through the core with no manual proxy</li>
+        <li>Guided CA install through system settings</li>
+        <li>Apps targeting API 24+ ignore user CAs. The wizard detects this and shows the <code>network_security_config</code> snippet for debug builds</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>iOS</h3>
+      <ul>
+        <li>Scan QR, then download the CA profile from the core over LAN</li>
+        <li>Walk through Settings → Profile Downloaded → Install</li>
+        <li>Then Certificate Trust Settings → enable full trust</li>
+        <li>App confirms trust by making a test HTTPS call through the proxy</li>
+      </ul>
+    </div>
+  </div>
+  <p class="muted">On-device capture (Android VpnService with the core embedded through JNI) comes after the LAN mode ships.</p>
+</section>
+
+<section>
+  <h2>MCP server</h2>
+  <p>Runs inside <code>proxyd</code>. Local only, token authenticated, read-only by default. Anything that changes state needs approval in the desktop app.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Tool</th><th>Tier</th><th>Returns or does</th></tr></thead>
+      <tbody>
+        <tr><td><code>list_flows</code> <code>search_flows</code></td><td><span class="tag read">read</span></td><td>Compact summaries, paged</td></tr>
+        <tr><td><code>get_flow</code></td><td><span class="tag read">read</span></td><td>Redacted headers and body, truncated with a size note</td></tr>
+        <tr><td><code>diff_flows</code></td><td><span class="tag read">read</span></td><td>Structured diff of two requests or responses</td></tr>
+        <tr><td><code>export_har</code></td><td><span class="tag read">read</span></td><td>Redacted HAR for chosen flows</td></tr>
+        <tr><td><code>create_mock</code></td><td><span class="tag write">approval</span></td><td>Adds a mock rule</td></tr>
+        <tr><td><code>add_breakpoint</code></td><td><span class="tag write">approval</span></td><td>Pauses matching flows</td></tr>
+        <tr><td><code>replay_request</code></td><td><span class="tag write">approval</span></td><td>Sends a modified request upstream</td></tr>
+        <tr><td><code>start_capture</code> <code>stop_capture</code></td><td><span class="tag write">approval</span></td><td>Controls the proxy</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="cols">
+    <div class="card">
+      <h3>Redaction</h3>
+      <p>Authorization, Cookie, Set-Cookie, API keys and token-shaped values are masked before data leaves the core. Revealing them is an explicit per-session opt-in.</p>
+    </div>
+    <div class="card">
+      <h3>Untrusted content</h3>
+      <p>Response bodies can contain text aimed at the model. Tool results label captured content as data, and write tools never act on instructions found inside it.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Compose Multiplatform apps</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Structure</h3>
+      <ul>
+        <li><code>shared</code>: commonMain with state, API client, UI components</li>
+        <li><code>desktopApp</code>: JVM target for macOS, Linux, Windows</li>
+        <li><code>androidApp</code> and <code>iosApp</code>: companion shells</li>
+        <li>The core runs as a sidecar process on desktop, started and supervised by the app</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Keeping the JVM desktop fast</h3>
+      <ul>
+        <li>No parsing, decoding or searching in Kotlin. The UI renders what the core sends</li>
+        <li>Lazy list over a paged window of rows, never the full list in memory</li>
+        <li>jpackage with a trimmed runtime and class-data sharing for startup</li>
+        <li>UI sits behind the API, so a native AppKit or GTK shell can replace it later without touching the core</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Performance targets</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Metric</th><th class="num">Target</th></tr></thead>
+      <tbody>
+        <tr><td>Core cold start</td><td class="num">under 50 ms</td></tr>
+        <tr><td>Desktop app to first paint</td><td class="num">under 1 s</td></tr>
+        <tr><td>Proxy overhead per request</td><td class="num">under 2 ms</td></tr>
+        <tr><td>Sustained capture</td><td class="num">5,000 requests/s on a laptop</td></tr>
+        <tr><td>Search across 100,000 flows</td><td class="num">under 100 ms</td></tr>
+        <tr><td>Core memory, idle</td><td class="num">under 40 MB</td></tr>
+        <tr><td>Desktop app memory, idle</td><td class="num">under 250 MB</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">These are goals to benchmark against from the first milestone, not measurements.</p>
+</section>
+
+<section>
+  <h2>Security</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Risk</th><th>Control</th></tr></thead>
+      <tbody>
+        <tr><td>CA private key theft</td><td>Unique CA per install, key held in the OS keychain, never exported or shared</td></tr>
+        <tr><td>Proxy exposed to the network</td><td>Binds to loopback by default. LAN binding only during pairing or when enabled</td></tr>
+        <tr><td>Unauthorized API clients</td><td>Token on every connection, rotated on re-pair</td></tr>
+        <tr><td>Secrets leaking to AI or exports</td><td>Redaction in the core, before MCP and before HAR export</td></tr>
+        <tr><td>Hostile traffic crashing the proxy</td><td>Rust, bounded buffers, per-flow size caps, fuzzed parsers</td></tr>
+        <tr><td>Stored captures</td><td>Local only, optional encryption at rest, one-click wipe</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Repository layout</h2>
+<pre>proxy/
+├─ core/                  Cargo workspace
+│  └─ crates/  net  tls  flow  rules  store  decode  api  mcp  cli
+├─ proto/                 api.proto, shared by Rust and Kotlin
+├─ app/                   Gradle, Kotlin Multiplatform
+│  ├─ shared/             commonMain: state, API client, UI
+│  ├─ desktopApp/
+│  ├─ androidApp/
+│  └─ iosApp/
+├─ rules-examples/        YAML mocks and rewrites
+└─ docs/</pre>
+</section>
+
+<section>
+  <h2>Decisions</h2>
+  <div>
+    <div class="decision"><b>Sidecar core, not in-process FFI</b><p>Crash isolation, and the desktop app, phones, CLI and MCP all use one API. No JNI or cinterop layer to maintain for the main path.</p></div>
+    <div class="decision"><b>WebSocket with protobuf, not gRPC</b><p>Ktor's WebSocket client runs on every Compose target. gRPC on Kotlin/Native iOS is the weaker option.</p></div>
+    <div class="decision"><b>SQLite plus blob files</b><p>Queryable metadata with a full-text index, and large bodies kept out of the database so scrolling and search stay fast.</p></div>
+    <div class="decision"><b>Rules as files</b><p>YAML or JSON rules live in git, work in CI, and are easy for AI to write and review.</p></div>
+    <div class="decision"><b>Read-only AI by default</b><p>Inspecting traffic is safe. Changing it needs a human click.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Build order</h2>
+  <ol class="steps">
+    <li><b>Capture core</b><span>HTTP and HTTPS proxy, TLS, store, CLI, HAR export.</span></li>
+    <li><b>Desktop app</b><span>Flow table, detail viewers, search, filters on macOS first.</span></li>
+    <li><b>Rules and MCP</b><span>Mock, map, breakpoint, throttle. MCP read tools, then approved writes.</span></li>
+    <li><b>Phone pairing</b><span>QR flow, Android and iOS companions, cert wizards.</span></li>
+    <li><b>Reach</b><span>Linux and Windows packaging, HTTP/3, on-device Android capture, scripting.</span></li>
+  </ol>
+</section>
+
+</div>

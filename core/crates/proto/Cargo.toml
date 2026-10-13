@@ -1,0 +1,14 @@
+[package]
+name = "proxy-proto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Wire types generated from proto/api.proto"
+build = "build.rs"
+
+[dependencies]
+prost.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+protoc-bin-vendored.workspace = true

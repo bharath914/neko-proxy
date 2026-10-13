@@ -1,0 +1,25 @@
+[package]
+name = "proxy-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Client API: WebSocket + protobuf over a Unix domain socket"
+
+[dependencies]
+flow.workspace = true
+store.workspace = true
+decode.workspace = true
+rules.workspace = true
+prost.workspace = true
+proto.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+time.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+bytes.workspace = true

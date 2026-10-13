@@ -1,0 +1,86 @@
+[workspace]
+resolver = "2"
+members = [
+  "core/crates/flow",
+  "core/crates/tls",
+  "core/crates/net",
+  "core/crates/store",
+  "core/crates/decode",
+  "core/crates/rules",
+  "core/crates/proto",
+  "core/crates/api",
+  "core/crates/cli",
+  "desktop",
+]
+default-members = [
+  "core/crates/flow",
+  "core/crates/tls",
+  "core/crates/net",
+  "core/crates/store",
+  "core/crates/decode",
+  "core/crates/rules",
+  "core/crates/proto",
+  "core/crates/api",
+  "core/crates/cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.80"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+bytes = "1"
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "http2", "client", "server"] }
+hyper-util = { version = "0.1", features = ["tokio", "http1", "http2", "client", "client-legacy", "server", "server-auto"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros", "signal", "fs", "process"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "logging", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls-native-certs = "0.8"
+rcgen = { version = "0.14", default-features = false, features = ["pem", "ring", "x509-parser"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+zstd = "0.14"
+flate2 = "1"
+brotli = "9"
+blake3 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+prost = "0.14"
+prost-build = "0.14"
+protoc-bin-vendored = "3"
+tokio-tungstenite = "0.30"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+tower-service = "0.3"
+percent-encoding = "2"
+base64 = "0.23"
+libc = "0.2"
+tempfile = "3"
+sha2 = "0.10"
+time = { version = "0.3", features = ["formatting"] }
+
+flow = { path = "core/crates/flow" }
+tls = { path = "core/crates/tls", package = "proxy-tls" }
+net = { path = "core/crates/net", package = "proxy-net" }
+store = { path = "core/crates/store", package = "proxy-store" }
+decode = { path = "core/crates/decode", package = "proxy-decode" }
+rules = { path = "core/crates/rules", package = "proxy-rules" }
+api = { path = "core/crates/api", package = "proxy-api" }
+proto = { path = "core/crates/proto", package = "proxy-proto" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 1

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Proxy
+GenericName=HTTP debugging proxy
+Comment=Inspect HTTP and HTTPS traffic from apps and browsers
+Exec=proxy
+Icon=dev.proxy.Proxy
+Terminal=false
+Categories=Development;Network;Debugger;
+Keywords=proxy;http;https;debug;inspect;charles;
+StartupWMClass=dev.proxy.Proxy

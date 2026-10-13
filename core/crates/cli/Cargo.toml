@@ -1,0 +1,27 @@
+[package]
+name = "proxy-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "proxyd: the headless capture core"
+
+[[bin]]
+name = "proxyd"
+path = "src/main.rs"
+
+[dependencies]
+flow.workspace = true
+tls.workspace = true
+net.workspace = true
+store.workspace = true
+decode.workspace = true
+rules.workspace = true
+api.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde_json.workspace = true
+time.workspace = true
+libc.workspace = true

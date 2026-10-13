@@ -1,0 +1,27 @@
+[package]
+name = "proxy-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Listener, CONNECT, TLS interception, HTTP/1.1 and HTTP/2 forwarding"
+
+[dependencies]
+flow.workspace = true
+tls.workspace = true
+bytes.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+rustls.workspace = true
+rustls-native-certs.workspace = true
+tower-service.workspace = true
+tracing.workspace = true
+webpki-roots = "1"
+
+[dev-dependencies]
+rules.workspace = true
+rcgen.workspace = true
+tempfile.workspace = true

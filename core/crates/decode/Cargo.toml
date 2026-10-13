@@ -1,0 +1,17 @@
+[package]
+name = "proxy-decode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Body decoding, classification, JSON outlines, curl and redaction"
+
+[dependencies]
+flow.workspace = true
+flate2.workspace = true
+brotli.workspace = true
+zstd.workspace = true
+serde_json.workspace = true
+percent-encoding.workspace = true
+
+[dev-dependencies]
+bytes.workspace = true

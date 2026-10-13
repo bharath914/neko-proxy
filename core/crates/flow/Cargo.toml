@@ -1,0 +1,10 @@
+[package]
+name = "flow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Flow model, lifecycle events and the interceptor pipeline"
+
+[dependencies]
+bytes.workspace = true
+http.workspace = true

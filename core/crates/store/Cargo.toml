@@ -1,0 +1,22 @@
+[package]
+name = "proxy-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SQLite WAL metadata, content-addressed zstd blobs, FTS index and HAR export"
+
+[dependencies]
+flow.workspace = true
+decode.workspace = true
+rusqlite.workspace = true
+zstd.workspace = true
+blake3.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+time.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+bytes.workspace = true

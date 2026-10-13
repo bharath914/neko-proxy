@@ -1,0 +1,435 @@
+syntax = "proto3";
+
+// Client API for proxyd. One WebSocket connection (binary frames) over a Unix
+// domain socket. Every frame is one ClientMessage (client -> core) or one
+// ServerMessage (core -> client). A response echoes the request id. Pushed
+// events (FlowBatch, Resync) carry id = 0.
+//
+// Phase 1 surface: subscribe, get_flow, search, capture.start/stop/status,
+// export(har), clear, plus status and ca_info for the app shell.
+// Also: hosts (the host list), and the person's SSL proxying and Map Local
+// rules (rules, set_ssl, ssl_host, put_map_local, remove_rule, unpin).
+package proxy.api.v1;
+
+option java_package = "dev.proxy.api";
+
+// ---------------------------------------------------------------- envelope
+
+message ClientMessage {
+  uint64 id = 1;
+  oneof body {
+    SubscribeRequest subscribe = 10;
+    UnsubscribeRequest unsubscribe = 11;
+    GetFlowRequest get_flow = 12;
+    SearchRequest search = 13;
+    CaptureRequest capture = 14;
+    ExportRequest export = 15;
+    ClearRequest clear = 16;
+    StatusRequest status = 17;
+    CaInfoRequest ca_info = 18;
+    HostsRequest hosts = 19;
+    RulesRequest rules = 20;
+    SetSslRequest set_ssl = 21;
+    SslHostRequest ssl_host = 22;
+    PutMapLocalRequest put_map_local = 23;
+    RemoveRuleRequest remove_rule = 24;
+    UnpinRequest unpin = 25;
+  }
+}
+
+message ServerMessage {
+  uint64 id = 1;
+  oneof body {
+    ErrorResponse error = 9;
+    SubscribeResponse subscribed = 10;
+    UnsubscribeResponse unsubscribed = 11;
+    FlowDetail flow = 12;
+    SearchResponse search = 13;
+    CaptureStatus capture = 14;
+    ExportResponse export = 15;
+    ClearResponse cleared = 16;
+    StatusResponse status = 17;
+    CaInfo ca_info = 18;
+    HostsResponse hosts = 19;
+    RulesResponse rules = 20;
+    FlowBatch batch = 30;
+    Resync resync = 31;
+  }
+}
+
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+}
+
+// ---------------------------------------------------------------- filters
+
+message Filter {
+  enum Kind {
+    ALL = 0;
+    ERRORS = 1;
+    SLOW = 2;
+    PINNED = 3;
+  }
+  Kind kind = 1;
+  // Free text. Plain words match host, path, headers and body text.
+  // Operators: method:POST status:404 status:5xx host:example.com app:curl
+  string text = 2;
+  // Exact host names (case-insensitive); empty means every host. This is how
+  // the app focuses on a host: unlike `host:` it never matches a longer name.
+  repeated string hosts = 3;
+}
+
+// ---------------------------------------------------------------- flows
+
+enum FlowState {
+  PENDING = 0;    // request seen, no response headers yet
+  RECEIVING = 1;  // response headers in, body still streaming
+  COMPLETE = 2;
+  FAILED = 3;
+}
+
+// FlowSummary.flags bit values.
+//   1 pinned        client rejected the minted certificate; host is tunneled
+//   2 tunnel        CONNECT tunnel, not decrypted
+//   4 error         transport or upstream failure
+//   8 req_truncated request body hit the capture cap
+//  16 res_truncated response body hit the capture cap
+//  32 websocket     upgraded to WebSocket (frames are not captured yet)
+//  64 mapped        answered from a Map Local rule, not by upstream
+// 128 ssl_bypassed  tunneled untouched because the host is outside the SSL
+//                   proxying list (or in its exclude list)
+message FlowSummary {
+  uint64 id = 1;
+  int64 started_at_ms = 2;
+  double duration_ms = 3;
+  string scheme = 4;
+  string host = 5;
+  uint32 port = 6;
+  string method = 7;
+  string path = 8;  // path and query
+  uint32 status = 9;
+  string protocol = 10;  // "HTTP/1.1", "h2", "tunnel"
+  string app = 11;
+  uint64 req_size = 12;
+  uint64 res_size = 13;
+  FlowState state = 14;
+  uint32 flags = 15;
+  string content_type = 16;  // short form of the response type, e.g. "json"
+  string error = 17;
+}
+
+message Header {
+  string name = 1;
+  string value = 2;
+}
+
+message Timings {
+  double dns_ms = 1;
+  double connect_ms = 2;
+  double tls_ms = 3;
+  double send_ms = 4;
+  double wait_ms = 5;  // time to first byte
+  double receive_ms = 6;
+  double total_ms = 7;
+  bool reused_connection = 8;
+}
+
+enum BodyKind {
+  EMPTY = 0;
+  JSON = 1;
+  TEXT = 2;
+  FORM = 3;
+  IMAGE = 4;
+  BINARY = 5;
+  HTML = 6;
+}
+
+enum JsonTokenKind {
+  PUNCT = 0;
+  KEY = 1;
+  STRING = 2;
+  NUMBER = 3;
+  LITERAL = 4;  // true, false, null
+}
+
+message JsonToken {
+  JsonTokenKind kind = 1;
+  string text = 2;
+}
+
+// One printed line of a JSON document. Containers that span lines carry the
+// index of their closing line in fold_end, so the UI can collapse them
+// without parsing.
+message JsonLine {
+  uint32 depth = 1;
+  repeated JsonToken tokens = 2;
+  int32 fold_end = 3;  // -1 when the line is not a foldable opener
+}
+
+message FormField {
+  string name = 1;
+  string value = 2;
+}
+
+enum HtmlBlockKind {
+  HTML_PARAGRAPH = 0;
+  HTML_HEADING = 1;
+  HTML_LIST_ITEM = 2;
+  HTML_QUOTE = 3;
+  HTML_CODE = 4;
+  HTML_RULE = 5;
+  HTML_IMAGE = 6;
+}
+
+// Inline run in a preview block. style bits: 1 bold, 2 italic, 4 code, 8 link.
+// For images, text is the alt text and href the source.
+message HtmlSpan {
+  string text = 1;
+  uint32 style = 2;
+  string href = 3;
+}
+
+// A block of a simplified page preview. Scripts, styles and remote resources
+// are never part of it.
+message HtmlBlock {
+  HtmlBlockKind kind = 1;
+  uint32 level = 2;    // heading 1-6, list depth from 0, quote depth
+  string marker = 3;   // list bullet or number
+  repeated HtmlSpan spans = 4;
+}
+
+enum SourceTokenKind {
+  SRC_PLAIN = 0;
+  SRC_TAG = 1;
+  SRC_ATTR = 2;
+  SRC_VALUE = 3;
+  SRC_COMMENT = 4;
+  SRC_PUNCT = 5;
+  SRC_ENTITY = 6;
+}
+
+message SourceToken {
+  SourceTokenKind kind = 1;
+  string text = 2;
+}
+
+// One display line of highlighted markup. Long minified lines are broken at
+// tag boundaries; `BodyView.text` keeps the original bytes.
+message SourceLine {
+  repeated SourceToken tokens = 1;
+}
+
+message BodyView {
+  BodyKind kind = 1;
+  string content_type = 2;
+  string content_encoding = 3;
+  uint64 wire_size = 4;
+  uint64 decoded_size = 5;
+  bool capture_truncated = 6;  // body was larger than the capture cap
+  bool preview_truncated = 7;  // text or json cut for display
+  string text = 8;             // utf-8 text (pretty printed for JSON)
+  repeated JsonLine json = 9;
+  repeated FormField form = 10;
+  bytes image = 11;            // raw bytes for images up to 4 MiB
+  string note = 12;            // decode problems, binary description
+  repeated HtmlBlock html = 13;     // preview blocks for HTML
+  string html_title = 14;
+  repeated SourceLine source = 15;  // highlighted markup lines for HTML
+}
+
+// parts bit mask for GetFlowRequest.
+//   1 overview      summary, headers, timings, url, curl
+//   2 request body
+//   4 response body
+message GetFlowRequest {
+  uint64 id = 1;
+  uint32 parts = 2;
+}
+
+message FlowDetail {
+  FlowSummary summary = 1;
+  string url = 2;
+  repeated Header request_headers = 3;
+  repeated Header response_headers = 4;
+  Timings timings = 5;
+  string curl = 6;
+  BodyView request_body = 7;
+  BodyView response_body = 8;
+}
+
+// ---------------------------------------------------------------- subscribe
+
+message SubscribeRequest {
+  Filter filter = 1;
+}
+message SubscribeResponse {
+  uint64 total = 1;  // flows currently stored
+}
+message UnsubscribeRequest {}
+message UnsubscribeResponse {}
+
+// Batched at 16 ms. Each flow appears at most once per batch (latest state).
+message FlowBatch {
+  repeated FlowSummary upserts = 1;
+  bool cleared = 2;   // the store was cleared; drop everything
+  uint64 total = 3;   // total stored flows after this batch
+}
+
+// The subscriber fell behind and events were dropped. Re-run search.
+message Resync {}
+
+// ---------------------------------------------------------------- search
+
+message SearchRequest {
+  Filter filter = 1;
+  int64 since_ms = 2;  // 0 = no lower bound
+  int64 until_ms = 3;  // 0 = no upper bound
+  uint32 offset = 4;
+  uint32 limit = 5;    // 0 = 200, capped at 1000
+}
+message SearchResponse {
+  uint64 total = 1;
+  uint32 offset = 2;
+  repeated FlowSummary items = 3;
+}
+
+// ---------------------------------------------------------------- capture
+
+message CaptureRequest {
+  enum Action {
+    STATUS = 0;
+    START = 1;
+    STOP = 2;
+  }
+  Action action = 1;
+}
+message CaptureStatus {
+  bool recording = 1;
+  uint64 flows = 2;
+}
+
+// ---------------------------------------------------------------- export
+
+message ExportRequest {
+  string kind = 1;            // "har"
+  repeated uint64 ids = 2;    // empty = everything matching filter
+  Filter filter = 3;
+  bool redact = 4;            // strip Authorization, Cookie, tokens
+}
+message ExportResponse {
+  bytes data = 1;
+  string filename = 2;
+  uint32 count = 3;
+}
+
+message ClearRequest {}
+message ClearResponse {
+  uint64 removed = 1;
+}
+
+// ---------------------------------------------------------------- status
+
+message StatusRequest {}
+message StatusResponse {
+  string version = 1;
+  string listen = 2;
+  string data_dir = 3;
+  uint64 uptime_ms = 4;
+  uint64 flows = 5;
+  bool recording = 6;
+  repeated string pinned_hosts = 7;
+  bool insecure_upstream = 8;
+  uint32 core_pid = 9;
+}
+
+message CaInfoRequest {}
+message CaInfo {
+  string cert_path = 1;
+  string sha256 = 2;
+  string subject = 3;
+  string not_after = 4;
+  string pem = 5;
+  string key_storage = 6;  // "keyring" or "file"
+  string spki_sha256 = 7;  // base64 SHA-256 of the CA public key, for browser flags
+}
+
+// ---------------------------------------------------------------- hosts
+
+message HostsRequest {
+  uint32 limit = 1;  // 0 = 500, capped at 2000
+}
+
+// One host with stored traffic, newest activity first in the response.
+message HostSummary {
+  string host = 1;
+  uint64 flows = 2;
+  uint64 errors = 3;
+  int64 last_started_ms = 4;
+  bool pinned = 5;       // the client rejected our certificate; tunneled
+  bool decrypted = 6;    // under the current SSL proxying rules, this host is decrypted
+  bool tunnel_only = 7;  // every stored flow is an untouched tunnel
+  uint64 mapped = 8;     // flows answered by a Map Local rule
+}
+
+message HostsResponse {
+  repeated HostSummary hosts = 1;
+}
+
+// ---------------------------------------------------------------- rules
+
+enum SslMode {
+  SSL_ALL = 0;     // decrypt every host except the excluded ones
+  SSL_LISTED = 1;  // decrypt only the listed hosts
+}
+
+// Host patterns: `example.com`, `*.example.com`, `api.example.com:8443`.
+message SslSettings {
+  SslMode mode = 1;
+  repeated string hosts = 2;
+  repeated string exclude = 3;
+}
+
+// Answer requests for one URL from a local file.
+message MapLocalRule {
+  string id = 1;            // empty on create; the core assigns one
+  bool enabled = 2;
+  string host = 3;          // pattern
+  uint32 port = 4;          // 0 = any
+  string path = 5;          // exact, or a prefix when it ends with *
+  string query = 6;         // exact query string; empty = any
+  string file = 7;          // absolute path, read on every request
+  uint32 status = 8;        // 0 = 200
+  string content_type = 9;  // empty = from the file extension
+}
+
+message RulesRequest {}
+message RulesResponse {
+  SslSettings ssl = 1;
+  repeated MapLocalRule map_local = 2;
+  repeated string pinned_hosts = 3;
+}
+
+message SetSslRequest {
+  SslSettings ssl = 1;
+}
+
+// Decrypt or tunnel one host without touching the rest. Enabling also gives a
+// pinned host another chance.
+message SslHostRequest {
+  string host = 1;
+  bool enable = 2;
+}
+
+message PutMapLocalRequest {
+  MapLocalRule rule = 1;
+}
+
+message RemoveRuleRequest {
+  string id = 1;
+}
+
+// Forget that a host rejected our certificate. Empty host = all hosts.
+message UnpinRequest {
+  string host = 1;
+}
