@@ -2,6 +2,7 @@
 //! blocks so they share this state without ceremony.
 
 use crate::backend::{Backend, ConnState, Event, Tag};
+use crate::edit::{BpEdit, RuleForm};
 use crate::model::{FlowTable, PAGE};
 use crate::platform::{self, Browser, Family, Prefs, SystemAppearance, TrustPlan};
 use crate::theme::{Palette, Scheme, Style};
@@ -15,6 +16,9 @@ use std::sync::Arc;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Section {
     Inspector,
+    /// Messages held at breakpoints.
+    Breakpoints,
+    Rules,
     Settings,
 }
 
@@ -50,6 +54,14 @@ pub enum Pending {
     Hosts,
     /// Any rule change or fetch: the core answers with the full rule state.
     Rules,
+    /// Start of the pushed notices; the core answers with what is held now.
+    Watch,
+    /// Resume or abort a held message; the core answers with what is left.
+    Resume,
+    Approvals,
+    Mcp,
+    /// A replay was sent; the answer names the new flow.
+    Replay,
 }
 
 pub struct Toast {
@@ -123,6 +135,18 @@ pub struct App {
     pub hosts_next_fetch: f64,
     /// The collapsed "other hosts" group is open.
     pub others_open: bool,
+
+    // breakpoints, approvals, AI access
+    /// Messages held at breakpoints right now, oldest first.
+    pub paused: Vec<pb::PausedFlow>,
+    pub bp_selected: Option<u64>,
+    pub bp_edit: Option<BpEdit>,
+    /// Changes an AI client is waiting on.
+    pub approvals: Vec<pb::Approval>,
+    pub mcp: Option<pb::McpInfo>,
+    pub show_token: bool,
+    /// Rule editor: `None` when closed.
+    pub rule_form: Option<RuleForm>,
 
     // rules
     pub rules: pb::RulesResponse,
@@ -205,6 +229,13 @@ impl App {
             hosts_stale: true,
             hosts_next_fetch: 0.0,
             others_open: false,
+            paused: Vec::new(),
+            bp_selected: None,
+            bp_edit: None,
+            approvals: Vec::new(),
+            mcp: None,
+            show_token: false,
+            rule_form: None,
             rules: pb::RulesResponse::default(),
             proxy_tab: 0,
             ssl_input: String::new(),
@@ -366,6 +397,103 @@ impl App {
         );
     }
 
+    pub fn put_rule(&mut self, rule: pb::Rule) {
+        self.send(
+            Req::PutRule(pb::PutRuleRequest { rule: Some(rule) }),
+            Pending::Rules,
+        );
+    }
+
+    pub fn set_rule_enabled(&mut self, id: &str, enabled: bool) {
+        self.send(
+            Req::SetRuleEnabled(pb::SetRuleEnabledRequest {
+                id: id.to_string(),
+                enabled,
+            }),
+            Pending::Rules,
+        );
+    }
+
+    /// Let a held message go, with the edits made in the editor.
+    pub fn resume_held(&mut self, flow_id: u64) {
+        let Some(orig) = self.paused.iter().find(|p| p.flow_id == flow_id).cloned() else {
+            return;
+        };
+        let req = match &self.bp_edit {
+            Some(e) if e.flow_id == flow_id => e.resume(&orig),
+            _ => pb::ResumeRequest {
+                flow_id,
+                ..Default::default()
+            },
+        };
+        self.send(Req::Resume(req), Pending::Resume);
+        self.paused.retain(|p| p.flow_id != flow_id);
+        self.close_editor_for(flow_id);
+    }
+
+    pub fn abort_held(&mut self, flow_id: u64) {
+        self.send(
+            Req::Resume(pb::ResumeRequest {
+                flow_id,
+                abort: true,
+                abort_reason: "stopped in the Proxy app".into(),
+                ..Default::default()
+            }),
+            Pending::Resume,
+        );
+        self.paused.retain(|p| p.flow_id != flow_id);
+        self.close_editor_for(flow_id);
+    }
+
+    fn close_editor_for(&mut self, flow_id: u64) {
+        if self.bp_selected == Some(flow_id) {
+            self.bp_selected = self.paused.first().map(|p| p.flow_id);
+            self.bp_edit = None;
+        }
+    }
+
+    /// Select a held message and load it into the editor.
+    pub fn select_held(&mut self, flow_id: Option<u64>) {
+        self.bp_selected = flow_id;
+        self.bp_edit = flow_id
+            .and_then(|id| self.paused.iter().find(|p| p.flow_id == id))
+            .map(BpEdit::new);
+    }
+
+    pub fn decide_approval(&mut self, id: &str, allow: bool) {
+        self.send(
+            Req::DecideApproval(pb::DecideApprovalRequest {
+                id: id.to_string(),
+                allow,
+            }),
+            Pending::Approvals,
+        );
+        self.approvals.retain(|a| a.id != id);
+    }
+
+    pub fn set_mcp_writes(&mut self, writes: pb::McpWrites) {
+        if let Some(m) = &mut self.mcp {
+            m.writes = writes as i32;
+        }
+        self.send(
+            Req::SetMcpWrites(pb::SetMcpWritesRequest {
+                writes: writes as i32,
+            }),
+            Pending::Mcp,
+        );
+    }
+
+    /// Send a captured request again.
+    pub fn replay(&mut self, id: u64) {
+        self.send(
+            Req::Replay(pb::ReplayRequest {
+                id,
+                ..Default::default()
+            }),
+            Pending::Replay,
+        );
+    }
+
     pub fn remove_rule(&mut self, id: &str) {
         self.send(
             Req::RemoveRule(pb::RemoveRuleRequest { id: id.to_string() }),
@@ -520,6 +648,9 @@ impl App {
         self.send(Req::Status(pb::StatusRequest {}), Pending::Status);
         self.send(Req::CaInfo(pb::CaInfoRequest {}), Pending::CaInfo);
         self.fetch_rules();
+        self.send(Req::Watch(pb::WatchRequest {}), Pending::Watch);
+        self.send(Req::Approvals(pb::ListApprovalsRequest {}), Pending::Approvals);
+        self.send(Req::McpInfo(pb::McpInfoRequest {}), Pending::Mcp);
         self.hosts_stale = true;
         self.send(
             Req::Capture(pb::CaptureRequest {
@@ -573,6 +704,17 @@ impl App {
                     let _ = before;
                 }
                 Event::Resync => self.table.invalidate(),
+                Event::Pause(n) => self.on_pause_notice(ctx, n),
+                Event::Approval(n) => {
+                    if let Some(a) = n.requested {
+                        if !self.approvals.iter().any(|x| x.id == a.id) {
+                            self.approvals.push(a);
+                        }
+                    }
+                    if !n.decided_id.is_empty() {
+                        self.approvals.retain(|a| a.id != n.decided_id);
+                    }
+                }
                 Event::Response(tag, body) => self.on_response(ctx, tag, body),
             }
         }
@@ -616,6 +758,30 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    fn on_pause_notice(&mut self, ctx: &Context, n: pb::PauseNotice) {
+        if let Some(p) = n.paused {
+            let first = self.paused.is_empty();
+            let id = p.flow_id;
+            let label = format!(
+                "{} {}{} is held",
+                p.method,
+                p.summary.as_ref().map(|s| s.host.as_str()).unwrap_or(""),
+                p.path
+            );
+            self.paused.retain(|x| x.flow_id != id);
+            self.paused.push(p);
+            if first || self.bp_selected.is_none() {
+                self.select_held(Some(id));
+            }
+            self.toast(ctx, label, true);
+        }
+        if n.released_flow_id != 0 {
+            let id = n.released_flow_id;
+            self.paused.retain(|p| p.flow_id != id);
+            self.close_editor_for(id);
         }
     }
 
@@ -673,6 +839,26 @@ impl App {
                 self.rules = r;
                 // Whether a host is decrypted changed with the rules.
                 self.hosts_stale = true;
+            }
+            (Pending::Watch, Res::Paused(l)) | (Pending::Resume, Res::Paused(l)) => {
+                self.paused = l.items;
+                let keep = self
+                    .bp_selected
+                    .filter(|id| self.paused.iter().any(|p| p.flow_id == *id));
+                if keep.is_none() {
+                    let first = self.paused.first().map(|p| p.flow_id);
+                    self.select_held(first);
+                }
+            }
+            (Pending::Approvals, Res::Approvals(a)) => self.approvals = a.pending,
+            (Pending::Mcp, Res::McpInfo(m)) => self.mcp = Some(m),
+            (Pending::Replay, Res::Replay(r)) => {
+                self.toast(
+                    ctx,
+                    format!("Sent again as flow {} ({})", r.flow_id, r.status),
+                    true,
+                );
+                self.follow = true;
             }
             (Pending::Status, Res::Status(s)) => {
                 self.recording = s.recording;

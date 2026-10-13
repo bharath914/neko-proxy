@@ -31,6 +31,10 @@ pub enum Event {
     Response(Tag, Res),
     Batch(pb::FlowBatch),
     Resync,
+    /// A message was held at a breakpoint, or released.
+    Pause(pb::PauseNotice),
+    /// An AI client asked for approval, or a request was answered.
+    Approval(pb::ApprovalNotice),
 }
 
 pub trait Backend: Send {
@@ -238,6 +242,8 @@ async fn session(
                     (_, None) => continue,
                     (0, Some(Res::Batch(b))) => Event::Batch(b),
                     (0, Some(Res::Resync(_))) => Event::Resync,
+                    (0, Some(Res::PauseNotice(n))) => Event::Pause(n),
+                    (0, Some(Res::ApprovalNotice(n))) => Event::Approval(n),
                     (id, Some(body)) => Event::Response(id, body),
                 };
                 let _ = ev.send(event);
@@ -266,6 +272,10 @@ struct DemoState {
     map_local: Vec<pb::MapLocalRule>,
     pinned: Vec<String>,
     next_rule: u64,
+    rules: Vec<pb::Rule>,
+    paused: Vec<pb::PausedFlow>,
+    approvals: Vec<pb::Approval>,
+    mcp_writes: i32,
 }
 
 impl DemoBackend {
@@ -283,6 +293,10 @@ impl DemoBackend {
                 map_local: Vec::new(),
                 pinned: vec!["pay.example.com".into()],
                 next_rule: 1,
+                rules: demo_rules_v2(),
+                paused: demo_paused(),
+                approvals: demo_approvals(),
+                mcp_writes: 0,
             }),
             next: AtomicU64::new(1),
         }
@@ -912,6 +926,109 @@ fn demo_rules(s: &DemoState) -> Res {
         ssl: Some(s.ssl.clone()),
         map_local: s.map_local.clone(),
         pinned_hosts: s.pinned.clone(),
+        rules: s.rules.clone(),
+        mcp_writes: s.mcp_writes,
+    })
+}
+
+fn demo_rules_v2() -> Vec<pb::Rule> {
+    vec![
+        pb::Rule {
+            id: "r10".into(),
+            name: "Checkout is down".into(),
+            enabled: true,
+            matcher: Some(pb::RuleMatch {
+                host: "api.example.com".into(),
+                path: "/v1/checkout".into(),
+                method: "POST".into(),
+                ..Default::default()
+            }),
+            action: Some(pb::rule::Action::Mock(pb::MockAction {
+                status: 503,
+                headers: vec![hdr("retry-after", "30")],
+                body: "{\"error\":\"unavailable\"}".into(),
+                delay_ms: 300,
+            })),
+        },
+        pb::Rule {
+            id: "r11".into(),
+            name: "Hit staging".into(),
+            enabled: false,
+            matcher: Some(pb::RuleMatch {
+                host: "api.example.com".into(),
+                ..Default::default()
+            }),
+            action: Some(pb::rule::Action::MapRemote(pb::MapRemoteAction {
+                scheme: "https".into(),
+                host: "staging.example.com".into(),
+                port: 0,
+            })),
+        },
+        pb::Rule {
+            id: "r12".into(),
+            name: "Pause on login".into(),
+            enabled: true,
+            matcher: Some(pb::RuleMatch {
+                host: "api.example.com".into(),
+                path: "/v1/login".into(),
+                ..Default::default()
+            }),
+            action: Some(pb::rule::Action::Breakpoint(pb::BreakpointAction {
+                phase: pb::breakpoint_action::Phase::Request as i32,
+                timeout_s: 0,
+            })),
+        },
+    ]
+}
+
+fn demo_paused() -> Vec<pb::PausedFlow> {
+    vec![pb::PausedFlow {
+        flow_id: 9001,
+        rule_id: "r12".into(),
+        phase: pb::MessagePhase::PhaseRequest as i32,
+        summary: Some(pb::FlowSummary {
+            id: 9001,
+            scheme: "https".into(),
+            host: "api.example.com".into(),
+            port: 443,
+            method: "POST".into(),
+            path: "/v1/login".into(),
+            app: "firefox".into(),
+            state: pb::FlowState::Pending as i32,
+            flags: 512,
+            ..Default::default()
+        }),
+        method: "POST".into(),
+        path: "/v1/login".into(),
+        status: 0,
+        headers: vec![
+            hdr("content-type", "application/json"),
+            hdr("accept", "application/json"),
+            hdr("user-agent", "Mozilla/5.0"),
+        ],
+        body: b"{\"email\":\"ann@example.com\",\"password\":\"correct horse\"}".to_vec(),
+        since_ms: 0,
+        timeout_s: 60,
+    }]
+}
+
+fn demo_approvals() -> Vec<pb::Approval> {
+    vec![pb::Approval {
+        id: "a1".into(),
+        tool: "create_mock".into(),
+        title: "Mock 503 for POST api.example.com/v1/checkout".into(),
+        detail: "{\n  \"host\": \"api.example.com\",\n  \"method\": \"POST\",\n  \"path\": \"/v1/checkout\",\n  \"status\": 503,\n  \"json\": { \"error\": \"unavailable\" }\n}".into(),
+        requested_ms: 0,
+    }]
+}
+
+fn demo_mcp(s: &DemoState) -> Res {
+    Res::McpInfo(pb::McpInfo {
+        enabled: true,
+        url: "http://127.0.0.1:8898/mcp".into(),
+        token: "3f1a9c0b7d2e4a68b5c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9".into(),
+        command: "claude mcp add --transport http proxy http://127.0.0.1:8898/mcp --header \"Authorization: Bearer 3f1a9c0b7d2e4a68b5c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9\"".into(),
+        writes: s.mcp_writes,
     })
 }
 
@@ -1079,6 +1196,55 @@ impl Backend for DemoBackend {
                 }
                 demo_rules(&s)
             }
+            Req::PutRule(r) => {
+                if let Some(mut rule) = r.rule {
+                    if rule.id.is_empty() {
+                        rule.id = format!("r{}", s.next_rule);
+                        s.next_rule += 1;
+                    }
+                    match s.rules.iter_mut().find(|m| m.id == rule.id) {
+                        Some(slot) => *slot = rule,
+                        None => s.rules.push(rule),
+                    }
+                }
+                demo_rules(&s)
+            }
+            Req::SetRuleEnabled(r) => {
+                for rule in s.rules.iter_mut().filter(|x| x.id == r.id) {
+                    rule.enabled = r.enabled;
+                }
+                for m in s.map_local.iter_mut().filter(|x| x.id == r.id) {
+                    m.enabled = r.enabled;
+                }
+                demo_rules(&s)
+            }
+            Req::Watch(_) | Req::Paused(_) => Res::Paused(pb::PausedList {
+                items: s.paused.clone(),
+            }),
+            Req::Resume(r) => {
+                s.paused.retain(|p| p.flow_id != r.flow_id);
+                Res::Paused(pb::PausedList {
+                    items: s.paused.clone(),
+                })
+            }
+            Req::Replay(r) => Res::Replay(pb::ReplayResponse {
+                flow_id: r.id + 10_000,
+                status: 200,
+            }),
+            Req::Approvals(_) => Res::Approvals(pb::ApprovalsResponse {
+                pending: s.approvals.clone(),
+            }),
+            Req::DecideApproval(r) => {
+                s.approvals.retain(|a| a.id != r.id);
+                Res::Approvals(pb::ApprovalsResponse {
+                    pending: s.approvals.clone(),
+                })
+            }
+            Req::SetMcpWrites(r) => {
+                s.mcp_writes = r.writes;
+                demo_mcp(&s)
+            }
+            Req::McpInfo(_) => demo_mcp(&s),
         };
         s.queue.push(Event::Response(tag, res));
         tag

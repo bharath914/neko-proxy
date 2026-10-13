@@ -142,8 +142,7 @@ fn loopback_host(h: &str, port: u16) -> bool {
         format!("localhost:{port}"),
         format!("[::1]:{port}"),
     ]
-    .iter()
-    .any(|a| *a == h)
+    .contains(&h)
 }
 
 async fn handle(state: Arc<State>, req: Request<Incoming>) -> Response<Full<Bytes>> {

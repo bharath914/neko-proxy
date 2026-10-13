@@ -17,6 +17,18 @@ The app starts `proxyd` for you and stops it on exit. Then:
 
 Try the interface without a core: `cargo run --release -p proxy-desktop -- --demo --live`.
 
+## Rules, breakpoints and AI clients
+
+**Rules** (mock, map remote, rewrite, throttle, breakpoint, Map Local) and **Breakpoints** are screens in the app. Select a flow and use **Replay**, **Mock** or **Break**.
+
+Let Claude Code read traffic and set these up:
+
+```bash
+proxyd mcp     # prints: claude mcp add --transport http proxy http://127.0.0.1:8898/mcp --header "Authorization: Bearer ..."
+```
+
+Changes from an AI client wait for your **Allow** in the app unless you switch it in Settings > AI clients. See `docs/phase-2.md`.
+
 ## Headless
 
 ```bash

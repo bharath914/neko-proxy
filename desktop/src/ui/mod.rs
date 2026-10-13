@@ -1,8 +1,10 @@
 //! Screens. Each is an `impl App` block so state stays in one place.
 
+mod breakpoints;
 mod detail;
 pub mod icons;
 mod overlay;
+mod rules;
 mod settings;
 mod sidebar;
 mod table;
@@ -67,6 +69,8 @@ impl App {
             .frame(Frame::new().fill(p.content))
             .show(root, |ui| match self.section {
                 Section::Inspector => self.inspector(ui),
+                Section::Breakpoints => self.breakpoints(ui),
+                Section::Rules => self.rules_screen(ui),
                 Section::Settings => self.settings(ui),
             });
 

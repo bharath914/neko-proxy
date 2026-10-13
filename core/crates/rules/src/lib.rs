@@ -472,6 +472,7 @@ impl RequestInterceptor for RuleSet {
         let path = parts.uri.path().to_string();
         let query = parts.uri.query().unwrap_or("").to_string();
         let host = flow.host.to_ascii_lowercase();
+        let method = parts.method.as_str().to_string();
 
         // Rules in order: every matching rewrite applies, the first remote
         // map wins, delays take the longest, the first mock answers.
@@ -484,7 +485,7 @@ impl RequestInterceptor for RuleSet {
             for r in st.rules.iter().filter(|r| r.enabled) {
                 if !r
                     .matcher
-                    .matches(&flow.scheme, &host, flow.port, &parts.method.to_string(), &path, &query)
+                    .matches(&flow.scheme, &host, flow.port, &method, &path, &query)
                 {
                     continue;
                 }
@@ -619,12 +620,12 @@ impl RuleSet {
             let Action::Breakpoint { phase, timeout_s } = &r.action else {
                 return None;
             };
-            let phase_ok = match (phase, want) {
-                (BreakpointPhase::Both, _) => true,
-                (BreakpointPhase::Request, Phase::Request) => true,
-                (BreakpointPhase::Response, Phase::Response) => true,
-                _ => false,
-            };
+            let phase_ok = matches!(
+                (phase, want),
+                (BreakpointPhase::Both, _)
+                    | (BreakpointPhase::Request, Phase::Request)
+                    | (BreakpointPhase::Response, Phase::Response)
+            );
             if !phase_ok
                 || !r
                     .matcher

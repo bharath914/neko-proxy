@@ -378,8 +378,8 @@ impl App {
         }
         head.add_space(2.0);
         let detail_ready = self.details.contains_key(&id);
-        head.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
+        head.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
             let curl = self
                 .details
                 .get(&id)
@@ -416,6 +416,34 @@ impl App {
                     .unwrap_or_default();
                 ui.ctx().copy_text(url);
                 self.toast(ui.ctx(), "URL copied", true);
+            }
+            // Flows that are plain HTTP exchanges can be sent again or turned
+            // into a rule that matches them.
+            let exchange = s.protocol != "tunnel" && s.flags & 3 == 0;
+            if widgets::button(ui, &st, "Replay", Kind::Secondary, None, detail_ready && exchange)
+                .on_hover_text("Send this request again as a new flow")
+                .clicked()
+            {
+                self.replay(id);
+            }
+            if widgets::button(ui, &st, "Mock", Kind::Secondary, None, exchange)
+                .on_hover_text("New mock rule for this request")
+                .clicked()
+            {
+                let mut f = crate::edit::RuleForm::for_flow(crate::edit::RuleKind::Mock, &s);
+                f.status = s.status.max(200).to_string();
+                self.rule_form = Some(f);
+                self.section = Section::Rules;
+            }
+            if widgets::button(ui, &st, "Break", Kind::Secondary, None, exchange)
+                .on_hover_text("New breakpoint for requests like this")
+                .clicked()
+            {
+                self.rule_form = Some(crate::edit::RuleForm::for_flow(
+                    crate::edit::RuleKind::Breakpoint,
+                    &s,
+                ));
+                self.section = Section::Rules;
             }
         });
         head.add_space(6.0);

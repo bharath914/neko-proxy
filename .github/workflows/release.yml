@@ -28,7 +28,10 @@ jobs:
         run: |
           v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != Cargo.toml version v$v"; exit 1; }
-      - run: cargo test --workspace
+      # The desktop render tests need a GPU adapter, which hosted runners lack;
+      # they run locally (`cargo test -p proxy-desktop`).
+      - run: cargo test --workspace --exclude proxy-desktop
+      - run: cargo test -p proxy-desktop -- --skip visual --skip e2e
 
   package:
     needs: test

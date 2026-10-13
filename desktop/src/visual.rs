@@ -146,3 +146,52 @@ fn empty_and_filtered_states() {
     settle(&mut h);
     save(&mut h, "no-match");
 }
+
+#[test]
+fn breakpoints_rules_and_ai_screens() {
+    for (dark, tag) in [(false, "light"), (true, "dark")] {
+        let mut h = harness(dark, (1320.0, 820.0), 40);
+        settle(&mut h);
+        assert_eq!(app(&mut h).paused.len(), 1, "demo core holds one message");
+        assert_eq!(app(&mut h).approvals.len(), 1);
+        assert_eq!(app(&mut h).rules.rules.len(), 3);
+
+        app(&mut h).section = Section::Breakpoints;
+        settle(&mut h);
+        save(&mut h, &format!("breakpoints-{tag}"));
+        assert!(app(&mut h).bp_edit.is_some(), "the held message is open in the editor");
+
+        app(&mut h).section = Section::Rules;
+        settle(&mut h);
+        save(&mut h, &format!("rules-{tag}"));
+
+        app(&mut h).rule_form = Some(crate::edit::RuleForm::new(crate::edit::RuleKind::Mock));
+        settle(&mut h);
+        save(&mut h, &format!("rules-editor-{tag}"));
+
+    }
+    // The AI group sits below the fold of a normal window; render it tall.
+    let mut h = harness(false, (1100.0, 2100.0), 10);
+    settle(&mut h);
+    app(&mut h).section = Section::Settings;
+    settle(&mut h);
+    save(&mut h, "settings-ai-tall");
+}
+
+#[test]
+fn resuming_and_deciding_clear_the_queues() {
+    let mut h = harness(false, (1320.0, 820.0), 10);
+    settle(&mut h);
+    let id = app(&mut h).paused[0].flow_id;
+    app(&mut h).select_held(Some(id));
+    app(&mut h).bp_edit.as_mut().unwrap().path = "/v1/changed".into();
+    app(&mut h).resume_held(id);
+    let aid = app(&mut h).approvals[0].id.clone();
+    app(&mut h).decide_approval(&aid, true);
+    settle(&mut h);
+    assert!(app(&mut h).paused.is_empty());
+    assert!(app(&mut h).approvals.is_empty());
+    app(&mut h).section = Section::Breakpoints;
+    settle(&mut h);
+    save(&mut h, "breakpoints-empty");
+}

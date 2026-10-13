@@ -13,7 +13,95 @@ use egui::{
 impl App {
     pub fn overlays(&mut self, ctx: &Context) {
         self.sheet_overlay(ctx);
+        self.approval_overlay(ctx);
         self.toast_overlay(ctx);
+    }
+
+    /// An AI client wants to change something: say exactly what, and wait.
+    fn approval_overlay(&mut self, ctx: &Context) {
+        let Some(a) = self.approvals.first().cloned() else {
+            return;
+        };
+        let more = self.approvals.len() - 1;
+        let st = self.st.clone();
+        let screen = ctx.content_rect();
+        let w = 460.0_f32.min(screen.width() - 32.0);
+        let mut decision: Option<bool> = None;
+        Area::new(Id::new("approval"))
+            .order(Order::Tooltip)
+            .pivot(Align2::RIGHT_BOTTOM)
+            .fixed_pos(pos2(screen.right() - 20.0, screen.bottom() - 20.0))
+            .show(ctx, |ui| {
+                let mut frame = Frame::new()
+                    .fill(st.p.card)
+                    .stroke(Stroke::new(1.0, st.p.accent))
+                    .corner_radius(cr(radius::SHEET))
+                    .inner_margin(Margin::same(16));
+                frame.shadow = egui::epaint::Shadow {
+                    offset: [0, 12],
+                    blur: 36,
+                    spread: 0,
+                    color: Color32::from_black_alpha(if st.p.is_dark() { 160 } else { 60 }),
+                };
+                frame.show(ui, |ui| {
+                    ui.set_width(w - 32.0);
+                    ui.horizontal(|ui| {
+                        widgets::badge(ui, "AI client", st.p.accent, st.p.accent_soft);
+                        if more > 0 {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(format!("+{more} more waiting"))
+                                        .font(Role::Caption.font())
+                                        .color(st.p.text3),
+                                )
+                                .selectable(false),
+                            );
+                        }
+                    });
+                    ui.add_space(6.0);
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(&a.title)
+                                .font(Role::Headline.font())
+                                .color(st.p.text),
+                        )
+                        .wrap()
+                        .selectable(false),
+                    );
+                    ui.add_space(6.0);
+                    egui::CollapsingHeader::new(
+                        egui::RichText::new("Exact request")
+                            .font(Role::Callout.font())
+                            .color(st.p.text2),
+                    )
+                    .id_salt(("approval-detail", &a.id))
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&a.detail)
+                                    .font(Role::MonoSmall.font())
+                                    .color(st.p.text),
+                            )
+                            .wrap()
+                            .selectable(true),
+                        );
+                    });
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        if widgets::button(ui, &st, "Allow", Kind::Primary, Some(Icon::Check), true)
+                            .clicked()
+                        {
+                            decision = Some(true);
+                        }
+                        if widgets::button(ui, &st, "Deny", Kind::Secondary, None, true).clicked() {
+                            decision = Some(false);
+                        }
+                    });
+                });
+            });
+        if let Some(allow) = decision {
+            self.decide_approval(&a.id, allow);
+        }
     }
 
     fn sheet_overlay(&mut self, ctx: &Context) {

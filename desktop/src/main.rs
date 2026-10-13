@@ -2,6 +2,7 @@
 //! client API and nothing else.
 
 mod app;
+mod edit;
 mod automation;
 mod backend;
 mod fmt;

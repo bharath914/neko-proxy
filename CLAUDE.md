@@ -7,9 +7,9 @@ Design pages (open in a browser):
 - `docs/desktop-prototype.html`: clickable desktop UI (inspector, rules, breakpoints, devices)
 - `docs/features.md`: full feature backlog mapped to milestones
 
-## Current scope: Phase 1, Linux only
+## Current scope: Phases 1 and 2, Linux only
 
-Build only Phase 1: the Rust capture core plus a Linux desktop app. No mobile, macOS or Windows. No rules, breakpoints, MCP or phone pairing yet. The full spec is in `docs/phase-1.md`: read it first and work through its task list in order. Everything below describes the long-term design and constraints that Phase 1 must not contradict.
+Built: the Rust capture core and Linux desktop app (`docs/phase-1.md`), then rules, breakpoints, replay and the MCP server (`docs/phase-2.md`). Still not started: phone pairing and companions, macOS, Windows, HTTP/3, scripting. Everything below describes the long-term design and constraints that new work must not contradict.
 
 ## Goals
 
@@ -27,7 +27,7 @@ Build only Phase 1: the Rust capture core plus a Linux desktop app. No mobile, m
 - **Client API:** WebSocket + protobuf (tokio-tungstenite in the desktop app, Ktor in the phone companions), Unix domain socket on Linux (LAN with token for phones comes later)
 - **Storage:** SQLite (WAL) for metadata and FTS, content-addressed zstd blobs on disk for bodies
 - **Rules:** YAML or JSON files, git-friendly, hot reload
-- **MCP:** built into the core, local only, token auth, read-only by default
+- **MCP:** built into the core (`core/crates/mcp`), Streamable HTTP on loopback, bearer token, changes need approval in the app by default
 
 Decision (Oct 2026): desktop is native Rust rather than CMP on the JVM, for startup and memory. egui was chosen over GTK4 because it builds with no system dev packages, is MIT/Apache, and gives full control of motion and materials. Because the UI only talks to the API, a different shell can still replace it.
 
@@ -117,7 +117,7 @@ Phase 1 = steps 1 and 2, Linux only, trimmed as described in `docs/phase-1.md`. 
 
 ## How to work in this repo
 
-- Phase 1 is built (core, API, desktop app, packaging). Read `docs/phase-1.md` for scope and `docs/bench.md` for measured results. Build only Phase 1 until told otherwise.
+- Phases 1 and 2 are built. Read `docs/phase-1.md` and `docs/phase-2.md` for scope and `docs/bench.md` for measured results. Phone pairing (build order step 4) is next; do not start it until told.
 - Be terse. Scaffold and implement without asking for step-by-step approval; ask only when a decision is genuinely open.
 - Keep UI free of logic: all parsing, decoding, search and redaction live in the core.
 - Build and test: `cargo test --workspace`. Run the app: `cargo run --release -p proxy-desktop`. Package: `packaging/build.sh`.

@@ -3,6 +3,7 @@ use super::widgets::{self, Kind};
 use crate::app::{App, Job, Sheet};
 use crate::paint::{self, cr};
 use crate::platform::{self, LaunchOptions};
+use proto::pb;
 use crate::theme::{radius, Role, Style};
 use egui::text::{LayoutJob, TextFormat};
 use egui::{pos2, vec2, Align, Color32, Frame, Layout, Margin, Rect, ScrollArea, Stroke, Ui};
@@ -129,6 +130,7 @@ impl App {
                 self.settings_certificate(ui, &st);
                 self.settings_launch(ui, &st);
                 self.settings_terminal(ui, &st);
+                self.settings_ai(ui, &st);
                 self.settings_appearance(ui, &st);
                 self.settings_data(ui, &st);
                 self.settings_about(ui, &st);
@@ -558,6 +560,104 @@ impl App {
             );
         });
         self.redact_export = redact;
+    }
+
+    fn settings_ai(&mut self, ui: &mut Ui, st: &Style) {
+        group_title(
+            ui,
+            st,
+            "AI clients",
+            "Let Claude Code (or another MCP client on this computer) read your traffic and set up mocks, rewrites and breakpoints. Secrets are redacted before anything leaves the core.",
+        );
+        let Some(m) = self.mcp.clone() else {
+            group(ui, st, |ui| {
+                ui.horizontal(|ui| {
+                    widgets::spinner(ui, st, 16.0);
+                    ui.add(
+                        egui::Label::new(job("Waiting for the core…", Role::Body, st.p.text2))
+                            .selectable(false),
+                    );
+                });
+            });
+            return;
+        };
+        if !m.enabled {
+            group(ui, st, |ui| {
+                row_plain(
+                    ui,
+                    st,
+                    "The AI server is not running",
+                    "Its port may be taken. Start the core with --mcp-listen to choose another address.",
+                );
+            });
+            return;
+        }
+        group(ui, st, |ui| {
+            row(
+                ui,
+                st,
+                "Changes from AI clients",
+                match m.writes {
+                    1 => "Applied immediately. Only choose this for clients you trust.",
+                    2 => "Read only: clients can look but not change anything.",
+                    _ => "Each change waits for you to allow it here.",
+                },
+                |ui| {
+                    let sel = match m.writes {
+                        1 => 1,
+                        2 => 2,
+                        _ => 0,
+                    };
+                    if let Some(i) = widgets::segmented(
+                        ui,
+                        st,
+                        self.id("mcp-writes"),
+                        &["Ask me", "Allow", "Read only"],
+                        sel,
+                    ) {
+                        self.set_mcp_writes(match i {
+                            1 => pb::McpWrites::McpAuto,
+                            2 => pb::McpWrites::McpOff,
+                            _ => pb::McpWrites::McpAsk,
+                        });
+                    }
+                },
+            );
+            divider(ui, st);
+            row(ui, st, "Endpoint", &m.url, |ui| {
+                if widgets::button(ui, st, "Copy", Kind::Plain, Some(Icon::Copy), true).clicked() {
+                    ui.ctx().copy_text(m.url.clone());
+                    self.toast(ui.ctx(), "Endpoint copied", true);
+                }
+            });
+            divider(ui, st);
+            row(
+                ui,
+                st,
+                "Connect Claude Code",
+                "Run this once in a terminal. It includes the access token.",
+                |ui| {
+                    if widgets::button(ui, st, "Copy command", Kind::Primary, Some(Icon::Terminal), true)
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(m.command.clone());
+                        self.toast(ui.ctx(), "Command copied", true);
+                    }
+                },
+            );
+            ui.add_space(6.0);
+            let shown = if self.show_token {
+                m.command.clone()
+            } else {
+                m.command.replace(&m.token, "••••••••••••••••")
+            };
+            code(ui, st, &shown);
+            ui.add_space(6.0);
+            let label = if self.show_token { "Hide token" } else { "Show token" };
+            if widgets::button(ui, st, label, Kind::Plain, None, true).clicked() {
+                self.show_token = !self.show_token;
+            }
+        });
     }
 
     fn settings_about(&mut self, ui: &mut Ui, st: &Style) {

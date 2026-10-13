@@ -28,18 +28,30 @@ impl App {
                 .layout(Layout::left_to_right(Align::Center)),
         );
         left.spacing_mut().item_spacing.x = 8.0;
-        let sel = if inspector { 0 } else { 1 };
+        let sel = match self.section {
+            Section::Inspector => 0,
+            Section::Breakpoints => 1,
+            Section::Rules => 2,
+            Section::Settings => 3,
+        };
+        // A count on Breakpoints says something is waiting for you.
+        let held = if self.paused.is_empty() {
+            "Breakpoints".to_string()
+        } else {
+            format!("Breakpoints ({})", self.paused.len())
+        };
         if let Some(i) = widgets::segmented(
             &mut left,
             &st,
             self.id("nav"),
-            &["Inspector", "Settings"],
+            &["Inspector", &held, "Rules", "Settings"],
             sel,
         ) {
-            self.section = if i == 0 {
-                Section::Inspector
-            } else {
-                Section::Settings
+            self.section = match i {
+                0 => Section::Inspector,
+                1 => Section::Breakpoints,
+                2 => Section::Rules,
+                _ => Section::Settings,
             };
         }
         if inspector {
