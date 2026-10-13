@@ -22,6 +22,12 @@ pub mod flags {
     /// The host is outside the SSL proxying list, so it was tunneled
     /// untouched even though it would otherwise have been decrypted.
     pub const SSL_BYPASSED: u32 = 128;
+    /// A rule or a breakpoint edit changed the request or the response.
+    pub const EDITED: u32 = 256;
+    /// The flow was held at a breakpoint.
+    pub const BREAKPOINT: u32 = 512;
+    /// The request was sent again by the proxy (replay).
+    pub const REPLAYED: u32 = 1024;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

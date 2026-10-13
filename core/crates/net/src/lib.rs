@@ -15,7 +15,7 @@ mod procinfo;
 use body::BoxError;
 use bytes::Bytes;
 use connector::{Connector, UpstreamTls};
-use flow::{ConnectPolicy, FlowSink, IdGen, InterceptorChain};
+use flow::{ConnectPolicy, FlowSink, Gate, IdGen, InterceptorChain};
 use http_body_util::combinators::UnsyncBoxBody;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
@@ -64,9 +64,27 @@ pub(crate) struct Inner {
     pub pinned: Mutex<BTreeSet<String>>,
     /// The person's own decrypt-or-tunnel choice, set after construction.
     pub policy: Mutex<Option<Arc<dyn ConnectPolicy>>>,
+    /// Holds messages at breakpoints, set after construction.
+    pub gate: Mutex<Option<Arc<dyn Gate>>>,
     pub client: Client<Connector, ProxyBody>,
     pub upstream_tls: Arc<UpstreamTls>,
     pub apps: Arc<flowctx::AppResolverHandle>,
+}
+
+/// A request for the proxy to send again, usually a captured flow with edits.
+#[derive(Clone, Debug)]
+pub struct ReplayRequest {
+    pub method: String,
+    /// Absolute `http://` or `https://` URL.
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Bytes,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplayOutcome {
+    pub flow_id: u64,
+    pub status: u16,
 }
 
 /// A running proxy. Cheap to clone.
@@ -99,6 +117,7 @@ impl Proxy {
                 recording: AtomicBool::new(true),
                 pinned: Mutex::new(BTreeSet::new()),
                 policy: Mutex::new(None),
+                gate: Mutex::new(None),
                 client,
                 upstream_tls,
                 apps: Arc::new(flowctx::AppResolverHandle(procinfo::AppResolver::default())),
@@ -134,6 +153,18 @@ impl Proxy {
     /// host is decrypted.
     pub fn set_connect_policy(&self, policy: Arc<dyn ConnectPolicy>) {
         *self.inner.policy.lock().unwrap() = Some(policy);
+    }
+
+    /// Send a request again as a new flow. It goes straight upstream: rules and
+    /// breakpoints do not apply, so a replay shows what the server really says.
+    pub async fn replay(&self, req: ReplayRequest) -> Result<ReplayOutcome, String> {
+        self.inner.replay(req).await
+    }
+
+    /// Let breakpoints hold requests and responses. Without a gate nothing is
+    /// ever held.
+    pub fn set_gate(&self, gate: Arc<dyn Gate>) {
+        *self.inner.gate.lock().unwrap() = Some(gate);
     }
 
     pub fn config(&self) -> &ProxyConfig {

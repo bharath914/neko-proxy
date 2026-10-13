@@ -1,16 +1,28 @@
-//! Rules the person sets from the app: which hosts are decrypted (SSL
-//! proxying) and which URLs are answered from a local file (Map Local).
+//! Rules the person sets from the app (or an AI client they approved): which
+//! hosts are decrypted (SSL proxying), which URLs are answered from a local
+//! file (Map Local), and mocks, remote maps, header rewrites, throttles and
+//! breakpoints.
 //!
 //! State lives in one JSON file in the data directory, so it is easy to read,
 //! diff and keep in git. The data path only ever takes read locks, and the
 //! file is read at request time for mapped responses so edits show up at once.
 
 mod pattern;
+mod pause;
+mod rule;
 
 pub use pattern::{host_matches, ssl_entry_matches};
+pub use pause::{PauseEvent, PausedFlow, Pauses};
+pub use rule::{
+    apply_header_edits, Action, BreakpointPhase, HeaderEdit, HeaderOp, Match, Rule,
+    DEFAULT_BREAKPOINT_TIMEOUT_S, MAX_BREAKPOINT_TIMEOUT_S, MAX_DELAY_MS, MAX_MOCK_BYTES,
+};
 
 use bytes::Bytes;
-use flow::{ConnectPolicy, FlowSummary, Intercept, RequestInterceptor};
+use flow::{
+    BoxFuture, ConnectPolicy, Delay, Edited, FlowSummary, Gate, Held, Intercept, Phase,
+    RequestInterceptor, ResponseInterceptor, Retarget, Ticket, Verdict,
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -71,12 +83,29 @@ fn ok_status() -> u16 {
     200
 }
 
+/// What an AI client connected through MCP may change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum McpWrites {
+    /// Every change waits for approval in the desktop app (the default).
+    #[default]
+    Ask,
+    /// Changes apply at once. For people who trust their client.
+    Auto,
+    /// Read only.
+    Off,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct State {
     #[serde(default)]
     ssl: SslSettings,
     #[serde(default)]
     map_local: Vec<MapLocalRule>,
+    #[serde(default)]
+    rules: Vec<Rule>,
+    #[serde(default)]
+    mcp_writes: McpWrites,
 }
 
 #[derive(Debug)]
@@ -100,6 +129,7 @@ pub struct RuleSet {
     state: RwLock<State>,
     path: Option<PathBuf>,
     next: AtomicU64,
+    pauses: Pauses,
 }
 
 impl RuleSet {
@@ -109,6 +139,7 @@ impl RuleSet {
             state: RwLock::new(State::default()),
             path: None,
             next: AtomicU64::new(1),
+            pauses: Pauses::default(),
         }
     }
 
@@ -128,21 +159,30 @@ impl RuleSet {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => tracing::warn!("could not read {}: {e}", path.display()),
         }
-        let max = state
+        let num = |id: &str| id.strip_prefix('r').and_then(|n| n.parse::<u64>().ok());
+        let mut max = state
             .map_local
             .iter()
-            .filter_map(|r| r.id.strip_prefix('r').and_then(|n| n.parse::<u64>().ok()))
+            .filter_map(|r| num(&r.id))
+            .chain(state.rules.iter().filter_map(|r| num(&r.id)))
             .max()
             .unwrap_or(0);
-        for r in &mut state.map_local {
-            if r.id.is_empty() {
-                r.id = format!("r{}", max + 1);
+        for id in state
+            .map_local
+            .iter_mut()
+            .map(|r| &mut r.id)
+            .chain(state.rules.iter_mut().map(|r| &mut r.id))
+        {
+            if id.is_empty() {
+                max += 1;
+                *id = format!("r{max}");
             }
         }
         RuleSet {
             state: RwLock::new(state),
             path: Some(path),
             next: AtomicU64::new(max + 1),
+            pauses: Pauses::default(),
         }
     }
 
@@ -255,15 +295,78 @@ impl RuleSet {
         Ok(rule)
     }
 
+    /// Remove a rule of any kind by id.
     pub fn remove(&self, id: &str) -> Result<bool, RulesError> {
         let mut st = self.state.write().unwrap();
-        let before = st.map_local.len();
+        let before = st.map_local.len() + st.rules.len();
         st.map_local.retain(|r| r.id != id);
-        let changed = st.map_local.len() != before;
+        st.rules.retain(|r| r.id != id);
+        let changed = st.map_local.len() + st.rules.len() != before;
         if changed {
             self.save(&st)?;
         }
         Ok(changed)
+    }
+
+    /// Mock, map remote, rewrite, throttle and breakpoint rules, in the order
+    /// they apply.
+    pub fn rules(&self) -> Vec<Rule> {
+        self.state.read().unwrap().rules.clone()
+    }
+
+    /// Add a rule, or replace the one with the same id.
+    pub fn put_rule(&self, mut rule: Rule) -> Result<Rule, RulesError> {
+        rule.validate().map_err(RulesError::Invalid)?;
+        let mut st = self.state.write().unwrap();
+        if rule.id.is_empty() {
+            rule.id = format!("r{}", self.next.fetch_add(1, Ordering::Relaxed));
+        } else if st.map_local.iter().any(|r| r.id == rule.id) {
+            return Err(RulesError::Invalid(format!(
+                "{} is a Map Local rule, not a {}",
+                rule.id,
+                rule.kind()
+            )));
+        }
+        match st.rules.iter_mut().find(|r| r.id == rule.id) {
+            Some(slot) => *slot = rule.clone(),
+            None => st.rules.push(rule.clone()),
+        }
+        self.save(&st)?;
+        Ok(rule)
+    }
+
+    /// Turn one rule of any kind on or off. False if there is no such rule.
+    pub fn set_enabled(&self, id: &str, enabled: bool) -> Result<bool, RulesError> {
+        let mut st = self.state.write().unwrap();
+        let mut found = false;
+        for r in st.map_local.iter_mut().filter(|r| r.id == id) {
+            r.enabled = enabled;
+            found = true;
+        }
+        for r in st.rules.iter_mut().filter(|r| r.id == id) {
+            r.enabled = enabled;
+            found = true;
+        }
+        if found {
+            self.save(&st)?;
+        }
+        Ok(found)
+    }
+
+    pub fn mcp_writes(&self) -> McpWrites {
+        self.state.read().unwrap().mcp_writes
+    }
+
+    pub fn set_mcp_writes(&self, mode: McpWrites) -> Result<McpWrites, RulesError> {
+        let mut st = self.state.write().unwrap();
+        st.mcp_writes = mode;
+        self.save(&st)?;
+        Ok(mode)
+    }
+
+    /// Messages held at breakpoints.
+    pub fn pauses(&self) -> &Pauses {
+        &self.pauses
     }
 
     /// Would this host be decrypted under the current list?
@@ -350,16 +453,99 @@ impl ConnectPolicy for RuleSet {
     }
 }
 
+/// Split `path?query` the way a flow summary carries it.
+fn split_path(path_and_query: &str) -> (&str, &str) {
+    path_and_query
+        .split_once('?')
+        .unwrap_or((path_and_query, ""))
+}
+
 impl RequestInterceptor for RuleSet {
     fn on_request(&self, flow: &FlowSummary, parts: &mut http::request::Parts) -> Intercept {
         // The common case is no rules at all: leave without touching a path.
-        if self.state.read().unwrap().map_local.is_empty() {
-            return Intercept::Continue;
+        {
+            let st = self.state.read().unwrap();
+            if st.map_local.is_empty() && st.rules.is_empty() {
+                return Intercept::Continue;
+            }
         }
-        let path = parts.uri.path();
-        let query = parts.uri.query().unwrap_or("");
+        let path = parts.uri.path().to_string();
+        let query = parts.uri.query().unwrap_or("").to_string();
         let host = flow.host.to_ascii_lowercase();
-        let Some(rule) = self.find(&host, flow.port, path, query) else {
+
+        // Rules in order: every matching rewrite applies, the first remote
+        // map wins, delays take the longest, the first mock answers.
+        let mut delay = 0u32;
+        let mut retarget: Option<Retarget> = None;
+        let mut mock: Option<http::Response<Bytes>> = None;
+        let mut edited = false;
+        {
+            let st = self.state.read().unwrap();
+            for r in st.rules.iter().filter(|r| r.enabled) {
+                if !r
+                    .matcher
+                    .matches(&flow.scheme, &host, flow.port, &parts.method.to_string(), &path, &query)
+                {
+                    continue;
+                }
+                match &r.action {
+                    Action::Rewrite { request_headers, .. } => {
+                        edited |= apply_header_edits(&mut parts.headers, request_headers);
+                    }
+                    Action::MapRemote { scheme, host, port } if retarget.is_none() => {
+                        retarget = Some(Retarget {
+                            scheme: match scheme.as_str() {
+                                "http" => Some("http"),
+                                "https" => Some("https"),
+                                _ => None,
+                            },
+                            host: (!host.is_empty()).then(|| host.clone()),
+                            port: (*port != 0).then_some(*port),
+                        });
+                    }
+                    Action::Throttle { delay_ms } => delay = delay.max(*delay_ms),
+                    Action::Mock {
+                        status,
+                        headers,
+                        body,
+                        delay_ms,
+                    } if mock.is_none() => {
+                        delay = delay.max(*delay_ms);
+                        let mut b = http::Response::builder().status(*status);
+                        let mut has_type = false;
+                        for (n, v) in headers {
+                            has_type |= n.eq_ignore_ascii_case("content-type");
+                            b = b.header(n.as_str(), v.as_str());
+                        }
+                        if !has_type {
+                            b = b.header(http::header::CONTENT_TYPE, mock_content_type(body));
+                        }
+                        mock = b
+                            .header("x-proxy-mock", r.id.as_str())
+                            .body(Bytes::from(body.clone()))
+                            .ok();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if delay > 0 {
+            parts
+                .extensions
+                .insert(Delay(std::time::Duration::from_millis(delay as u64)));
+        }
+        if let Some(r) = retarget {
+            parts.extensions.insert(r);
+            edited = true;
+        }
+        if edited {
+            parts.extensions.insert(Edited);
+        }
+        if let Some(res) = mock {
+            return Intercept::Respond(res);
+        }
+
+        let Some(rule) = self.find(&host, flow.port, &path, &query) else {
             return Intercept::Continue;
         };
         let meta = match std::fs::metadata(&rule.file) {
@@ -386,6 +572,106 @@ impl RequestInterceptor for RuleSet {
             .body(Bytes::from(body))
             .unwrap_or_else(|_| http::Response::new(Bytes::new()));
         Intercept::Respond(res)
+    }
+}
+
+/// JSON when the body parses as JSON, otherwise plain text.
+fn mock_content_type(body: &str) -> &'static str {
+    let t = body.trim_start();
+    if (t.starts_with('{') || t.starts_with('[')) && serde_json::from_str::<serde_json::Value>(body).is_ok()
+    {
+        "application/json"
+    } else {
+        "text/plain; charset=utf-8"
+    }
+}
+
+impl ResponseInterceptor for RuleSet {
+    fn on_response(&self, flow: &FlowSummary, parts: &mut http::response::Parts) {
+        let st = self.state.read().unwrap();
+        if st.rules.is_empty() {
+            return;
+        }
+        let (path, query) = split_path(&flow.path);
+        let host = flow.host.to_ascii_lowercase();
+        for r in st.rules.iter().filter(|r| r.enabled) {
+            if let Action::Rewrite { response_headers, .. } = &r.action {
+                if r.matcher
+                    .matches(&flow.scheme, &host, flow.port, &flow.method, path, query)
+                {
+                    apply_header_edits(&mut parts.headers, response_headers);
+                }
+            }
+        }
+    }
+}
+
+impl RuleSet {
+    fn breakpoint_ticket(
+        &self,
+        flow: &FlowSummary,
+        want: Phase,
+    ) -> Option<Ticket> {
+        let st = self.state.read().unwrap();
+        let (path, query) = split_path(&flow.path);
+        let host = flow.host.to_ascii_lowercase();
+        st.rules.iter().filter(|r| r.enabled).find_map(|r| {
+            let Action::Breakpoint { phase, timeout_s } = &r.action else {
+                return None;
+            };
+            let phase_ok = match (phase, want) {
+                (BreakpointPhase::Both, _) => true,
+                (BreakpointPhase::Request, Phase::Request) => true,
+                (BreakpointPhase::Response, Phase::Response) => true,
+                _ => false,
+            };
+            if !phase_ok
+                || !r
+                    .matcher
+                    .matches(&flow.scheme, &host, flow.port, &flow.method, path, query)
+            {
+                return None;
+            }
+            let secs = if *timeout_s == 0 {
+                DEFAULT_BREAKPOINT_TIMEOUT_S
+            } else {
+                *timeout_s
+            };
+            Some(Ticket {
+                rule_id: r.id.clone(),
+                timeout: std::time::Duration::from_secs(secs as u64),
+            })
+        })
+    }
+}
+
+impl Gate for RuleSet {
+    fn request_ticket(&self, flow: &FlowSummary, _parts: &http::request::Parts) -> Option<Ticket> {
+        if self.state.read().unwrap().rules.is_empty() {
+            return None;
+        }
+        self.breakpoint_ticket(flow, Phase::Request)
+    }
+
+    fn response_ticket(&self, flow: &FlowSummary, _parts: &http::response::Parts) -> Option<Ticket> {
+        if self.state.read().unwrap().rules.is_empty() {
+            return None;
+        }
+        self.breakpoint_ticket(flow, Phase::Response)
+    }
+
+    fn hold<'a>(
+        &'a self,
+        flow: &'a FlowSummary,
+        phase: Phase,
+        ticket: Ticket,
+        held: Held,
+    ) -> BoxFuture<'a, Verdict> {
+        Box::pin(async move {
+            self.pauses
+                .hold(flow, ticket.rule_id, phase, ticket.timeout, held)
+                .await
+        })
     }
 }
 
@@ -618,5 +904,255 @@ mod tests {
         let r = RuleSet::load(dir.path());
         assert!(r.map_local().is_empty());
         assert!(dir.path().join("rules.json.bad").exists());
+    }
+
+    fn m(host: &str, path: &str) -> Match {
+        Match {
+            scheme: String::new(),
+            host: host.into(),
+            port: 0,
+            method: String::new(),
+            path: path.into(),
+            query: String::new(),
+        }
+    }
+
+    fn put(r: &RuleSet, matcher: Match, action: Action) -> Rule {
+        r.put_rule(Rule {
+            id: String::new(),
+            name: String::new(),
+            enabled: true,
+            matcher,
+            action,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn mock_answers_and_beats_map_local() {
+        let r = RuleSet::in_memory();
+        put(
+            &r,
+            m("api.example.com", "/v1/me"),
+            Action::Mock {
+                status: 503,
+                headers: vec![],
+                body: r#"{"error":"down"}"#.into(),
+                delay_ms: 250,
+            },
+        );
+        let mut p = parts("/v1/me");
+        let Intercept::Respond(res) = r.on_request(&summary("api.example.com", 443), &mut p) else {
+            panic!("expected a mock")
+        };
+        assert_eq!(res.status(), 503);
+        assert_eq!(res.headers()["content-type"], "application/json");
+        assert!(res.headers().contains_key("x-proxy-mock"));
+        let d = p.extensions.get::<Delay>().expect("mock delay");
+        assert_eq!(d.0.as_millis(), 250);
+
+        let mut p = parts("/v1/other");
+        assert!(matches!(
+            r.on_request(&summary("api.example.com", 443), &mut p),
+            Intercept::Continue
+        ));
+    }
+
+    #[test]
+    fn rewrite_remap_and_throttle_leave_marks() {
+        let r = RuleSet::in_memory();
+        put(
+            &r,
+            m("*", ""),
+            Action::Rewrite {
+                request_headers: vec![HeaderEdit {
+                    op: HeaderOp::Set,
+                    name: "x-env".into(),
+                    value: "staging".into(),
+                }],
+                response_headers: vec![HeaderEdit {
+                    op: HeaderOp::Remove,
+                    name: "set-cookie".into(),
+                    value: String::new(),
+                }],
+            },
+        );
+        put(
+            &r,
+            m("api.example.com", ""),
+            Action::MapRemote {
+                scheme: "http".into(),
+                host: "localhost".into(),
+                port: 3000,
+            },
+        );
+        put(&r, m("api.example.com", ""), Action::Throttle { delay_ms: 800 });
+
+        let mut p = parts("/v1/me");
+        let out = r.on_request(&summary("api.example.com", 443), &mut p);
+        assert!(matches!(out, Intercept::Continue));
+        assert_eq!(p.headers["x-env"], "staging");
+        let t = p.extensions.get::<Retarget>().unwrap();
+        assert_eq!(t.host.as_deref(), Some("localhost"));
+        assert_eq!(t.port, Some(3000));
+        assert_eq!(t.scheme, Some("http"));
+        assert_eq!(p.extensions.get::<Delay>().unwrap().0.as_millis(), 800);
+        assert!(p.extensions.get::<Edited>().is_some());
+
+        let mut res = http::Response::builder()
+            .header("set-cookie", "a=b")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        r.on_response(
+            &FlowSummary {
+                host: "api.example.com".into(),
+                port: 443,
+                method: "GET".into(),
+                path: "/v1/me".into(),
+                ..Default::default()
+            },
+            &mut res,
+        );
+        assert!(!res.headers.contains_key("set-cookie"));
+    }
+
+    #[test]
+    fn disabled_rules_do_nothing_and_ids_are_shared() {
+        let r = RuleSet::in_memory();
+        let a = put(&r, m("a.test", ""), Action::Throttle { delay_ms: 10 });
+        let b = r
+            .put_map_local(rule(Path::new("/f.json")))
+            .unwrap();
+        assert_ne!(a.id, b.id);
+        assert!(r.set_enabled(&a.id, false).unwrap());
+        assert!(!r.set_enabled("nope", false).unwrap());
+        let mut p = parts("/");
+        r.on_request(&summary("a.test", 80), &mut p);
+        assert!(p.extensions.get::<Delay>().is_none());
+        assert!(r.remove(&a.id).unwrap());
+        assert!(r.rules().is_empty());
+        assert_eq!(r.map_local().len(), 1);
+    }
+
+    #[test]
+    fn rules_persist() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let r = RuleSet::load(dir.path());
+            put(&r, m("a.test", "/x"), Action::Throttle { delay_ms: 10 });
+            r.set_mcp_writes(McpWrites::Auto).unwrap();
+        }
+        let r = RuleSet::load(dir.path());
+        assert_eq!(r.rules().len(), 1);
+        assert_eq!(r.mcp_writes(), McpWrites::Auto);
+        let again = put(&r, m("b.test", ""), Action::Throttle { delay_ms: 5 });
+        assert_ne!(again.id, r.rules()[0].id);
+    }
+
+    fn held_request() -> Held {
+        Held {
+            method: "GET".into(),
+            path_and_query: "/v1/me".into(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn breakpoint_holds_until_resumed_with_edits() {
+        let r = std::sync::Arc::new(RuleSet::in_memory());
+        put(
+            &r,
+            m("api.example.com", "/v1/*"),
+            Action::Breakpoint {
+                phase: BreakpointPhase::Request,
+                timeout_s: 5,
+            },
+        );
+        let flow = FlowSummary {
+            id: 7,
+            scheme: "https".into(),
+            host: "api.example.com".into(),
+            port: 443,
+            method: "GET".into(),
+            path: "/v1/me".into(),
+            ..Default::default()
+        };
+        let p = parts("/v1/me");
+        let ticket = r.request_ticket(&flow, &p).expect("breakpoint matches");
+        // Not the response phase.
+        let rp = http::Response::new(()).into_parts().0;
+        assert!(r.response_ticket(&flow, &rp).is_none());
+
+        let mut events = r.pauses().subscribe();
+        let r2 = r.clone();
+        let f2 = flow.clone();
+        let task = tokio::spawn(async move {
+            r2.hold(&f2, Phase::Request, ticket, held_request()).await
+        });
+        let PauseEvent::Paused(pf) = events.recv().await.unwrap() else {
+            panic!("expected a pause")
+        };
+        assert_eq!(pf.flow_id, 7);
+        assert_eq!(r.pauses().list().len(), 1);
+
+        let edits = flow::Edits {
+            path_and_query: Some("/v1/other".into()),
+            ..Default::default()
+        };
+        assert!(r.pauses().resume(7, Verdict::Continue(edits)));
+        match task.await.unwrap() {
+            Verdict::Continue(e) => assert_eq!(e.path_and_query.as_deref(), Some("/v1/other")),
+            Verdict::Abort(_) => panic!("not aborted"),
+        }
+        assert!(r.pauses().list().is_empty());
+        assert!(!r.pauses().resume(7, Verdict::Abort("late".into())));
+    }
+
+    #[tokio::test]
+    async fn breakpoint_times_out_and_lets_the_message_through() {
+        let pauses = Pauses::default();
+        let flow = FlowSummary {
+            id: 9,
+            ..Default::default()
+        };
+        let v = pauses
+            .hold(
+                &flow,
+                "r1".into(),
+                Phase::Request,
+                std::time::Duration::from_millis(30),
+                held_request(),
+            )
+            .await;
+        assert!(matches!(v, Verdict::Continue(e) if e.is_empty()));
+        assert!(pauses.list().is_empty());
+    }
+
+    #[tokio::test]
+    async fn dropping_the_waiter_clears_the_slot() {
+        let pauses = std::sync::Arc::new(Pauses::default());
+        let p2 = pauses.clone();
+        let task = tokio::spawn(async move {
+            let flow = FlowSummary {
+                id: 3,
+                ..Default::default()
+            };
+            p2.hold(
+                &flow,
+                "r1".into(),
+                Phase::Response,
+                std::time::Duration::from_secs(30),
+                Held::default(),
+            )
+            .await
+        });
+        while pauses.list().is_empty() {
+            tokio::task::yield_now().await;
+        }
+        task.abort();
+        let _ = task.await;
+        assert!(pauses.list().is_empty());
     }
 }

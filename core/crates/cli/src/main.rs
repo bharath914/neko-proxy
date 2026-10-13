@@ -24,11 +24,25 @@ enum Command {
     Flows(FlowsArgs),
     /// Export captured flows.
     Export(ExportArgs),
+    /// Show how to connect a local AI client (Claude Code) to the MCP server.
+    Mcp(McpArgs),
     /// Inspect the proxy CA.
     Ca {
         #[command(subcommand)]
         action: CaAction,
     },
+}
+
+#[derive(clap::Args)]
+struct McpArgs {
+    /// Address the running core serves MCP on.
+    #[arg(long, default_value = mcp::DEFAULT_ADDR)]
+    listen: std::net::SocketAddr,
+    /// Print only the endpoint URL and token, as JSON.
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    data_dir: Option<PathBuf>,
 }
 
 #[derive(clap::Args)]
@@ -107,7 +121,29 @@ fn main() -> Result<()> {
         Command::Flows(a) => flows(a),
         Command::Export(a) => export(a),
         Command::Ca { action } => ca(action),
+        Command::Mcp(a) => mcp_info(a),
     }
+}
+
+fn mcp_info(a: McpArgs) -> Result<()> {
+    let dir = a.data_dir.unwrap_or_else(paths::data_dir);
+    let token = mcp::load_or_create_token(&dir).context("reading the MCP token")?;
+    let url = format!("http://{}/mcp", a.listen);
+    if a.json {
+        println!("{}", serde_json::json!({ "url": url, "token": token }));
+        return Ok(());
+    }
+    println!("MCP endpoint  {url}");
+    println!("Token file    {}", dir.join("mcp.token").display());
+    println!();
+    println!("Connect Claude Code (run once):");
+    println!(
+        "  claude mcp add --transport http proxy {url} --header \"Authorization: Bearer {token}\""
+    );
+    println!();
+    println!("Start `proxyd run` (or the desktop app) first. Reads are always allowed;");
+    println!("changes wait for approval in the app unless you choose otherwise in Settings.");
+    Ok(())
 }
 
 fn init_tracing() {

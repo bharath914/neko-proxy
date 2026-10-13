@@ -1,6 +1,6 @@
 use crate::convert;
 use crate::pb::{self, client_message::Body as Req, server_message::Body as Res};
-use crate::{ApiContext, HubEvent};
+use crate::{ApiContext, ApprovalEvent, HubEvent};
 use flow::FlowSummary;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as _;
@@ -137,6 +137,9 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
     });
 
     let mut sub: Option<(Query, broadcast::Receiver<HubEvent>)> = None;
+    // Pushed notices, once the client sends `watch`.
+    let mut pause_rx: Option<broadcast::Receiver<rules::PauseEvent>> = None;
+    let mut approval_rx: Option<broadcast::Receiver<ApprovalEvent>> = None;
     let mut batch: Vec<FlowSummary> = Vec::new();
     let mut batch_index: HashMap<u64, usize> = HashMap::new();
     let mut batch_cleared = false;
@@ -147,6 +150,18 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
         let event = async {
             match &mut sub {
                 Some((_, rx)) => rx.recv().await,
+                None => std::future::pending().await,
+            }
+        };
+        let pause_event = async {
+            match &mut pause_rx {
+                Some(rx) => rx.recv().await,
+                None => std::future::pending().await,
+            }
+        };
+        let approval_event = async {
+            match &mut approval_rx {
+                Some(rx) => rx.recv().await,
                 None => std::future::pending().await,
             }
         };
@@ -185,6 +200,12 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
                             body: Some(Res::Subscribed(pb::SubscribeResponse { total })),
                         });
                     }
+                    Some(Req::Watch(_)) => {
+                        // Subscribe first so nothing slips between the list and the pushes.
+                        pause_rx = Some(ctx.rules.pauses().subscribe());
+                        approval_rx = Some(ctx.approvals.subscribe());
+                        let _ = out_tx.send(paused_list(&ctx, id));
+                    }
                     Some(Req::Unsubscribe(_)) => {
                         sub = None;
                         batch.clear();
@@ -205,6 +226,56 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
                     None => {
                         let _ = out_tx.send(error(id, "bad_request", "empty request"));
                     }
+                }
+            }
+            ev = pause_event => {
+                match ev {
+                    Ok(rules::PauseEvent::Paused(p)) => {
+                        let _ = out_tx.send(pb::ServerMessage {
+                            id: 0,
+                            body: Some(Res::PauseNotice(pb::PauseNotice {
+                                paused: Some(convert::paused(&p)),
+                                ..Default::default()
+                            })),
+                        });
+                    }
+                    Ok(rules::PauseEvent::Released { flow_id, how, .. }) => {
+                        let _ = out_tx.send(pb::ServerMessage {
+                            id: 0,
+                            body: Some(Res::PauseNotice(pb::PauseNotice {
+                                released_flow_id: flow_id,
+                                how: how.to_string(),
+                                ..Default::default()
+                            })),
+                        });
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => pause_rx = None,
+                }
+            }
+            ev = approval_event => {
+                match ev {
+                    Ok(ApprovalEvent::Requested(a)) => {
+                        let _ = out_tx.send(pb::ServerMessage {
+                            id: 0,
+                            body: Some(Res::ApprovalNotice(pb::ApprovalNotice {
+                                requested: Some(convert::approval(&a)),
+                                ..Default::default()
+                            })),
+                        });
+                    }
+                    Ok(ApprovalEvent::Decided { id, allowed }) => {
+                        let _ = out_tx.send(pb::ServerMessage {
+                            id: 0,
+                            body: Some(Res::ApprovalNotice(pb::ApprovalNotice {
+                                decided_id: id,
+                                allowed,
+                                ..Default::default()
+                            })),
+                        });
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => approval_rx = None,
                 }
             }
             ev = event => {
@@ -431,7 +502,141 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             }
             rules_response(&ctx, id)
         }
-        Req::Subscribe(_) | Req::Unsubscribe(_) => error(id, "internal", "handled elsewhere"),
+        Req::PutRule(r) => {
+            let Some(rule) = r.rule else {
+                return error(id, "bad_request", "missing rule");
+            };
+            let rule = match convert::rule_from_pb(rule) {
+                Ok(r) => r,
+                Err(e) => return error(id, "invalid_rule", e),
+            };
+            match ctx.rules.put_rule(rule) {
+                Ok(_) => rules_response(&ctx, id),
+                Err(e) => error(id, "invalid_rule", e.to_string()),
+            }
+        }
+        Req::SetRuleEnabled(r) => match ctx.rules.set_enabled(&r.id, r.enabled) {
+            Ok(true) => rules_response(&ctx, id),
+            Ok(false) => error(id, "not_found", format!("no rule {}", r.id)),
+            Err(e) => error(id, "invalid_rule", e.to_string()),
+        },
+        Req::Paused(_) => paused_list(&ctx, id),
+        Req::Resume(r) => {
+            let verdict = if r.abort {
+                flow::Verdict::Abort(if r.abort_reason.is_empty() {
+                    "stopped by the person".into()
+                } else {
+                    r.abort_reason
+                })
+            } else {
+                flow::Verdict::Continue(flow::Edits {
+                    method: r.method,
+                    path_and_query: r.path,
+                    status: r.status.map(|s| s.min(599) as u16),
+                    headers: r
+                        .replace_headers
+                        .then(|| r.headers.into_iter().map(|h| (h.name, h.value)).collect()),
+                    body: r.body.map(bytes::Bytes::from),
+                })
+            };
+            if ctx.rules.pauses().resume(r.flow_id, verdict) {
+                paused_list(&ctx, id)
+            } else {
+                error(
+                    id,
+                    "not_found",
+                    format!("flow {} is not held at a breakpoint (it may have timed out)", r.flow_id),
+                )
+            }
+        }
+        Req::Replay(r) => {
+            let edits = crate::ReplayEdits {
+                method: r.method,
+                url: r.url,
+                headers: r
+                    .replace_headers
+                    .then(|| r.headers.into_iter().map(|h| (h.name, h.value)).collect()),
+                body: r.body.map(bytes::Bytes::from),
+            };
+            match crate::replay_flow(&ctx, r.id, edits).await {
+                Ok(done) => pb::ServerMessage {
+                    id,
+                    body: Some(Res::Replay(pb::ReplayResponse {
+                        flow_id: done.flow_id,
+                        status: done.status as u32,
+                    })),
+                },
+                Err(e) => error(id, "replay", e),
+            }
+        }
+        Req::Approvals(_) => approvals_response(&ctx, id),
+        Req::DecideApproval(r) => {
+            if ctx.approvals.decide(&r.id, r.allow) {
+                approvals_response(&ctx, id)
+            } else {
+                error(id, "not_found", "that request was already answered or expired")
+            }
+        }
+        Req::SetMcpWrites(r) => {
+            match ctx.rules.set_mcp_writes(convert::mcp_writes_from_pb(r.writes)) {
+                Ok(_) => mcp_info(&ctx, id),
+                Err(e) => error(id, "invalid_rule", e.to_string()),
+            }
+        }
+        Req::McpInfo(_) => mcp_info(&ctx, id),
+        Req::Watch(_) | Req::Subscribe(_) | Req::Unsubscribe(_) => {
+            error(id, "internal", "handled elsewhere")
+        }
+    }
+}
+
+fn paused_list(ctx: &ApiContext, id: u64) -> pb::ServerMessage {
+    pb::ServerMessage {
+        id,
+        body: Some(Res::Paused(pb::PausedList {
+            items: ctx
+                .rules
+                .pauses()
+                .list()
+                .iter()
+                .map(|p| convert::paused(p))
+                .collect(),
+        })),
+    }
+}
+
+fn approvals_response(ctx: &ApiContext, id: u64) -> pb::ServerMessage {
+    pb::ServerMessage {
+        id,
+        body: Some(Res::Approvals(pb::ApprovalsResponse {
+            pending: ctx
+                .approvals
+                .list()
+                .iter()
+                .map(|a| convert::approval(a))
+                .collect(),
+        })),
+    }
+}
+
+fn mcp_info(ctx: &ApiContext, id: u64) -> pb::ServerMessage {
+    let writes = convert::mcp_writes_to_pb(ctx.rules.mcp_writes()) as i32;
+    let info = match &ctx.mcp {
+        Some(m) => pb::McpInfo {
+            enabled: true,
+            url: m.url.clone(),
+            token: m.token.clone(),
+            command: m.claude_command(),
+            writes,
+        },
+        None => pb::McpInfo {
+            writes,
+            ..Default::default()
+        },
+    };
+    pb::ServerMessage {
+        id,
+        body: Some(Res::McpInfo(info)),
     }
 }
 
@@ -465,6 +670,8 @@ fn rules_response(ctx: &ApiContext, id: u64) -> pb::ServerMessage {
                 })
                 .collect(),
             pinned_hosts: ctx.control.pinned_hosts(),
+            rules: ctx.rules.rules().iter().map(convert::rule_to_pb).collect(),
+            mcp_writes: convert::mcp_writes_to_pb(ctx.rules.mcp_writes()) as i32,
         })),
     }
 }

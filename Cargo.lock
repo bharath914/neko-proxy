@@ -2796,11 +2796,13 @@ name = "proxy-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
  "flow",
  "libc",
  "proxy-api",
  "proxy-decode",
+ "proxy-mcp",
  "proxy-net",
  "proxy-rules",
  "proxy-store",
@@ -2844,6 +2846,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "proxy-mcp"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "flow",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "proxy-api",
+ "proxy-decode",
+ "proxy-rules",
+ "proxy-store",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "proxy-net"
 version = "0.1.0"
 dependencies = [
@@ -2853,6 +2875,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "proxy-decode",
  "proxy-rules",
  "proxy-tls",
  "rcgen",
@@ -2885,6 +2908,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 

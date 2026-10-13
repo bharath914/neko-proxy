@@ -79,6 +79,7 @@ async fn start_proxy_with(rules: Option<Arc<rules::RuleSet>>) -> Harness {
     let mut chain = InterceptorChain::empty();
     if let Some(r) = &rules {
         chain.push_request(r.clone());
+        chain.push_response(r.clone());
     }
     let proxy = Proxy::new(
         cfg,
@@ -88,7 +89,8 @@ async fn start_proxy_with(rules: Option<Arc<rules::RuleSet>>) -> Harness {
         chain,
     );
     if let Some(r) = rules {
-        proxy.set_connect_policy(r);
+        proxy.set_connect_policy(r.clone());
+        proxy.set_gate(r);
     }
     let p = proxy.clone();
     tokio::spawn(async move { p.serve(listener, std::future::pending()).await });
@@ -711,4 +713,308 @@ async fn parser_survives_hostile_input() {
             .expect("handler finished")
             .expect("handler did not panic");
     }
+}
+
+// ------------------------------------------------------- rules and breakpoints
+
+async fn send_raw(addr: SocketAddr, req: String) -> String {
+    let mut s = TcpStream::connect(addr).await.unwrap();
+    s.write_all(req.as_bytes()).await.unwrap();
+    let mut out = String::new();
+    s.read_to_string(&mut out).await.unwrap();
+    out
+}
+
+fn get_req(origin: SocketAddr, path: &str) -> String {
+    format!("GET http://{origin}{path} HTTP/1.1\r\nHost: {origin}\r\nConnection: close\r\n\r\n")
+}
+
+fn post_req(origin: SocketAddr, path: &str, body: &str) -> String {
+    format!(
+        "POST http://{origin}{path} HTTP/1.1\r\nHost: {origin}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
+fn rule_for(origin: SocketAddr, path: &str, action: rules::Action) -> rules::Rule {
+    rules::Rule {
+        id: String::new(),
+        name: String::new(),
+        enabled: true,
+        matcher: rules::Match {
+            scheme: String::new(),
+            host: "127.0.0.1".into(),
+            port: origin.port(),
+            method: String::new(),
+            path: path.into(),
+            query: String::new(),
+        },
+        action,
+    }
+}
+
+#[tokio::test]
+async fn mock_rewrite_and_throttle_apply_without_touching_the_origin() {
+    let rules = Arc::new(rules::RuleSet::in_memory());
+    let h = start_proxy_with(Some(rules.clone())).await;
+    let origin = start_origin_http().await;
+    rules
+        .put_rule(rule_for(
+            origin,
+            "/missing",
+            rules::Action::Mock {
+                status: 503,
+                headers: vec![("retry-after".into(), "7".into())],
+                body: r#"{"down":true}"#.into(),
+                delay_ms: 120,
+            },
+        ))
+        .unwrap();
+    rules
+        .put_rule(rule_for(
+            origin,
+            "/json",
+            rules::Action::Rewrite {
+                request_headers: vec![],
+                response_headers: vec![rules::HeaderEdit {
+                    op: rules::HeaderOp::Set,
+                    name: "x-from-rule".into(),
+                    value: "yes".into(),
+                }],
+            },
+        ))
+        .unwrap();
+
+    let t = std::time::Instant::now();
+    let out = send_raw(h.addr, get_req(origin, "/missing")).await;
+    assert!(t.elapsed() >= Duration::from_millis(120), "mock delay applied");
+    assert!(out.starts_with("HTTP/1.1 503"), "{out}");
+    assert!(out.to_ascii_lowercase().contains("retry-after: 7"));
+    assert!(out.ends_with(r#"{"down":true}"#), "{out}");
+
+    let out = send_raw(h.addr, get_req(origin, "/json")).await;
+    assert!(out.starts_with("HTTP/1.1 200"), "{out}");
+    assert!(out.to_ascii_lowercase().contains("x-from-rule: yes"), "{out}");
+
+    let flows = h.sink.finished(2).await;
+    assert_ne!(flows[0].flags & flags::MAPPED, 0, "mocks are answered locally");
+    assert_ne!(flows[1].flags & flags::EDITED, 0, "rewrites are flagged");
+    assert_eq!(flows[1].status, 200);
+}
+
+#[tokio::test]
+async fn map_remote_redirects_the_upstream() {
+    let rules = Arc::new(rules::RuleSet::in_memory());
+    let h = start_proxy_with(Some(rules.clone())).await;
+    let origin = start_origin_http().await;
+    // Nothing listens on port 9 (discard), so without the rule this is a 502.
+    let dead: SocketAddr = "127.0.0.1:9".parse().unwrap();
+    rules
+        .put_rule(rules::Rule {
+            matcher: rules::Match {
+                port: 9,
+                ..rule_for(origin, "/json", rules::Action::Throttle { delay_ms: 1 }).matcher
+            },
+            ..rule_for(
+                origin,
+                "/json",
+                rules::Action::MapRemote {
+                    scheme: String::new(),
+                    host: String::new(),
+                    port: origin.port(),
+                },
+            )
+        })
+        .unwrap();
+
+    let out = send_raw(h.addr, get_req(dead, "/json")).await;
+    assert!(out.starts_with("HTTP/1.1 200"), "{out}");
+    assert!(out.ends_with(r#"{"ok":true,"n":1}"#), "{out}");
+    let f = &h.sink.finished(1).await[0];
+    assert_eq!(f.port, 9, "the flow still shows what the client asked for");
+    assert_ne!(f.flags & flags::EDITED, 0);
+}
+
+async fn next_paused(
+    rx: &mut tokio::sync::broadcast::Receiver<rules::PauseEvent>,
+) -> Arc<rules::PausedFlow> {
+    loop {
+        let ev = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("a breakpoint should hit")
+            .unwrap();
+        if let rules::PauseEvent::Paused(p) = ev {
+            return p;
+        }
+    }
+}
+
+#[tokio::test]
+async fn request_breakpoint_edits_reach_the_origin() {
+    let rules = Arc::new(rules::RuleSet::in_memory());
+    let h = start_proxy_with(Some(rules.clone())).await;
+    let origin = start_origin_http().await;
+    rules
+        .put_rule(rule_for(
+            origin,
+            "/echo",
+            rules::Action::Breakpoint {
+                phase: rules::BreakpointPhase::Request,
+                timeout_s: 10,
+            },
+        ))
+        .unwrap();
+    let mut rx = rules.pauses().subscribe();
+
+    let addr = h.addr;
+    let client = tokio::spawn(async move { send_raw(addr, post_req(origin, "/echo", "original")).await });
+
+    let paused = next_paused(&mut rx).await;
+    assert_eq!(paused.phase, flow::Phase::Request);
+    assert_eq!(paused.held.method, "POST");
+    assert_eq!(paused.held.path_and_query, "/echo");
+    assert_eq!(&paused.held.body[..], b"original");
+    assert!(!client.is_finished(), "the client is waiting");
+
+    let mut headers = paused.held.headers.clone();
+    headers.push(("x-edited".into(), "1".into()));
+    assert!(rules.pauses().resume(
+        paused.flow_id,
+        flow::Verdict::Continue(flow::Edits {
+            headers: Some(headers),
+            body: Some(Bytes::from_static(b"changed by a person")),
+            ..Default::default()
+        }),
+    ));
+
+    let out = client.await.unwrap();
+    assert!(out.starts_with("HTTP/1.1 201"), "{out}");
+    assert!(out.ends_with("changed by a person"), "origin got the edit: {out}");
+
+    let f = &h.sink.finished(1).await[0];
+    assert_eq!(&f.req_body[..], b"changed by a person");
+    assert_ne!(f.flags & flags::EDITED, 0);
+    assert_ne!(f.flags & flags::BREAKPOINT, 0);
+    assert!(f.req_headers.iter().any(|(n, _)| n == "x-edited"));
+}
+
+#[tokio::test]
+async fn response_breakpoint_can_change_status_and_body_and_abort() {
+    let rules = Arc::new(rules::RuleSet::in_memory());
+    let h = start_proxy_with(Some(rules.clone())).await;
+    let origin = start_origin_http().await;
+    rules
+        .put_rule(rule_for(
+            origin,
+            "/json",
+            rules::Action::Breakpoint {
+                phase: rules::BreakpointPhase::Response,
+                timeout_s: 10,
+            },
+        ))
+        .unwrap();
+    let mut rx = rules.pauses().subscribe();
+
+    let addr = h.addr;
+    let client = tokio::spawn(async move { send_raw(addr, get_req(origin, "/json")).await });
+    let paused = next_paused(&mut rx).await;
+    assert_eq!(paused.phase, flow::Phase::Response);
+    assert_eq!(paused.held.status, 200);
+    assert_eq!(&paused.held.body[..], br#"{"ok":true,"n":1}"#);
+    rules.pauses().resume(
+        paused.flow_id,
+        flow::Verdict::Continue(flow::Edits {
+            status: Some(202),
+            body: Some(Bytes::from_static(br#"{"ok":false}"#)),
+            ..Default::default()
+        }),
+    );
+    let out = client.await.unwrap();
+    assert!(out.starts_with("HTTP/1.1 202"), "{out}");
+    assert!(out.ends_with(r#"{"ok":false}"#), "{out}");
+    let f = &h.sink.finished(1).await[0];
+    assert_eq!(f.status, 202);
+    assert_eq!(&f.res_body[..], br#"{"ok":false}"#);
+    assert_ne!(f.flags & flags::EDITED, 0);
+
+    // Abort: the client gets an error and the flow fails.
+    let client = tokio::spawn(async move { send_raw(addr, get_req(origin, "/json")).await });
+    let paused = next_paused(&mut rx).await;
+    rules
+        .pauses()
+        .resume(paused.flow_id, flow::Verdict::Abort("not today".into()));
+    let out = client.await.unwrap();
+    assert!(out.starts_with("HTTP/1.1 502"), "{out}");
+    let f = &h.sink.finished(2).await[1];
+    assert_eq!(f.state, FlowState::Failed);
+    assert!(f.error.contains("not today"), "{}", f.error);
+}
+
+#[tokio::test]
+async fn forgotten_breakpoint_times_out_and_lets_traffic_through() {
+    let rules = Arc::new(rules::RuleSet::in_memory());
+    let h = start_proxy_with(Some(rules.clone())).await;
+    let origin = start_origin_http().await;
+    rules
+        .put_rule(rule_for(
+            origin,
+            "/json",
+            rules::Action::Breakpoint {
+                phase: rules::BreakpointPhase::Request,
+                timeout_s: 1,
+            },
+        ))
+        .unwrap();
+    let out = send_raw(h.addr, get_req(origin, "/json")).await;
+    assert!(out.starts_with("HTTP/1.1 200"), "{out}");
+    assert!(rules.pauses().list().is_empty());
+}
+
+#[tokio::test]
+async fn replay_sends_a_new_flow_straight_upstream() {
+    let rules = Arc::new(rules::RuleSet::in_memory());
+    let h = start_proxy_with(Some(rules.clone())).await;
+    let origin = start_origin_http().await;
+    // A mock that would answer a normal request; replay must bypass it.
+    rules
+        .put_rule(rule_for(
+            origin,
+            "/echo",
+            rules::Action::Mock {
+                status: 418,
+                headers: vec![],
+                body: "teapot".into(),
+                delay_ms: 0,
+            },
+        ))
+        .unwrap();
+    let out = h
+        .proxy
+        .replay(proxy_net::ReplayRequest {
+            method: "post".into(),
+            url: format!("http://{origin}/echo"),
+            headers: vec![("content-type".into(), "text/plain".into())],
+            body: Bytes::from_static(b"again"),
+        })
+        .await
+        .unwrap();
+    assert_eq!(out.status, 201);
+    let f = &h.sink.finished(1).await[0];
+    assert_eq!(f.id, out.flow_id);
+    assert_eq!(&f.res_body[..], b"again");
+    assert_eq!(&f.req_body[..], b"again");
+    assert_ne!(f.flags & flags::REPLAYED, 0);
+    assert_eq!(f.app, "proxy");
+
+    let err = h
+        .proxy
+        .replay(proxy_net::ReplayRequest {
+            method: "GET".into(),
+            url: "/relative".into(),
+            headers: vec![],
+            body: Bytes::new(),
+        })
+        .await
+        .unwrap_err();
+    assert!(err.contains("http"), "{err}");
 }

@@ -32,6 +32,13 @@ impl AppSlot {
         Arc::new(AppSlot::default())
     }
 
+    /// A slot whose app name is already known (replays carry "proxy").
+    pub fn named(name: &str) -> Arc<AppSlot> {
+        let slot = AppSlot::default();
+        let _ = slot.0.set(name.to_string());
+        Arc::new(slot)
+    }
+
     pub fn get(&self) -> String {
         self.0.get().cloned().unwrap_or_default()
     }
@@ -121,6 +128,41 @@ impl FlowCtx {
 
     pub fn summary(&self) -> flow::FlowSummary {
         self.state.lock().unwrap().rec.summary()
+    }
+
+    /// Mark the flow (edited, held at a breakpoint, replayed) and tell
+    /// subscribers.
+    pub fn add_flags(&self, extra: u32) {
+        let summary = {
+            let mut s = self.state.lock().unwrap();
+            if s.rec.flags & extra == extra {
+                return;
+            }
+            s.rec.flags |= extra;
+            s.rec.summary()
+        };
+        self.sink.publish(FlowEvent::Updated(summary));
+    }
+
+    /// The request was changed (breakpoint edit) before it went upstream:
+    /// record what was actually sent.
+    pub fn request_edited(
+        &self,
+        method: String,
+        path: String,
+        query: String,
+        headers: Vec<(String, String)>,
+    ) {
+        let summary = {
+            let mut s = self.state.lock().unwrap();
+            s.rec.method = method;
+            s.rec.path = path;
+            s.rec.query = query;
+            s.rec.req_headers = headers;
+            s.rec.flags |= flags::EDITED;
+            s.rec.summary()
+        };
+        self.sink.publish(FlowEvent::Updated(summary));
     }
 
     pub fn dispatched(&self) {

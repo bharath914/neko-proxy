@@ -1,0 +1,24 @@
+[package]
+name = "proxy-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MCP server: lets a local AI client read traffic and, with approval, create rules and breakpoints"
+
+[dependencies]
+api.workspace = true
+flow.workspace = true
+store.workspace = true
+decode.workspace = true
+rules.workspace = true
+bytes.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

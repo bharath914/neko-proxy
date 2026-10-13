@@ -7,10 +7,10 @@ use crate::flowctx::{AppSlot, FlowCtx, NewFlow};
 use crate::parse::{resolve_plain, resolve_tunneled, Target};
 use crate::{Inner, ProxyBody};
 use bytes::Bytes;
-use flow::{flags, Intercept};
+use flow::{flags, Delay, Edited, Edits, FlowSummary, Held, Intercept, Phase, Retarget, Verdict};
 use http::header::{CONNECTION, CONTENT_TYPE, HOST, UPGRADE};
 use http::{HeaderMap, HeaderName, Method, Request, Response, StatusCode, Uri, Version};
-use http_body_util::{BodyExt, Empty, Full};
+use http_body_util::{BodyExt, Empty, Full, Limited};
 use hyper::body::Incoming;
 use hyper_util::rt::TokioIo;
 use std::convert::Infallible;
@@ -164,6 +164,106 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+/// What rules and breakpoints see when the flow is not being recorded.
+fn summary_for(target: &Target, method: &Method) -> FlowSummary {
+    FlowSummary {
+        scheme: target.scheme.to_string(),
+        host: target.host.clone(),
+        port: target.port,
+        method: method.to_string(),
+        path: target.path_and_query.clone(),
+        ..Default::default()
+    }
+}
+
+/// A message collected so it can be shown and edited at a breakpoint.
+struct Collected {
+    bytes: Bytes,
+    /// The body was decompressed for editing, so `content-encoding` is gone.
+    decoded: bool,
+}
+
+/// Read a whole body, up to `cap`, and undo content encoding when possible.
+async fn collect_for_hold<B>(
+    body: B,
+    headers: &HeaderMap,
+    cap: usize,
+) -> Result<Collected, String>
+where
+    B: hyper::body::Body<Data = Bytes> + Unpin,
+    B::Error: Into<BoxError>,
+{
+    let wire = Limited::new(body, cap)
+        .collect()
+        .await
+        .map_err(|e| {
+            let e: BoxError = e;
+            format!(
+                "The body is larger than the {} MiB a breakpoint can hold, or its stream failed: {e}",
+                cap / (1024 * 1024)
+            )
+        })?
+        .to_bytes();
+    let enc = headers
+        .get(http::header::CONTENT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if enc.is_empty() || enc.eq_ignore_ascii_case("identity") || wire.is_empty() {
+        return Ok(Collected {
+            bytes: wire,
+            decoded: false,
+        });
+    }
+    let d = decode::decode_content(enc, &wire, cap);
+    if d.problem.is_none() {
+        Ok(Collected {
+            bytes: Bytes::from(d.bytes),
+            decoded: true,
+        })
+    } else {
+        Ok(Collected {
+            bytes: wire,
+            decoded: false,
+        })
+    }
+}
+
+/// Header map to the list a breakpoint editor shows. Drops what no longer
+/// describes the body once it has been decoded.
+fn held_headers(h: &HeaderMap, decoded: bool) -> Vec<(String, String)> {
+    h.iter()
+        .filter(|(k, _)| {
+            !(decoded
+                && (*k == http::header::CONTENT_ENCODING || *k == http::header::CONTENT_LENGTH))
+        })
+        .map(|(k, v)| {
+            (
+                k.as_str().to_string(),
+                String::from_utf8_lossy(v.as_bytes()).into_owned(),
+            )
+        })
+        .collect()
+}
+
+fn header_map(list: &[(String, String)]) -> HeaderMap {
+    let mut m = HeaderMap::new();
+    for (n, v) in list {
+        if let (Ok(n), Ok(v)) = (
+            HeaderName::from_bytes(n.as_bytes()),
+            http::HeaderValue::from_str(v),
+        ) {
+            m.append(n, v);
+        }
+    }
+    m
+}
+
+/// The body is now exactly these bytes: let the framing follow.
+fn fix_framing(h: &mut HeaderMap, len: usize) {
+    h.remove(http::header::TRANSFER_ENCODING);
+    h.insert(http::header::CONTENT_LENGTH, http::HeaderValue::from(len));
+}
+
 impl Inner {
     pub(crate) async fn handle(
         self: Arc<Self>,
@@ -202,6 +302,102 @@ impl Inner {
             return Ok(self.proxy_upgrade(req, target, &ctx).await);
         }
         Ok(self.proxy_http(req, target, &ctx).await)
+    }
+
+    /// Send a request again as a new, recorded flow.
+    pub(crate) async fn replay(
+        self: &Arc<Self>,
+        r: crate::ReplayRequest,
+    ) -> Result<crate::ReplayOutcome, String> {
+        if self.cfg.offline {
+            return Err("upstream connections are disabled".into());
+        }
+        let method = Method::from_bytes(r.method.trim().to_ascii_uppercase().as_bytes())
+            .map_err(|_| format!("\"{}\" is not an HTTP method", r.method))?;
+        let uri: Uri = r.url.parse().map_err(|_| format!("\"{}\" is not a URL", r.url))?;
+        if uri.scheme().is_none() {
+            return Err("the URL must start with http:// or https://".into());
+        }
+        let target = resolve_plain(&method, &uri, None)
+            .map_err(|e| format!("could not work out where to send this ({e:?})"))?;
+
+        let mut headers = header_map(&r.headers);
+        strip_hop_by_hop(&mut headers, false);
+        headers.remove(HOST);
+        headers.remove(http::header::CONTENT_LENGTH);
+
+        let flow = FlowCtx::start(
+            self.sink.clone(),
+            NewFlow {
+                id: self.ids.next(),
+                started_at_ms: unix_ms(),
+                scheme: target.scheme,
+                host: target.host.clone(),
+                port: target.port,
+                method: method.to_string(),
+                path: target.path().to_string(),
+                query: target.query().to_string(),
+                req_headers: headers_vec(&headers),
+                flags: flags::REPLAYED,
+                protocol: "HTTP/1.1",
+            },
+            AppSlot::named("proxy"),
+            self.cfg.body_cap,
+        );
+        flow.req_cap.push(&r.body);
+
+        let upstream = Uri::builder()
+            .scheme(target.scheme)
+            .authority(target.authority())
+            .path_and_query(target.path_and_query.as_str())
+            .build()
+            .map_err(|e| {
+                let m = format!("Invalid request target: {e}");
+                flow.fail(m.clone());
+                m
+            })?;
+        let mut builder = Request::builder().method(method).uri(upstream);
+        if let Some(h) = builder.headers_mut() {
+            *h = headers;
+        }
+        let req = builder.body(full(r.body)).map_err(|e| {
+            let m = e.to_string();
+            flow.fail(m.clone());
+            m
+        })?;
+        flow.dispatched();
+        let sent = tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            self.client.request(req),
+        )
+        .await;
+        let res = match sent {
+            Ok(Ok(res)) => res,
+            Ok(Err(e)) => {
+                let m = error_chain(&e);
+                flow.fail(m.clone());
+                return Err(m);
+            }
+            Err(_) => {
+                let m = "the server did not answer within 60 seconds".to_string();
+                flow.fail(m.clone());
+                return Err(m);
+            }
+        };
+        let status = res.status().as_u16();
+        let summary = flow.summary();
+        let flow_id = summary.id;
+        let forwarded = self.forward_response(Some(flow.clone()), summary, res).await;
+        // Drain the body so the flow finishes with everything captured.
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            forwarded.into_body().collect(),
+        )
+        .await;
+        Ok(crate::ReplayOutcome {
+            flow_id,
+            status,
+        })
     }
 
     fn is_self(&self, t: &Target) -> bool {
@@ -286,31 +482,159 @@ impl Inner {
     async fn proxy_http(
         self: &Arc<Self>,
         req: Request<Incoming>,
-        target: Target,
+        mut target: Target,
         ctx: &ConnCtx,
     ) -> Response<ProxyBody> {
         let (mut parts, body) = req.into_parts();
         let flow = self.begin_flow(&target, &parts, &ctx.app);
+        let gate = self.gate.lock().unwrap().clone();
+        let current = |target: &Target, parts: &http::request::Parts| match &flow {
+            Some(f) => f.summary(),
+            None => summary_for(target, &parts.method),
+        };
 
-        if !self.chain.is_empty() {
-            let summary = flow.as_ref().map(|f| f.summary()).unwrap_or_default();
-            if let Intercept::Respond(r) = self.chain.run_request(&summary, &mut parts) {
-                let (rp, rb) = r.into_parts();
-                // What was served is what gets recorded, so the body shows.
-                let rb_copy = rb.clone();
-                let res = Response::from_parts(rp, full(rb));
+        // Breakpoint on the request: hold it, let the person look and edit.
+        let mut held_body: Option<Bytes> = None;
+        let mut body = Some(body);
+        if let Some(g) = &gate {
+            let summary = current(&target, &parts);
+            if let Some(ticket) = g.request_ticket(&summary, &parts) {
+                let collected = collect_for_hold(
+                    body.take().expect("body is taken once"),
+                    &parts.headers,
+                    self.cfg.body_cap,
+                )
+                .await;
+                let collected = match collected {
+                    Ok(c) => c,
+                    Err(msg) => {
+                        if let Some(f) = &flow {
+                            f.fail(msg.clone());
+                        }
+                        return text_response(
+                            StatusCode::PAYLOAD_TOO_LARGE,
+                            "Cannot hold this request at a breakpoint",
+                            &msg,
+                        );
+                    }
+                };
+                let held = Held {
+                    method: parts.method.to_string(),
+                    path_and_query: target.path_and_query.clone(),
+                    status: 0,
+                    headers: held_headers(&parts.headers, collected.decoded),
+                    body: collected.bytes.clone(),
+                };
                 if let Some(f) = &flow {
-                    f.response_headers(
-                        res.status().as_u16(),
-                        proto_label(res.version()),
-                        headers_vec(res.headers()),
-                        None,
-                        flags::MAPPED,
-                    );
-                    f.res_cap.push(&rb_copy);
-                    f.finish_body(BodyEnd::Complete);
+                    f.add_flags(flags::BREAKPOINT);
                 }
-                return res;
+                match g.hold(&summary, Phase::Request, ticket, held).await {
+                    Verdict::Abort(why) => {
+                        let msg = format!("Aborted at a breakpoint: {why}");
+                        if let Some(f) = &flow {
+                            f.fail(msg.clone());
+                        }
+                        return text_response(
+                            StatusCode::BAD_GATEWAY,
+                            "The request was aborted at a breakpoint",
+                            &why,
+                        );
+                    }
+                    Verdict::Continue(edits) => {
+                        let changed = !edits.is_empty() || collected.decoded;
+                        let Edits {
+                            method,
+                            path_and_query,
+                            headers,
+                            body: new_body,
+                            ..
+                        } = edits;
+                        if let Some(m) = method.and_then(|m| Method::from_bytes(m.as_bytes()).ok())
+                        {
+                            parts.method = m;
+                        }
+                        if let Some(pq) = path_and_query {
+                            if pq.starts_with('/') && pq.parse::<http::uri::PathAndQuery>().is_ok()
+                            {
+                                target.path_and_query = pq;
+                            }
+                        }
+                        match headers {
+                            Some(list) => parts.headers = header_map(&list),
+                            None if collected.decoded => {
+                                parts.headers.remove(http::header::CONTENT_ENCODING);
+                            }
+                            None => {}
+                        }
+                        let final_body = new_body.unwrap_or(collected.bytes);
+                        fix_framing(&mut parts.headers, final_body.len());
+                        if let Some(f) = &flow {
+                            if changed {
+                                f.request_edited(
+                                    parts.method.to_string(),
+                                    target.path().to_string(),
+                                    target.query().to_string(),
+                                    headers_vec(&parts.headers),
+                                );
+                            }
+                            f.req_cap.push(&final_body);
+                        }
+                        held_body = Some(final_body);
+                    }
+                }
+            }
+        }
+
+        // Rules: rewrites, remaps, delays and mocks.
+        let mut respond = None;
+        if !self.chain.is_empty() {
+            let summary = current(&target, &parts);
+            if let Intercept::Respond(r) = self.chain.run_request(&summary, &mut parts) {
+                respond = Some(r);
+            }
+        }
+        let delay = parts.extensions.remove::<Delay>();
+        let retarget = parts.extensions.remove::<Retarget>();
+        if parts.extensions.remove::<Edited>().is_some() {
+            if let Some(f) = &flow {
+                f.add_flags(flags::EDITED);
+            }
+        }
+        if let Some(Delay(d)) = delay {
+            tokio::time::sleep(d).await;
+        }
+        if let Some(r) = respond {
+            let (rp, rb) = r.into_parts();
+            // What was served is what gets recorded, so the body shows.
+            let rb_copy = rb.clone();
+            let res = Response::from_parts(rp, full(rb));
+            if let Some(f) = &flow {
+                f.response_headers(
+                    res.status().as_u16(),
+                    proto_label(res.version()),
+                    headers_vec(res.headers()),
+                    None,
+                    flags::MAPPED,
+                );
+                f.res_cap.push(&rb_copy);
+                f.finish_body(BodyEnd::Complete);
+            }
+            return res;
+        }
+        if let Some(rt) = retarget {
+            let scheme_changed = rt.scheme.map(|s| s != target.scheme).unwrap_or(false);
+            if let Some(s) = rt.scheme {
+                target.scheme = s;
+            }
+            if let Some(h) = rt.host {
+                target.host = h;
+            }
+            match rt.port {
+                Some(p) => target.port = p,
+                None if scheme_changed => {
+                    target.port = if target.scheme == "https" { 443 } else { 80 }
+                }
+                None => {}
             }
         }
 
@@ -334,19 +658,24 @@ impl Inner {
         strip_hop_by_hop(&mut parts.headers, false);
         parts.headers.remove(HOST);
 
-        let req_body: ProxyBody = match &flow {
-            Some(f) => Tee::new(body, f.req_cap.clone(), |_| {}).boxed_unsync(),
-            None => body.map_err(|e| Box::new(e) as BoxError).boxed_unsync(),
+        let req_body: ProxyBody = match (held_body, body, &flow) {
+            (Some(b), _, _) => full(b),
+            (None, Some(body), Some(f)) => {
+                Tee::new(body, f.req_cap.clone(), |_| {}).boxed_unsync()
+            }
+            (None, Some(body), None) => body.map_err(|e| Box::new(e) as BoxError).boxed_unsync(),
+            (None, None, _) => empty(),
         };
         if let Some(f) = &flow {
             f.dispatched();
         }
+        let summary = current(&target, &parts);
         match self
             .client
             .request(Request::from_parts(parts, req_body))
             .await
         {
-            Ok(res) => self.forward_response(flow, res),
+            Ok(res) => self.forward_response(flow, summary, res).await,
             Err(e) => {
                 let msg = error_chain(&e);
                 if let Some(f) = &flow {
@@ -361,16 +690,94 @@ impl Inner {
         }
     }
 
-    fn forward_response(
+    async fn forward_response(
         self: &Arc<Self>,
         flow: Option<Arc<FlowCtx>>,
+        fallback: FlowSummary,
         res: Response<Incoming>,
     ) -> Response<ProxyBody> {
         let (mut parts, body) = res.into_parts();
-        if let Some(f) = &flow {
-            if !self.chain.is_empty() {
-                self.chain.run_response(&f.summary(), &mut parts);
+        let summary = flow.as_ref().map(|f| f.summary()).unwrap_or(fallback);
+        let mut extra = 0u32;
+
+        if !self.chain.is_empty() {
+            let before = parts.headers.clone();
+            self.chain.run_response(&summary, &mut parts);
+            if before != parts.headers {
+                extra |= flags::EDITED;
             }
+        }
+
+        // Breakpoint on the response.
+        let mut held_body: Option<Bytes> = None;
+        let mut body = Some(body);
+        let gate = self.gate.lock().unwrap().clone();
+        if let (Some(g), true) = (&gate, parts.status != StatusCode::SWITCHING_PROTOCOLS) {
+            if let Some(ticket) = g.response_ticket(&summary, &parts) {
+                let collected = match collect_for_hold(
+                    body.take().expect("body is taken once"),
+                    &parts.headers,
+                    self.cfg.body_cap,
+                )
+                .await
+                {
+                    Ok(c) => c,
+                    Err(msg) => {
+                        if let Some(f) = &flow {
+                            f.fail(msg.clone());
+                        }
+                        return text_response(
+                            StatusCode::BAD_GATEWAY,
+                            "Cannot hold this response at a breakpoint",
+                            &msg,
+                        );
+                    }
+                };
+                let held = Held {
+                    method: summary.method.clone(),
+                    path_and_query: String::new(),
+                    status: parts.status.as_u16(),
+                    headers: held_headers(&parts.headers, collected.decoded),
+                    body: collected.bytes.clone(),
+                };
+                if let Some(f) = &flow {
+                    f.add_flags(flags::BREAKPOINT);
+                }
+                match g.hold(&summary, Phase::Response, ticket, held).await {
+                    Verdict::Abort(why) => {
+                        let msg = format!("Aborted at a breakpoint: {why}");
+                        if let Some(f) = &flow {
+                            f.fail(msg);
+                        }
+                        return text_response(
+                            StatusCode::BAD_GATEWAY,
+                            "The response was aborted at a breakpoint",
+                            &why,
+                        );
+                    }
+                    Verdict::Continue(edits) => {
+                        if !edits.is_empty() || collected.decoded {
+                            extra |= flags::EDITED;
+                        }
+                        if let Some(st) = edits.status.and_then(|s| StatusCode::from_u16(s).ok()) {
+                            parts.status = st;
+                        }
+                        match edits.headers {
+                            Some(list) => parts.headers = header_map(&list),
+                            None if collected.decoded => {
+                                parts.headers.remove(http::header::CONTENT_ENCODING);
+                            }
+                            None => {}
+                        }
+                        let final_body = edits.body.unwrap_or(collected.bytes);
+                        fix_framing(&mut parts.headers, final_body.len());
+                        held_body = Some(final_body);
+                    }
+                }
+            }
+        }
+
+        if let Some(f) = &flow {
             let info = parts.extensions.get::<Arc<ConnInfo>>().cloned();
             let claimed = info.as_ref().filter(|i| i.claim());
             let ws = if parts.status == StatusCode::SWITCHING_PROTOCOLS {
@@ -383,16 +790,24 @@ impl Inner {
                 proto_label(parts.version),
                 headers_vec(&parts.headers),
                 claimed.map(|i| &**i),
-                ws,
+                ws | extra,
             );
         }
         strip_hop_by_hop(&mut parts.headers, false);
-        let body: ProxyBody = match flow {
-            Some(f) => {
+        let body: ProxyBody = match (held_body, body, flow) {
+            (Some(b), _, flow) => {
+                if let Some(f) = &flow {
+                    f.res_cap.push(&b);
+                    f.finish_body(BodyEnd::Complete);
+                }
+                full(b)
+            }
+            (None, Some(body), Some(f)) => {
                 let f2 = f.clone();
                 Tee::new(body, f.res_cap.clone(), move |end| f2.finish_body(end)).boxed_unsync()
             }
-            None => body.map_err(|e| Box::new(e) as BoxError).boxed_unsync(),
+            (None, Some(body), None) => body.map_err(|e| Box::new(e) as BoxError).boxed_unsync(),
+            (None, None, _) => empty(),
         };
         Response::from_parts(parts, body)
     }
@@ -469,7 +884,8 @@ impl Inner {
             // The server declined the upgrade; relay its answer as a normal response.
             let (mut rparts, body) = res.into_parts();
             rparts.extensions.insert(info);
-            return self.forward_response(flow, Response::from_parts(rparts, body));
+            let summary = summary_for(&target, &Method::GET);
+            return self.forward_response(flow, summary, Response::from_parts(rparts, body)).await;
         }
 
         let on_upstream = hyper::upgrade::on(&mut res);

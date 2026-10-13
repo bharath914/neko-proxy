@@ -5,6 +5,9 @@ syntax = "proto3";
 // ServerMessage (core -> client). A response echoes the request id. Pushed
 // events (FlowBatch, Resync) carry id = 0.
 //
+// Phase 2 adds rules (mock, map remote, rewrite, throttle, breakpoint),
+// held messages (paused, resume), replay, and approvals for AI clients.
+//
 // Phase 1 surface: subscribe, get_flow, search, capture.start/stop/status,
 // export(har), clear, plus status and ca_info for the app shell.
 // Also: hosts (the host list), and the person's SSL proxying and Map Local
@@ -34,6 +37,16 @@ message ClientMessage {
     PutMapLocalRequest put_map_local = 23;
     RemoveRuleRequest remove_rule = 24;
     UnpinRequest unpin = 25;
+    PutRuleRequest put_rule = 26;
+    SetRuleEnabledRequest set_rule_enabled = 27;
+    ListPausedRequest paused = 28;
+    ResumeRequest resume = 29;
+    ReplayRequest replay = 30;
+    WatchRequest watch = 31;
+    ListApprovalsRequest approvals = 32;
+    DecideApprovalRequest decide_approval = 33;
+    SetMcpWritesRequest set_mcp_writes = 34;
+    McpInfoRequest mcp_info = 35;
   }
 }
 
@@ -52,8 +65,14 @@ message ServerMessage {
     CaInfo ca_info = 18;
     HostsResponse hosts = 19;
     RulesResponse rules = 20;
+    PausedList paused = 21;
+    ReplayResponse replay = 22;
+    ApprovalsResponse approvals = 23;
+    McpInfo mcp_info = 24;
     FlowBatch batch = 30;
     Resync resync = 31;
+    PauseNotice pause_notice = 32;
+    ApprovalNotice approval_notice = 33;
   }
 }
 
@@ -99,6 +118,9 @@ enum FlowState {
 //  64 mapped        answered from a Map Local rule, not by upstream
 // 128 ssl_bypassed  tunneled untouched because the host is outside the SSL
 //                   proxying list (or in its exclude list)
+// 256 edited        a rule or a breakpoint edit changed the request or response
+// 512 breakpoint    the flow was held at a breakpoint
+// 1024 replayed     sent again by the proxy
 message FlowSummary {
   uint64 id = 1;
   int64 started_at_ms = 2;
@@ -408,6 +430,8 @@ message RulesResponse {
   SslSettings ssl = 1;
   repeated MapLocalRule map_local = 2;
   repeated string pinned_hosts = 3;
+  repeated Rule rules = 4;       // mock, map remote, rewrite, throttle, breakpoint
+  McpWrites mcp_writes = 5;
 }
 
 message SetSslRequest {
@@ -432,4 +456,204 @@ message RemoveRuleRequest {
 // Forget that a host rejected our certificate. Empty host = all hosts.
 message UnpinRequest {
   string host = 1;
+}
+
+// ---------------------------------------------------------------- rules v2
+
+// Which requests a rule applies to. Empty fields match anything.
+message RuleMatch {
+  string scheme = 1;   // "http", "https" or empty
+  string host = 2;     // pattern, * for any
+  uint32 port = 3;     // 0 = any
+  string method = 4;
+  string path = 5;     // exact, or a prefix when it ends with *
+  string query = 6;    // exact query string
+}
+
+message HeaderEdit {
+  enum Op {
+    SET = 0;
+    ADD = 1;
+    REMOVE = 2;
+  }
+  Op op = 1;
+  string name = 2;
+  string value = 3;
+}
+
+// Answer with a fixed response; the server is never contacted.
+message MockAction {
+  uint32 status = 1;
+  repeated Header headers = 2;
+  string body = 3;
+  uint32 delay_ms = 4;
+}
+
+// Send the request to another host, port or scheme.
+message MapRemoteAction {
+  string scheme = 1;
+  string host = 2;
+  uint32 port = 3;
+}
+
+message RewriteAction {
+  repeated HeaderEdit request_headers = 1;
+  repeated HeaderEdit response_headers = 2;
+}
+
+message ThrottleAction {
+  uint32 delay_ms = 1;
+}
+
+message BreakpointAction {
+  enum Phase {
+    BOTH = 0;
+    REQUEST = 1;
+    RESPONSE = 2;
+  }
+  Phase phase = 1;
+  uint32 timeout_s = 2;  // 0 = 60
+}
+
+message Rule {
+  string id = 1;  // empty on create; the core assigns one
+  string name = 2;
+  bool enabled = 3;
+  RuleMatch matcher = 4;
+  oneof action {
+    MockAction mock = 10;
+    MapRemoteAction map_remote = 11;
+    RewriteAction rewrite = 12;
+    ThrottleAction throttle = 13;
+    BreakpointAction breakpoint = 14;
+  }
+}
+
+message PutRuleRequest {
+  Rule rule = 1;
+}
+
+// Turn any rule (Map Local included) on or off.
+message SetRuleEnabledRequest {
+  string id = 1;
+  bool enabled = 2;
+}
+
+// ---------------------------------------------------------------- breakpoints
+
+enum MessagePhase {
+  PHASE_REQUEST = 0;
+  PHASE_RESPONSE = 1;
+}
+
+// A request or response held at a breakpoint. Compressed bodies are shown
+// decompressed and the content-encoding header is dropped.
+message PausedFlow {
+  uint64 flow_id = 1;
+  string rule_id = 2;
+  MessagePhase phase = 3;
+  FlowSummary summary = 4;
+  string method = 5;
+  string path = 6;    // request: path and query
+  uint32 status = 7;  // response
+  repeated Header headers = 8;
+  bytes body = 9;
+  int64 since_ms = 10;
+  uint32 timeout_s = 11;
+}
+
+message ListPausedRequest {}
+message PausedList {
+  repeated PausedFlow items = 1;
+}
+
+// Resume a held message, with edits, or abort it. Unset fields keep the
+// original. `replace_headers` swaps the whole header list for `headers`.
+message ResumeRequest {
+  uint64 flow_id = 1;
+  bool abort = 2;
+  string abort_reason = 3;
+  optional string method = 4;
+  optional string path = 5;
+  optional uint32 status = 6;
+  bool replace_headers = 7;
+  repeated Header headers = 8;
+  optional bytes body = 9;
+}
+
+// Pushed (id = 0) to connections that sent `watch`.
+message PauseNotice {
+  PausedFlow paused = 1;       // set when a message was just held
+  uint64 released_flow_id = 2; // set when one went on its way
+  string how = 3;              // resumed, edited, aborted, timeout, gone
+}
+
+// ---------------------------------------------------------------- replay
+
+// Send a captured flow again. Edits apply to the copy; unset fields keep the
+// original. The result is a new flow that bypasses rules and breakpoints.
+message ReplayRequest {
+  uint64 id = 1;
+  optional string method = 2;
+  optional string url = 3;
+  bool replace_headers = 4;
+  repeated Header headers = 5;
+  optional bytes body = 6;
+}
+
+message ReplayResponse {
+  uint64 flow_id = 1;
+  uint32 status = 2;
+}
+
+// ---------------------------------------------------------------- AI clients
+
+// Start receiving pushed PauseNotice and ApprovalNotice messages.
+message WatchRequest {}
+
+enum McpWrites {
+  MCP_ASK = 0;   // every change waits for approval in the app
+  MCP_AUTO = 1;  // changes apply at once
+  MCP_OFF = 2;   // read only
+}
+
+message SetMcpWritesRequest {
+  McpWrites writes = 1;
+}
+
+message McpInfoRequest {}
+
+// How to connect a local AI client.
+message McpInfo {
+  bool enabled = 1;
+  string url = 2;      // http://127.0.0.1:8898/mcp
+  string token = 3;
+  string command = 4;  // ready-to-run `claude mcp add ...`
+  McpWrites writes = 5;
+}
+
+// A change an AI client wants to make, waiting for a person.
+message Approval {
+  string id = 1;
+  string tool = 2;
+  string title = 3;
+  string detail = 4;  // pretty JSON of the arguments
+  int64 requested_ms = 5;
+}
+
+message ListApprovalsRequest {}
+message ApprovalsResponse {
+  repeated Approval pending = 1;
+}
+
+message DecideApprovalRequest {
+  string id = 1;
+  bool allow = 2;
+}
+
+// Pushed (id = 0) to connections that sent `watch`.
+message ApprovalNotice {
+  Approval requested = 1;  // set when a new one is waiting
+  string decided_id = 2;   // set when one was answered or expired
+  bool allowed = 3;
 }

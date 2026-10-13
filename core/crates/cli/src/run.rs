@@ -30,6 +30,12 @@ pub struct RunArgs {
     /// Per-direction body capture cap, in MiB.
     #[arg(long, default_value_t = 8)]
     pub body_cap_mb: usize,
+    /// Address of the MCP server for local AI clients (loopback only).
+    #[arg(long, default_value = mcp::DEFAULT_ADDR)]
+    pub mcp_listen: SocketAddr,
+    /// Do not start the MCP server.
+    #[arg(long)]
+    pub no_mcp: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -82,6 +88,20 @@ impl api::Control for ProxyControl {
     fn unpin_host(&self, host: &str) -> bool {
         self.0.unpin(host)
     }
+    fn replay(&self, call: api::ReplayCall) -> flow::BoxFuture<'_, Result<(u64, u16), String>> {
+        Box::pin(async move {
+            let out = self
+                .0
+                .replay(net::ReplayRequest {
+                    method: call.method,
+                    url: call.url,
+                    headers: call.headers,
+                    body: call.body,
+                })
+                .await?;
+            Ok((out.flow_id, out.status))
+        })
+    }
 }
 
 pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
@@ -102,13 +122,16 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     let mut cfg = net::ProxyConfig::new(args.listen);
     cfg.insecure_upstream = args.insecure_upstream;
     cfg.body_cap = args.body_cap_mb.max(1) * 1024 * 1024;
-    // The person's rules: Map Local answers requests through the interceptor
-    // seam, and the SSL list decides which CONNECTs are decrypted.
+    // The person's rules: mocks, remaps, rewrites and Map Local answer or
+    // change requests through the interceptor seam, breakpoints hold them at
+    // the gate, and the SSL list decides which CONNECTs are decrypted.
     let rules = Arc::new(rules::RuleSet::load(&data_dir));
     let mut chain = InterceptorChain::empty();
     chain.push_request(rules.clone());
+    chain.push_response(rules.clone());
     let proxy = net::Proxy::new(cfg, ca.clone(), sink, ids, chain);
     proxy.set_connect_policy(rules.clone());
+    proxy.set_gate(rules.clone());
     proxy.set_recording(!args.no_record);
 
     let listener = tokio::net::TcpListener::bind(args.listen)
@@ -116,11 +139,36 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
         .with_context(|| format!("binding {}", args.listen))?;
     let listen = listener.local_addr()?;
 
+    // The MCP server for local AI clients. A port that is taken is not fatal:
+    // the proxy and the app work without it.
+    let mut mcp_listener = None;
+    let mut mcp_endpoint = None;
+    let mut mcp_token = String::new();
+    if !args.no_mcp {
+        match mcp::load_or_create_token(&data_dir) {
+            Ok(token) => match mcp::bind(args.mcp_listen).await {
+                Ok(l) => {
+                    let addr = l.local_addr()?;
+                    mcp_endpoint = Some(api::McpEndpoint {
+                        url: format!("http://{addr}/mcp"),
+                        token: token.clone(),
+                    });
+                    mcp_token = token;
+                    mcp_listener = Some(l);
+                }
+                Err(e) => tracing::warn!("MCP server not started on {}: {e}", args.mcp_listen),
+            },
+            Err(e) => tracing::warn!("MCP server not started: could not make a token: {e}"),
+        }
+    }
+
     let ctx = Arc::new(api::ApiContext {
         store: store.clone(),
         hub,
         control: Arc::new(ProxyControl(proxy.clone())),
         rules: rules.clone(),
+        approvals: Arc::new(api::Approvals::default()),
+        mcp: mcp_endpoint.clone(),
         info: api::CoreInfo {
             version: env!("CARGO_PKG_VERSION").to_string(),
             listen: listen.to_string(),
@@ -149,6 +197,17 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
                 .await
         })
     };
+    let mcp_task = mcp_listener.map(|listener| {
+        let mut rx = stop_rx.clone();
+        let ctx = ctx.clone();
+        let token = mcp_token.clone();
+        tokio::spawn(async move {
+            mcp::serve(ctx, listener, token, async move {
+                let _ = rx.wait_for(|v| *v).await;
+            })
+            .await
+        })
+    });
     let api_task = {
         let mut rx = stop_rx.clone();
         let socket = socket.clone();
@@ -170,11 +229,15 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     }
 
     eprintln!(
-        "proxyd {} ready in {} ms\n  proxy   {}\n  api     {}\n  ca      {} ({})\n  data    {}\n  record  {}",
+        "proxyd {} ready in {} ms\n  proxy   {}\n  api     {}\n  mcp     {}\n  ca      {} ({})\n  data    {}\n  record  {}",
         env!("CARGO_PKG_VERSION"),
         started.elapsed().as_millis(),
         listen,
         socket.display(),
+        mcp_endpoint
+            .as_ref()
+            .map(|m| m.url.as_str())
+            .unwrap_or("off"),
         ca.cert_path().display(),
         ca.key_storage().as_str(),
         data_dir.display(),
@@ -186,6 +249,9 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     let _ = stop_tx.send(true);
     let _ = proxy_task.await;
     let _ = api_task.await;
+    if let Some(t) = mcp_task {
+        let _ = t.await;
+    }
     store.close();
     Ok(())
 }

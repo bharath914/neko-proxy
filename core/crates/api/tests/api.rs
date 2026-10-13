@@ -29,6 +29,18 @@ impl Control for FakeControl {
     fn unpin_host(&self, _host: &str) -> bool {
         true
     }
+    fn replay(
+        &self,
+        call: proxy_api::ReplayCall,
+    ) -> flow::BoxFuture<'_, Result<(u64, u16), String>> {
+        Box::pin(async move {
+            if call.url.contains("fail") {
+                Err("refused".into())
+            } else {
+                Ok((99, 200))
+            }
+        })
+    }
 }
 
 fn record(id: u64, host: &str, status: u16, body: &str) -> Arc<FlowRecord> {
@@ -110,6 +122,8 @@ async fn setup() -> (Client, Arc<ApiContext>, tempfile::TempDir) {
             recording: AtomicBool::new(true),
         }),
         rules: Arc::new(rules::RuleSet::in_memory()),
+        approvals: Arc::new(proxy_api::Approvals::default()),
+        mcp: None,
         info: CoreInfo {
             version: "test".into(),
             listen: "127.0.0.1:8899".into(),
@@ -530,4 +544,252 @@ async fn clear_notifies_subscribers() {
         panic!()
     };
     assert!(b.cleared);
+}
+
+// ------------------------------------------------------- rules, breakpoints, approvals
+
+fn mock_rule(host: &str) -> pb::Rule {
+    pb::Rule {
+        id: String::new(),
+        name: "down".into(),
+        enabled: true,
+        matcher: Some(pb::RuleMatch {
+            host: host.into(),
+            path: "/v1/*".into(),
+            ..Default::default()
+        }),
+        action: Some(pb::rule::Action::Mock(pb::MockAction {
+            status: 503,
+            headers: vec![],
+            body: "down".into(),
+            delay_ms: 0,
+        })),
+    }
+}
+
+#[tokio::test]
+async fn rules_roundtrip_toggle_and_validate() {
+    let (mut c, ctx, _d) = setup().await;
+    let Res::Rules(r) = c
+        .call(Req::PutRule(pb::PutRuleRequest {
+            rule: Some(mock_rule("API.example.com")),
+        }))
+        .await
+    else {
+        panic!("rules response")
+    };
+    assert_eq!(r.rules.len(), 1);
+    let rule = &r.rules[0];
+    assert_eq!(rule.matcher.as_ref().unwrap().host, "api.example.com");
+    assert!(!rule.id.is_empty());
+    assert!(matches!(rule.action, Some(pb::rule::Action::Mock(ref m)) if m.status == 503));
+
+    let Res::Rules(r) = c
+        .call(Req::SetRuleEnabled(pb::SetRuleEnabledRequest {
+            id: rule.id.clone(),
+            enabled: false,
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert!(!r.rules[0].enabled);
+    assert!(!ctx.rules.rules()[0].enabled);
+
+    // Invalid rules are refused with a reason.
+    let mut bad = mock_rule("x.test");
+    if let Some(pb::rule::Action::Mock(m)) = &mut bad.action {
+        m.status = 42;
+    }
+    let Res::Error(e) = c
+        .call(Req::PutRule(pb::PutRuleRequest { rule: Some(bad) }))
+        .await
+    else {
+        panic!("expected an error")
+    };
+    assert_eq!(e.code, "invalid_rule");
+    assert!(e.message.contains("status"), "{}", e.message);
+
+    let Res::Rules(r) = c
+        .call(Req::RemoveRule(pb::RemoveRuleRequest {
+            id: rule.id.clone(),
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert!(r.rules.is_empty());
+}
+
+#[tokio::test]
+async fn watchers_see_breakpoints_and_can_resume_them() {
+    let (mut c, ctx, _d) = setup().await;
+    let Res::Paused(p) = c.call(Req::Watch(pb::WatchRequest {})).await else {
+        panic!()
+    };
+    assert!(p.items.is_empty());
+
+    let rules = ctx.rules.clone();
+    let waiter = tokio::spawn(async move {
+        let flow = flow::FlowSummary {
+            id: 11,
+            host: "api.example.com".into(),
+            ..Default::default()
+        };
+        let held = flow::Held {
+            method: "GET".into(),
+            path_and_query: "/v1/me".into(),
+            body: Bytes::from_static(b"hi"),
+            ..Default::default()
+        };
+        rules
+            .pauses()
+            .hold(&flow, "r1".into(), flow::Phase::Request, Duration::from_secs(10), held)
+            .await
+    });
+
+    // The pause is pushed with id 0.
+    let pushed = loop {
+        let m = c.recv().await;
+        if let Some(Res::PauseNotice(n)) = m.body {
+            break n;
+        }
+    };
+    let held = pushed.paused.expect("paused message");
+    assert_eq!(held.flow_id, 11);
+    assert_eq!(held.path, "/v1/me");
+    assert_eq!(held.body, b"hi");
+
+    let Res::Paused(list) = c.call(Req::Paused(pb::ListPausedRequest {})).await else {
+        panic!()
+    };
+    assert_eq!(list.items.len(), 1);
+
+    let Res::Paused(list) = c
+        .call(Req::Resume(pb::ResumeRequest {
+            flow_id: 11,
+            path: Some("/v1/other".into()),
+            body: Some(b"changed".to_vec()),
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert!(list.items.is_empty());
+    match waiter.await.unwrap() {
+        flow::Verdict::Continue(e) => {
+            assert_eq!(e.path_and_query.as_deref(), Some("/v1/other"));
+            assert_eq!(&e.body.unwrap()[..], b"changed");
+        }
+        flow::Verdict::Abort(_) => panic!("not aborted"),
+    }
+
+    // Releasing is announced too.
+    let released = loop {
+        let m = c.recv().await;
+        if let Some(Res::PauseNotice(n)) = m.body {
+            if n.released_flow_id != 0 {
+                break n;
+            }
+        }
+    };
+    assert_eq!(released.released_flow_id, 11);
+    assert_eq!(released.how, "edited");
+
+    let Res::Error(e) = c
+        .call(Req::Resume(pb::ResumeRequest {
+            flow_id: 11,
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!("nothing is held any more")
+    };
+    assert_eq!(e.code, "not_found");
+}
+
+#[tokio::test]
+async fn approvals_are_pushed_and_decided() {
+    let (mut c, ctx, _d) = setup().await;
+    c.call(Req::Watch(pb::WatchRequest {})).await;
+    let approvals = ctx.approvals.clone();
+    let asker = tokio::spawn(async move {
+        approvals
+            .ask("create_mock", "Mock 503".into(), "{}".into(), Duration::from_secs(10))
+            .await
+    });
+    let requested = loop {
+        let m = c.recv().await;
+        if let Some(Res::ApprovalNotice(n)) = m.body {
+            if let Some(a) = n.requested {
+                break a;
+            }
+        }
+    };
+    assert_eq!(requested.tool, "create_mock");
+    let Res::Approvals(list) = c.call(Req::Approvals(pb::ListApprovalsRequest {})).await else {
+        panic!()
+    };
+    assert_eq!(list.pending.len(), 1);
+    c.call(Req::DecideApproval(pb::DecideApprovalRequest {
+        id: requested.id.clone(),
+        allow: true,
+    }))
+    .await;
+    assert_eq!(asker.await.unwrap(), proxy_api::Decision::Allowed);
+}
+
+#[tokio::test]
+async fn replay_edits_a_stored_flow_and_mcp_settings_round_trip() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.enqueue(record(5, "api.example.com", 200, "{}"));
+    ctx.store.flush();
+
+    let Res::Replay(r) = c
+        .call(Req::Replay(pb::ReplayRequest {
+            id: 5,
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!("replay response")
+    };
+    assert_eq!((r.flow_id, r.status), (99, 200));
+
+    let Res::Error(e) = c
+        .call(Req::Replay(pb::ReplayRequest {
+            id: 5,
+            url: Some("https://fail.example.com/".into()),
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(e.code, "replay");
+    assert_eq!(e.message, "refused");
+
+    let Res::Error(e) = c
+        .call(Req::Replay(pb::ReplayRequest {
+            id: 404,
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert!(e.message.contains("no flow"), "{}", e.message);
+
+    let Res::McpInfo(i) = c
+        .call(Req::SetMcpWrites(pb::SetMcpWritesRequest {
+            writes: pb::McpWrites::McpAuto as i32,
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(i.writes, pb::McpWrites::McpAuto as i32);
+    assert!(!i.enabled, "no MCP endpoint in this context");
+    assert_eq!(ctx.rules.mcp_writes(), rules::McpWrites::Auto);
 }

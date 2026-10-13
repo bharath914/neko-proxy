@@ -10,7 +10,8 @@ mod model;
 
 pub use event::{FlowEvent, FlowSink, NullSink};
 pub use intercept::{
-    ConnectPolicy, Intercept, InterceptorChain, RequestInterceptor, ResponseInterceptor,
+    BoxFuture, ConnectPolicy, Delay, Edited, Edits, Gate, Held, Intercept, InterceptorChain, Phase,
+    RequestInterceptor, ResponseInterceptor, Retarget, Ticket, Verdict,
 };
 pub use model::{
     flags, short_content_type, FlowId, FlowRecord, FlowState, FlowSummary, Header, IdGen, Timings,
