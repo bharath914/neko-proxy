@@ -32,7 +32,8 @@ impl App {
             Section::Inspector => 0,
             Section::Breakpoints => 1,
             Section::Rules => 2,
-            Section::Settings => 3,
+            Section::Devices => 3,
+            Section::Settings => 4,
         };
         // A count on Breakpoints says something is waiting for you.
         let held = if self.paused.is_empty() {
@@ -40,17 +41,24 @@ impl App {
         } else {
             format!("Breakpoints ({})", self.paused.len())
         };
+        // A count on Devices says a phone is asking to pair.
+        let devices = if self.devices.pending.is_empty() {
+            "Devices".to_string()
+        } else {
+            format!("Devices ({})", self.devices.pending.len())
+        };
         if let Some(i) = widgets::segmented(
             &mut left,
             &st,
             self.id("nav"),
-            &["Inspector", &held, "Rules", "Settings"],
+            &["Inspector", &held, "Rules", &devices, "Settings"],
             sel,
         ) {
             self.section = match i {
                 0 => Section::Inspector,
                 1 => Section::Breakpoints,
                 2 => Section::Rules,
+                3 => Section::Devices,
                 _ => Section::Settings,
             };
         }

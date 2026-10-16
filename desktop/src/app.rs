@@ -19,6 +19,8 @@ pub enum Section {
     /// Messages held at breakpoints.
     Breakpoints,
     Rules,
+    /// Phones and simulators running the in-app SDK.
+    Devices,
     Settings,
 }
 
@@ -62,6 +64,14 @@ pub enum Pending {
     Mcp,
     /// A replay was sent; the answer names the new flow.
     Replay,
+    /// The state of the SDK listener.
+    SdkStatus,
+    /// Start of the pushed device list; the core answers with the first one.
+    DevicesSub,
+    /// Allow, deny, revoke or a settings change.
+    DeviceOp,
+    /// A lazy SDK body was requested for this flow.
+    FetchBody(u64),
 }
 
 pub struct Toast {
@@ -75,6 +85,8 @@ pub enum Sheet {
     ConfirmTrust(TrustPlan),
     /// SSL proxying hosts and Map Local rules.
     Proxy,
+    /// Replace the SDK listener's certificate (every pairing is redone).
+    ConfirmRegenCert,
 }
 
 pub enum Job {
@@ -147,6 +159,20 @@ pub struct App {
     pub show_token: bool,
     /// Rule editor: `None` when closed.
     pub rule_form: Option<RuleForm>,
+
+    // in-app SDK
+    pub sdk: Option<pb::SdkStatus>,
+    pub devices: pb::DevicesSnapshot,
+    /// Settings drawer of one device and app, when open.
+    pub device_drawer: Option<crate::edit::DeviceForm>,
+    pub hints_open: bool,
+    /// Devices and apps the Inspector is narrowed to (filter chips).
+    pub device_filter: Vec<String>,
+    pub app_filter: Vec<String>,
+    /// Flows whose lazy body is being fetched.
+    pub fetching: std::collections::HashSet<(u64, bool)>,
+    /// Which timings view a merged flow shows.
+    pub wire_view: bool,
 
     // rules
     pub rules: pb::RulesResponse,
@@ -236,6 +262,14 @@ impl App {
             mcp: None,
             show_token: false,
             rule_form: None,
+            sdk: None,
+            devices: pb::DevicesSnapshot::default(),
+            device_drawer: None,
+            hints_open: false,
+            device_filter: Vec::new(),
+            app_filter: Vec::new(),
+            fetching: Default::default(),
+            wire_view: false,
             rules: pb::RulesResponse::default(),
             proxy_tab: 0,
             ssl_input: String::new(),
@@ -329,7 +363,90 @@ impl App {
             kind: self.table.kind,
             text: self.search.clone(),
             hosts: self.focus.clone(),
+            devices: self.device_filter.clone(),
+            apps: self.app_filter.clone(),
         }
+    }
+
+    // ------------------------------------------------------------ SDK
+
+    pub fn set_sdk_enabled(&mut self, enabled: bool) {
+        self.send(
+            Req::SdkSetEnabled(pb::SdkSetEnabledRequest { enabled }),
+            Pending::SdkStatus,
+        );
+        if let Some(s) = &mut self.sdk {
+            s.enabled = enabled;
+        }
+    }
+
+    pub fn allow_prompt(&mut self, id: u64) {
+        self.device_op(pb::device_action_request::Kind::Allow, id, "", "");
+        self.devices.pending.retain(|p| p.id != id);
+    }
+
+    pub fn deny_prompt(&mut self, id: u64) {
+        self.device_op(pb::device_action_request::Kind::Deny, id, "", "");
+        self.devices.pending.retain(|p| p.id != id);
+    }
+
+    pub fn revoke_device(&mut self, device_id: &str, app_id: &str) {
+        self.device_op(pb::device_action_request::Kind::Revoke, 0, device_id, app_id);
+    }
+
+    pub fn forget_device(&mut self, device_id: &str) {
+        self.device_op(pb::device_action_request::Kind::Forget, 0, device_id, "");
+    }
+
+    fn device_op(&mut self, kind: pb::device_action_request::Kind, id: u64, device: &str, app: &str) {
+        self.send(
+            Req::DeviceAction(pb::DeviceActionRequest {
+                kind: kind as i32,
+                pending_id: id,
+                device_id: device.to_string(),
+                app_id: app.to_string(),
+            }),
+            Pending::DeviceOp,
+        );
+    }
+
+    pub fn save_device_config(&mut self, device_id: &str, app_id: &str, cfg: pb::DeviceConfig) {
+        self.send(
+            Req::SetDeviceConfig(pb::SetDeviceConfigRequest {
+                device_id: device_id.to_string(),
+                app_id: app_id.to_string(),
+                config: Some(cfg),
+            }),
+            Pending::DeviceOp,
+        );
+    }
+
+    pub fn regenerate_sdk_cert(&mut self) {
+        self.send(
+            Req::RegenerateSdkCert(pb::RegenerateSdkCertRequest {}),
+            Pending::SdkStatus,
+        );
+    }
+
+    /// Ask the device for a lazy body of the flow being viewed.
+    pub fn fetch_body(&mut self, flow_id: u64, response: bool) {
+        if !self.fetching.insert((flow_id, response)) {
+            return;
+        }
+        self.send(
+            Req::FetchBody(pb::FetchBodyRequest { flow_id, response }),
+            Pending::FetchBody(flow_id),
+        );
+    }
+
+    /// Narrow the Inspector to one device (empty clears).
+    pub fn set_device_filter(&mut self, devices: Vec<String>, apps: Vec<String>) {
+        if self.device_filter == devices && self.app_filter == apps {
+            return;
+        }
+        self.device_filter = devices;
+        self.app_filter = apps;
+        self.filter_changed();
     }
 
     /// Narrow the list to these hosts (empty clears the focus).
@@ -651,6 +768,11 @@ impl App {
         self.send(Req::Watch(pb::WatchRequest {}), Pending::Watch);
         self.send(Req::Approvals(pb::ListApprovalsRequest {}), Pending::Approvals);
         self.send(Req::McpInfo(pb::McpInfoRequest {}), Pending::Mcp);
+        self.send(Req::SdkStatus(pb::SdkStatusRequest {}), Pending::SdkStatus);
+        self.send(
+            Req::DevicesSubscribe(pb::DevicesSubscribeRequest {}),
+            Pending::DevicesSub,
+        );
         self.hosts_stale = true;
         self.send(
             Req::Capture(pb::CaptureRequest {
@@ -704,6 +826,7 @@ impl App {
                     let _ = before;
                 }
                 Event::Resync => self.table.invalidate(),
+                Event::Devices(d) => self.on_devices(ctx, d),
                 Event::Pause(n) => self.on_pause_notice(ctx, n),
                 Event::Approval(n) => {
                     if let Some(a) = n.requested {
@@ -758,6 +881,26 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    /// A new device list. Say so when a pairing request arrives, because the
+    /// person may be looking at another screen.
+    fn on_devices(&mut self, ctx: &Context, d: pb::DevicesSnapshot) {
+        for p in &d.pending {
+            if !self.devices.pending.iter().any(|x| x.id == p.id) {
+                let msg = format!(
+                    "{} wants to pair. Code {} {}",
+                    p.device_name,
+                    &p.code[..p.code.len().min(3)],
+                    p.code.get(3..).unwrap_or("")
+                );
+                self.toast(ctx, msg, true);
+            }
+        }
+        self.devices = d;
+        if self.sdk.as_ref().is_some_and(|s| s.enabled != self.devices.enabled) {
+            self.send(Req::SdkStatus(pb::SdkStatusRequest {}), Pending::SdkStatus);
         }
     }
 
@@ -851,6 +994,19 @@ impl App {
                 }
             }
             (Pending::Approvals, Res::Approvals(a)) => self.approvals = a.pending,
+            (Pending::SdkStatus, Res::SdkStatus(s)) => self.sdk = Some(s),
+            (Pending::DevicesSub, Res::Devices(d)) => self.devices = d,
+            (Pending::DevicesSub, Res::Error(_)) => {}
+            (Pending::DeviceOp, Res::Ok(_)) => {}
+            (Pending::FetchBody(id), Res::Flow(d)) => {
+                self.fetching.retain(|(f, _)| *f != id);
+                let entry = self.make_entry(ctx, d);
+                self.details.insert(id, entry);
+            }
+            (Pending::FetchBody(id), Res::Error(e)) => {
+                self.fetching.retain(|(f, _)| *f != id);
+                self.toast(ctx, e.message, false);
+            }
             (Pending::Mcp, Res::McpInfo(m)) => self.mcp = Some(m),
             (Pending::Replay, Res::Replay(r)) => {
                 self.toast(

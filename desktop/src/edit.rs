@@ -557,3 +557,140 @@ mod tests {
         assert_eq!(f.method, "GET");
     }
 }
+
+// ------------------------------------------------------------------ devices
+
+/// The settings drawer of one device and app. Text fields hold what the
+/// person typed; `config()` turns them into what the core stores.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeviceForm {
+    pub device_id: String,
+    pub app_id: String,
+    pub title: String,
+    pub capture: bool,
+    pub allow: String,
+    pub deny: String,
+    pub body_cap_kb: u32,
+    pub eager_kb: u32,
+    /// `pb::Redaction` as i32.
+    pub redaction: i32,
+    pub extra_keys: String,
+    original: pb::DeviceConfig,
+}
+
+fn lines(v: &[String]) -> String {
+    v.join("\n")
+}
+
+fn split_list(text: &str) -> Vec<String> {
+    text.split(|c: char| c == '\n' || c == ',' || c.is_whitespace())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+impl DeviceForm {
+    pub fn new(d: &pb::Device) -> DeviceForm {
+        let c = d.config.clone().unwrap_or_default();
+        DeviceForm {
+            device_id: d.device_id.clone(),
+            app_id: d.app_id.clone(),
+            title: if d.device_name.is_empty() {
+                d.app_id.clone()
+            } else {
+                format!("{} · {}", d.device_name, d.app_id)
+            },
+            capture: c.capture_enabled,
+            allow: lines(&c.host_allow),
+            deny: lines(&c.host_deny),
+            body_cap_kb: (c.body_cap_bytes / 1024).max(1),
+            eager_kb: c.eager_body_bytes / 1024,
+            redaction: c.redaction,
+            extra_keys: lines(&c.extra_redact_keys),
+            original: c,
+        }
+    }
+
+    pub fn config(&self) -> pb::DeviceConfig {
+        let cap = self.body_cap_kb.clamp(1, 8 * 1024) * 1024;
+        pb::DeviceConfig {
+            capture_enabled: self.capture,
+            host_allow: split_list(&self.allow),
+            host_deny: split_list(&self.deny),
+            body_cap_bytes: cap,
+            eager_body_bytes: (self.eager_kb * 1024).min(cap),
+            redaction: self.redaction,
+            extra_redact_keys: split_list(&self.extra_keys),
+        }
+    }
+
+    pub fn dirty(&self) -> bool {
+        self.config() != self.original
+    }
+
+    /// Revealing values is the one setting that needs a warning.
+    pub fn reveals_secrets(&self) -> bool {
+        self.redaction == pb::Redaction::RedactNone as i32
+    }
+}
+
+#[cfg(test)]
+mod device_form_tests {
+    use super::*;
+
+    fn device() -> pb::Device {
+        pb::Device {
+            device_id: "i1".into(),
+            app_id: "com.x".into(),
+            device_name: "Pixel 8".into(),
+            config: Some(pb::DeviceConfig {
+                capture_enabled: true,
+                body_cap_bytes: 1 << 20,
+                eager_body_bytes: 64 << 10,
+                host_deny: vec!["ads.test".into()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn untouched_form_is_not_dirty_and_round_trips() {
+        let f = DeviceForm::new(&device());
+        assert!(!f.dirty());
+        assert_eq!(f.config(), device().config.unwrap());
+        assert_eq!(f.title, "Pixel 8 · com.x");
+    }
+
+    #[test]
+    fn lists_split_on_lines_commas_and_spaces() {
+        let mut f = DeviceForm::new(&device());
+        f.allow = "api.test, *.cdn.test\n  other.test ".into();
+        f.extra_keys = "ssn\nnational_id".into();
+        let c = f.config();
+        assert_eq!(c.host_allow, vec!["api.test", "*.cdn.test", "other.test"]);
+        assert_eq!(c.extra_redact_keys, vec!["ssn", "national_id"]);
+        assert!(f.dirty());
+    }
+
+    #[test]
+    fn sizes_are_clamped_and_eager_never_exceeds_the_cap() {
+        let mut f = DeviceForm::new(&device());
+        f.body_cap_kb = 100_000;
+        f.eager_kb = 100_000;
+        let c = f.config();
+        assert_eq!(c.body_cap_bytes, 8 << 20);
+        assert_eq!(c.eager_body_bytes, 8 << 20);
+        f.body_cap_kb = 0;
+        assert_eq!(f.config().body_cap_bytes, 1024);
+    }
+
+    #[test]
+    fn none_redaction_is_flagged() {
+        let mut f = DeviceForm::new(&device());
+        assert!(!f.reveals_secrets());
+        f.redaction = pb::Redaction::RedactNone as i32;
+        assert!(f.reveals_secrets());
+    }
+}

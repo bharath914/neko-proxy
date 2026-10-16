@@ -84,6 +84,30 @@ pub fn status_text(code: u32) -> &'static str {
     }
 }
 
+/// "just now", "12 s ago", "3 min ago", "2 h ago", "4 d ago".
+pub fn ago(unix_ms: i64, now_ms: i64) -> String {
+    if unix_ms <= 0 {
+        return "never".into();
+    }
+    let s = ((now_ms - unix_ms) / 1000).max(0);
+    match s {
+        0..=4 => "just now".into(),
+        5..=59 => format!("{s} s ago"),
+        60..=3599 => format!("{} min ago", s / 60),
+        3600..=86_399 => format!("{} h ago", s / 3600),
+        _ => format!("{} d ago", s / 86_400),
+    }
+}
+
+/// `482913` as `482 913`.
+pub fn pair_code(code: &str) -> String {
+    if code.len() == 6 && code.is_ascii() {
+        format!("{} {}", &code[..3], &code[3..])
+    } else {
+        code.to_string()
+    }
+}
+
 /// Local wall-clock time `HH:MM:SS.mmm` for a unix-ms timestamp.
 pub fn clock(unix_ms: i64) -> String {
     let secs = (unix_ms.div_euclid(1000)) as libc::time_t;
@@ -130,5 +154,12 @@ mod tests {
         assert_eq!(duration(0.0), "—");
         assert_eq!(count(1204), "1,204");
         assert_eq!(count(12), "12");
+        assert_eq!(ago(0, 5), "never");
+        assert_eq!(ago(1_000, 1_000), "just now");
+        assert_eq!(ago(1_000, 31_000), "30 s ago");
+        assert_eq!(ago(1_000, 301_000), "5 min ago");
+        assert_eq!(ago(1_000, 7_201_000), "2 h ago");
+        assert_eq!(pair_code("482913"), "482 913");
+        assert_eq!(pair_code("12"), "12");
     }
 }

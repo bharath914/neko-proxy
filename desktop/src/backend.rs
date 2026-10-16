@@ -35,6 +35,8 @@ pub enum Event {
     Pause(pb::PauseNotice),
     /// An AI client asked for approval, or a request was answered.
     Approval(pb::ApprovalNotice),
+    /// The device list or a pairing request changed.
+    Devices(pb::DevicesSnapshot),
 }
 
 pub trait Backend: Send {
@@ -244,6 +246,7 @@ async fn session(
                     (0, Some(Res::Resync(_))) => Event::Resync,
                     (0, Some(Res::PauseNotice(n))) => Event::Pause(n),
                     (0, Some(Res::ApprovalNotice(n))) => Event::Approval(n),
+                    (0, Some(Res::Devices(d))) => Event::Devices(d),
                     (id, Some(body)) => Event::Response(id, body),
                 };
                 let _ = ev.send(event);
@@ -276,6 +279,8 @@ struct DemoState {
     paused: Vec<pb::PausedFlow>,
     approvals: Vec<pb::Approval>,
     mcp_writes: i32,
+    sdk_enabled: bool,
+    devices: pb::DevicesSnapshot,
 }
 
 impl DemoBackend {
@@ -297,6 +302,8 @@ impl DemoBackend {
                 paused: demo_paused(),
                 approvals: demo_approvals(),
                 mcp_writes: 0,
+                sdk_enabled: true,
+                devices: demo_devices(),
             }),
             next: AtomicU64::new(1),
         }
@@ -731,7 +738,97 @@ const DEMO_ROWS: &[(&str, &str, &str, u32, u64, f64, &str)] = &[
     ),
 ];
 
+/// The fixture capture: mostly proxy traffic, with calls from a pretend
+/// phone mixed in. Every 7th flow (from 2) is reported by the SDK; every
+/// 7th (from 4) was seen by both, so it is merged.
 fn demo_flow(id: u64) -> pb::FlowDetail {
+    let mut d = demo_proxy_flow(id);
+    let (kind, tunnel) = {
+        let s = d.summary.as_ref().unwrap();
+        (id % 7, s.flags & 3 != 0)
+    };
+    if tunnel || !(kind == 2 || kind == 4) {
+        return d;
+    }
+    let wire = (kind == 4).then(|| Box::new(d.clone()));
+    let s = d.summary.as_mut().unwrap();
+    let screens = ["ProductListActivity", "CartActivity", "CheckoutActivity", "HomeActivity"];
+    let names = ["List products", "Apply coupon", "Place order", "Profile", "Recommendations"];
+    let owners = ["catalog", "payments", "payments", "identity", "growth"];
+    let k = (id as usize / 7) % names.len();
+    s.source = if kind == 4 { pb::FlowSource::Merged } else { pb::FlowSource::Sdk } as i32;
+    if kind == 4 {
+        s.merged_with = id + 100_000;
+    }
+    s.device_id = "pixel-8".into();
+    s.app_id = "com.demo.shop".into();
+    s.app = "com.demo.shop".into();
+    s.name = names[k].into();
+    s.owner = owners[k].into();
+    s.screen = screens[k % screens.len()].into();
+    s.route_template = s.path.split('?').next().unwrap_or("").replace("/items", "/items/{id}");
+    s.client_stack = "okhttp".into();
+    s.protocol = "h2".into();
+    let lazy = id % 14 == 2 && s.res_size > 0;
+    let redacted = d.request_headers.iter().any(|h| h.name == "Authorization");
+    for h in d.request_headers.iter_mut() {
+        if h.name == "Authorization" {
+            h.value = "[redacted]".into();
+        }
+        if h.name == "Host" {
+            h.value = s.host.clone();
+        }
+    }
+    d.request_headers.retain(|h| h.name != "Host" && h.name != "Accept-Encoding");
+    let m = d.timings.clone().unwrap_or_default();
+    d.sdk = Some(pb::SdkContext {
+        device_id: "pixel-8".into(),
+        app_id: "com.demo.shop".into(),
+        device_name: "Pixel 8".into(),
+        device_model: "Google Pixel 8".into(),
+        os_version: "Android 15".into(),
+        app_name: "Demo Shop".into(),
+        app_version: "1.4.2".into(),
+        build: "142".into(),
+        sdk_name: "android".into(),
+        sdk_version: "0.1.0".into(),
+        connection: "wifi".into(),
+        name: s.name.clone(),
+        owner: s.owner.clone(),
+        tag: if k == 1 { "checkout-v2".into() } else { String::new() },
+        screen: s.screen.clone(),
+        route_template: s.route_template.clone(),
+        client_stack: "okhttp".into(),
+        from_cache: false,
+        request_redacted: redacted,
+        response_redacted: false,
+        request_body_state: pb::BodyState::BodyPresent as i32,
+        response_body_state: if lazy { pb::BodyState::BodyLazy } else { pb::BodyState::BodyPresent } as i32,
+        timings: Some(pb::Timings {
+            dns_ms: if m.reused_connection { -1.0 } else { m.dns_ms.round() },
+            connect_ms: if m.reused_connection { 0.0 } else { m.connect_ms.round() },
+            tls_ms: if m.reused_connection { -1.0 } else { m.tls_ms.round() },
+            send_ms: m.send_ms.round().max(1.0),
+            wait_ms: (m.wait_ms * 1.04).round(),
+            receive_ms: m.receive_ms.round(),
+            total_ms: m.total_ms * 1.06,
+            reused_connection: m.reused_connection,
+        }),
+    });
+    if lazy {
+        d.response_body = Some(pb::BodyView::default());
+    }
+    if let Some(mut w) = wire {
+        // The wire half: what the proxy saw, with the real headers.
+        if let Some(ws) = w.summary.as_mut() {
+            ws.id = id + 100_000;
+        }
+        d.wire = Some(w);
+    }
+    d
+}
+
+fn demo_proxy_flow(id: u64) -> pb::FlowDetail {
     let (m, h, p, status, size, ms, ct) = DEMO_ROWS[((id - 1) as usize) % DEMO_ROWS.len()];
     let jitter = ((id * 7) % 31) as f64;
     let ms = if ms > 0.0 { ms + jitter } else { 0.0 };
@@ -770,6 +867,7 @@ fn demo_flow(id: u64) -> pb::FlowDetail {
         } else {
             String::new()
         },
+        ..Default::default()
     };
     let fresh = id % 3 != 0;
     let timings = pb::Timings {
@@ -880,6 +978,8 @@ fn demo_flow(id: u64) -> pb::FlowDetail {
         }),
         response_body: Some(res_body),
         summary: Some(summary),
+        sdk: None,
+        wire: None,
     }
 }
 
@@ -979,6 +1079,86 @@ fn demo_rules_v2() -> Vec<pb::Rule> {
             })),
         },
     ]
+}
+
+fn demo_sdk(s: &DemoState) -> Res {
+    Res::SdkStatus(pb::SdkStatus {
+        available: true,
+        enabled: s.sdk_enabled,
+        port: 8897,
+        fingerprint: "d7d65b46c503850d97743ff9acd51b6ba5e1fb5ad1be4b073de65e0cf1c45d83".into(),
+        desktop_name: "fedora".into(),
+        listening: if s.sdk_enabled { vec!["192.168.0.109:8897".into(), "127.0.0.1:8897".into()] } else { vec![] },
+        lan_addresses: vec!["192.168.0.109".into()],
+        adb_state: "ready".into(),
+        adb_label: "adb ready, 1 device(s)".into(),
+        adb_devices: vec!["R58M123ABC".into()],
+        discovery_state: "advertising".into(),
+        discovery_error: String::new(),
+        sessions: 3,
+        stats: Some(pb::SdkStats::default()),
+    })
+}
+
+fn demo_now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn demo_devices() -> pb::DevicesSnapshot {
+    let cfg = pb::DeviceConfig {
+        capture_enabled: true,
+        body_cap_bytes: 1 << 20,
+        eager_body_bytes: 64 << 10,
+        ..Default::default()
+    };
+    let dev = |id: &str, name: &str, model: &str, os: &str, app: &str, app_name: &str, ver: &str, sdk: &str, conn: &str, status: pb::DeviceStatus, flows: u64, seen_s: i64| pb::Device {
+        device_id: id.into(),
+        app_id: app.into(),
+        device_name: name.into(),
+        device_model: model.into(),
+        os_version: os.into(),
+        app_name: app_name.into(),
+        app_version: ver.into(),
+        sdk_name: sdk.into(),
+        sdk_version: "0.1.0".into(),
+        status: status as i32,
+        connection: conn.into(),
+        remote_ip: "192.168.0.41".into(),
+        last_seen_ms: demo_now_ms() - seen_s * 1000,
+        flows,
+        dropped: 0,
+        config: Some(cfg.clone()),
+    };
+    pb::DevicesSnapshot {
+        rev: 1,
+        enabled: true,
+        devices: vec![
+            dev("pixel-8", "Pixel 8", "Google Pixel 8", "Android 15", "com.demo.shop", "Demo Shop", "1.4.2", "android", "wifi", pb::DeviceStatus::DeviceConnected, 1284, 0),
+            dev("emu-1", "Pixel 7 API 35", "sdk_gphone64_x86_64", "Android 15", "com.demo.shop", "Demo Shop", "1.4.3-debug", "android", "emulator", pb::DeviceStatus::DeviceConnected, 312, 0),
+            dev("iphone-15", "Asha's iPhone", "iPhone 15 Pro", "iOS 19.2", "com.demo.shop", "Demo Shop", "1.4.2", "ios", "wifi", pb::DeviceStatus::DeviceIdle, 96, 5400),
+            dev("galaxy-s23", "Galaxy S23", "SM-S911B", "Android 14", "com.demo.partner", "Partner Hub", "0.9.0", "android", "usb", pb::DeviceStatus::DeviceDenied, 0, 86_400 * 3),
+        ],
+        pending: vec![pb::PendingPrompt {
+            id: 7,
+            device_id: "tab-a9".into(),
+            app_id: "com.demo.shop".into(),
+            device_name: "Galaxy Tab A9".into(),
+            device_model: "SM-X110".into(),
+            os_version: "Android 14".into(),
+            app_name: "Demo Shop".into(),
+            sdk_name: "android".into(),
+            sdk_version: "0.1.0".into(),
+            connection: "wifi".into(),
+            remote_ip: "192.168.0.57".into(),
+            code: "482913".into(),
+            created_ms: demo_now_ms(),
+            expires_ms: demo_now_ms() + 48_000,
+            repair: false,
+        }],
+    }
 }
 
 fn demo_paused() -> Vec<pb::PausedFlow> {
@@ -1086,6 +1266,7 @@ impl Backend for DemoBackend {
                     upserts: vec![],
                     cleared: true,
                     total: 0,
+                    removed: vec![],
                 }));
                 Res::Cleared(pb::ClearResponse { removed })
             }
@@ -1245,6 +1426,82 @@ impl Backend for DemoBackend {
                 demo_mcp(&s)
             }
             Req::McpInfo(_) => demo_mcp(&s),
+            Req::SdkStatus(_) => demo_sdk(&s),
+            Req::SdkSetEnabled(r) => {
+                s.sdk_enabled = r.enabled;
+                s.devices.enabled = r.enabled;
+                let snap = s.devices.clone();
+                s.queue.push(Event::Devices(snap));
+                demo_sdk(&s)
+            }
+            Req::RegenerateSdkCert(_) => demo_sdk(&s),
+            Req::DevicesSubscribe(_) => Res::Devices(s.devices.clone()),
+            Req::DeviceAction(r) => {
+                use pb::device_action_request::Kind;
+                match Kind::try_from(r.kind).unwrap_or(Kind::Allow) {
+                    Kind::Allow => {
+                        if let Some(i) = s.devices.pending.iter().position(|p| p.id == r.pending_id) {
+                            let p = s.devices.pending.remove(i);
+                            let mut d = demo_devices().devices[0].clone();
+                            d.device_id = p.device_id;
+                            d.device_name = p.device_name;
+                            d.device_model = p.device_model;
+                            d.flows = 0;
+                            s.devices.devices.push(d);
+                        }
+                    }
+                    Kind::Deny => s.devices.pending.retain(|p| p.id != r.pending_id),
+                    Kind::Revoke => {
+                        for d in s.devices.devices.iter_mut() {
+                            if d.device_id == r.device_id && d.app_id == r.app_id {
+                                d.status = pb::DeviceStatus::DeviceRevoked as i32;
+                            }
+                        }
+                    }
+                    Kind::Forget => s.devices.devices.retain(|d| d.device_id != r.device_id),
+                }
+                s.devices.rev += 1;
+                let snap = s.devices.clone();
+                s.queue.push(Event::Devices(snap));
+                Res::Ok(pb::OkResponse {})
+            }
+            Req::SetDeviceConfig(r) => {
+                for d in s.devices.devices.iter_mut() {
+                    if d.device_id == r.device_id && d.app_id == r.app_id {
+                        d.config = r.config.clone();
+                    }
+                }
+                s.devices.rev += 1;
+                let snap = s.devices.clone();
+                s.queue.push(Event::Devices(snap));
+                Res::Ok(pb::OkResponse {})
+            }
+            Req::FetchBody(r) => match s
+                .flows
+                .iter_mut()
+                .find(|d| d.summary.as_ref().map(|x| x.id) == Some(r.flow_id))
+            {
+                Some(d) => {
+                    let text = demo_order_json();
+                    if let Some(c) = d.sdk.as_mut() {
+                        c.response_body_state = pb::BodyState::BodyPresent as i32;
+                    }
+                    d.response_body = Some(pb::BodyView {
+                        kind: pb::BodyKind::Json as i32,
+                        content_type: "application/json".into(),
+                        wire_size: text.len() as u64,
+                        decoded_size: text.len() as u64,
+                        json: json_from_pretty(&text),
+                        text,
+                        ..Default::default()
+                    });
+                    Res::Flow(d.clone())
+                }
+                None => Res::Error(pb::ErrorResponse {
+                    code: "not_found".into(),
+                    message: "no such flow".into(),
+                }),
+            },
         };
         s.queue.push(Event::Response(tag, res));
         tag
@@ -1264,6 +1521,7 @@ impl Backend for DemoBackend {
                 upserts: vec![summary],
                 cleared: false,
                 total,
+                removed: vec![],
             }));
         }
         std::mem::take(&mut s.queue)

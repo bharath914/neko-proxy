@@ -172,6 +172,13 @@ impl App {
                     false,
                 )
             }
+            SheetKind::RegenCert => (
+                "Replace the SDK certificate?".to_string(),
+                "Every paired device pins the current certificate, so every pairing is revoked and each app has to pair again. Do this only if you think the certificate leaked.".to_string(),
+                None,
+                "Replace",
+                true,
+            ),
             SheetKind::Trust(plan) => (
                 format!("Install the certificate for {}?", self.family.label()),
                 "You will be asked for your password. This is the exact command that will run:".to_string(),
@@ -266,6 +273,7 @@ impl App {
                         match which {
                             SheetKind::Proxy => {}
                             SheetKind::Clear => self.clear_all(),
+                            SheetKind::RegenCert => self.regenerate_sdk_cert(),
                             SheetKind::Trust(plan) => {
                                 if let Some(script) = plan.run {
                                     let tx = self.job_tx.clone();
@@ -357,6 +365,7 @@ impl App {
 /// A lightweight, cloneable view of the open sheet.
 enum SheetKind {
     Clear,
+    RegenCert,
     Proxy,
     Trust(platform::TrustPlan),
 }
@@ -366,6 +375,7 @@ impl Sheet {
         match self {
             Sheet::ConfirmClear => SheetKind::Clear,
             Sheet::Proxy => SheetKind::Proxy,
+            Sheet::ConfirmRegenCert => SheetKind::RegenCert,
             Sheet::ConfirmTrust(p) => SheetKind::Trust(p.clone()),
         }
     }

@@ -2,6 +2,7 @@
 
 mod breakpoints;
 mod detail;
+mod devices;
 pub mod icons;
 mod overlay;
 mod rules;
@@ -71,6 +72,7 @@ impl App {
                 Section::Inspector => self.inspector(ui),
                 Section::Breakpoints => self.breakpoints(ui),
                 Section::Rules => self.rules_screen(ui),
+                Section::Devices => self.devices_screen(ui),
                 Section::Settings => self.settings(ui),
             });
 

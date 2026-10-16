@@ -187,7 +187,8 @@ impl FlowTable {
             self.stale = true;
             effect.cleared = true;
         }
-        let mut unknown = false;
+        // A row that stopped being a row of its own (merged into another).
+        let mut unknown = !b.removed.is_empty();
         for u in &b.upserts {
             match self.shown.index.get(&u.id).copied() {
                 Some((p, i)) => {
@@ -274,6 +275,7 @@ mod tests {
             upserts: vec![upd],
             cleared: false,
             total: 10,
+            removed: vec![],
         });
         assert_eq!(e.patched, vec![3]);
         assert_eq!(t.get(2).unwrap().status, 404);
@@ -282,6 +284,7 @@ mod tests {
             upserts: vec![summary(99)],
             cleared: false,
             total: 11,
+            removed: vec![],
         });
         assert!(t.stale);
     }
@@ -308,6 +311,7 @@ mod tests {
             upserts: vec![],
             cleared: true,
             total: 0,
+            removed: vec![],
         });
         assert!(e.cleared);
         assert_eq!(t.total(), 0);

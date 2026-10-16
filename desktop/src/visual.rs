@@ -195,3 +195,51 @@ fn resuming_and_deciding_clear_the_queues() {
     settle(&mut h);
     save(&mut h, "breakpoints-empty");
 }
+
+#[test]
+fn devices_screen() {
+    for (dark, tag) in [(false, "light"), (true, "dark")] {
+        let mut h = harness(dark, (1320.0, 900.0), 40);
+        settle(&mut h);
+        assert_eq!(app(&mut h).devices.devices.len(), 4);
+        assert_eq!(app(&mut h).devices.pending.len(), 1);
+        app(&mut h).section = Section::Devices;
+        settle(&mut h);
+        save(&mut h, &format!("devices-{tag}"));
+
+        // Settings drawer and the hints panel.
+        let d = app(&mut h).devices.devices[0].clone();
+        app(&mut h).device_drawer = Some(crate::edit::DeviceForm::new(&d));
+        app(&mut h).hints_open = true;
+        app(&mut h).device_drawer.as_mut().unwrap().redaction = 2;
+        settle(&mut h);
+        save(&mut h, &format!("devices-drawer-{tag}"));
+    }
+}
+
+#[test]
+fn devices_empty_state_and_actions() {
+    let mut h = harness(false, (1100.0, 800.0), 5);
+    settle(&mut h);
+    let id = app(&mut h).devices.pending[0].id;
+    app(&mut h).allow_prompt(id);
+    app(&mut h).revoke_device("emu-1", "com.demo.shop");
+    settle(&mut h);
+    assert!(app(&mut h).devices.pending.is_empty());
+    assert_eq!(app(&mut h).devices.devices.len(), 5);
+    let revoked = app(&mut h)
+        .devices
+        .devices
+        .iter()
+        .find(|d| d.device_id == "emu-1")
+        .unwrap()
+        .status;
+    assert_eq!(revoked, proto::pb::DeviceStatus::DeviceRevoked as i32);
+    for dev in ["pixel-8", "emu-1", "iphone-15", "galaxy-s23", "tab-a9"] {
+        app(&mut h).forget_device(dev);
+    }
+    app(&mut h).section = Section::Devices;
+    settle(&mut h);
+    assert!(app(&mut h).devices.devices.is_empty());
+    save(&mut h, "devices-empty");
+}
