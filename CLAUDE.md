@@ -117,6 +117,7 @@ Phase 1 = steps 1 and 2, Linux only, trimmed as described in `docs/phase-1.md`. 
 
 ## How to work in this repo
 
+- In-app SDK work: follow `docs/sdk/CLAUDE.md` and `docs/sdk/docs/10-tasks.md`. Deviations from that plan are in `docs/sdk/docs/DEVIATIONS.md`.
 - Phases 1 and 2 are built. Read `docs/phase-1.md` and `docs/phase-2.md` for scope and `docs/bench.md` for measured results. Phone pairing and the SDK (build order step 4) is next; do not start it until told.
 - Be terse. Scaffold and implement without asking for step-by-step approval; ask only when a decision is genuinely open.
 - Keep UI free of logic: all parsing, decoding, search and redaction live in the core.
