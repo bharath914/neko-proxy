@@ -69,6 +69,8 @@ pub struct FlowTable {
     last_refresh: Instant,
     pub kind: i32,
     pub text: String,
+    /// Some loaded flow came from the SDK (so the Source column is useful).
+    pub saw_sdk: bool,
 }
 
 #[derive(Default, Debug)]
@@ -88,6 +90,7 @@ impl FlowTable {
             last_refresh: Instant::now() - Duration::from_secs(1),
             kind: 0,
             text: String::new(),
+            saw_sdk: false,
         }
     }
 
@@ -147,6 +150,7 @@ impl FlowTable {
 
     pub fn on_page(&mut self, gen: u64, page: usize, resp: pb::SearchResponse) {
         let total = resp.total as usize;
+        self.saw_sdk |= resp.items.iter().any(|i| i.source != 0);
         if let Some(p) = self.pending.as_mut() {
             if p.generation == gen {
                 p.insert(page, resp.items, total);
@@ -189,6 +193,7 @@ impl FlowTable {
         }
         // A row that stopped being a row of its own (merged into another).
         let mut unknown = !b.removed.is_empty();
+        self.saw_sdk |= b.upserts.iter().any(|i| i.source != 0);
         for u in &b.upserts {
             match self.shown.index.get(&u.id).copied() {
                 Some((p, i)) => {

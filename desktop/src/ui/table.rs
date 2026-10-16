@@ -1,4 +1,5 @@
 use super::icons::{self, Icon};
+use super::widgets;
 use crate::app::App;
 use crate::fmt;
 use crate::motion::{self, QUICK};
@@ -11,6 +12,11 @@ pub const ROW_H: f32 = 30.0;
 pub const HEADER_H: f32 = 30.0;
 
 struct Cols {
+    /// Where the call was seen: SDK, Proxy or both.
+    src: f32,
+    name: f32,
+    screen: f32,
+    route: f32,
     id: f32,
     method: f32,
     host: f32,
@@ -22,13 +28,22 @@ struct Cols {
 }
 
 /// Columns drop away as the table narrows, least important first.
-fn cols(w: f32) -> Cols {
+fn cols(w: f32, sdk: bool, name: bool, screen: bool, route: bool) -> Cols {
     let kind = if w >= 720.0 { 54.0 } else { 0.0 };
     let size = if w >= 600.0 { 68.0 } else { 0.0 };
+    let src = if sdk && w >= 560.0 { 58.0 } else { 0.0 };
+    // Optional columns only appear when there is room for them.
+    let name = if sdk && name && w >= 740.0 { 128.0 } else { 0.0 };
+    let screen = if sdk && screen && w >= 880.0 { 132.0 } else { 0.0 };
+    let route = if sdk && route && w >= 1020.0 { 150.0 } else { 0.0 };
     let (id, method, status, time) = (42.0, 66.0, 60.0, 66.0);
-    let fixed = id + method + status + time + kind + size;
+    let fixed = id + method + status + time + kind + size + src + name + screen + route;
     let flex = (w - fixed - 28.0).max(120.0);
     Cols {
+        src,
+        name,
+        screen,
+        route,
         id,
         method,
         host: flex * 0.5,
@@ -40,7 +55,92 @@ fn cols(w: f32) -> Cols {
     }
 }
 
+fn filter_chip(ui: &mut Ui, st: &crate::theme::Style, label: &str, on: bool) -> egui::Response {
+    let g = paint::galley(ui, label, Role::Callout, st.p.text);
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 24.0), Sense::click());
+    let hot = resp.hovered();
+    let (bg, fg) = if on {
+        (st.p.accent_soft, st.p.accent)
+    } else if hot {
+        (st.p.fill_hover, st.p.text)
+    } else {
+        (st.p.fill, st.p.text2)
+    };
+    ui.painter().rect_filled(rect, cr(255), bg);
+    let g = paint::galley(ui, label, Role::Callout, fg);
+    ui.painter()
+        .galley(pos2(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, fg);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 impl App {
+    /// Chips that narrow the list to the paired devices and apps. Returns the
+    /// height taken (zero when no device is paired).
+    pub fn device_chips(&mut self, ui: &mut Ui, body: Rect) -> f32 {
+        const H: f32 = 38.0;
+        let usable = |d: &&pb::Device| {
+            d.status == pb::DeviceStatus::DeviceConnected as i32
+                || d.status == pb::DeviceStatus::DeviceIdle as i32
+        };
+        let mut devices: Vec<(String, String)> = Vec::new();
+        let mut apps: Vec<String> = Vec::new();
+        for d in self.devices.devices.iter().filter(usable) {
+            if !devices.iter().any(|(id, _)| *id == d.device_id) {
+                devices.push((d.device_id.clone(), d.device_name.clone()));
+            }
+            if !apps.contains(&d.app_id) {
+                apps.push(d.app_id.clone());
+            }
+        }
+        if devices.is_empty() {
+            return 0.0;
+        }
+        let st = self.st.clone();
+        let r = Rect::from_min_size(body.min, vec2(body.width(), H));
+        ui.painter().rect_filled(r, 0.0, st.p.panel);
+        paint::hairline(ui.painter(), &st, r.left_bottom(), r.right_bottom());
+        let mut child = ui.new_child(
+            UiBuilder::new()
+                .max_rect(r.shrink2(vec2(14.0, 0.0)))
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        child.set_clip_rect(r.intersect(ui.clip_rect()));
+        child.spacing_mut().item_spacing.x = 6.0;
+        let mut devs = self.device_filter.clone();
+        let mut aps = self.app_filter.clone();
+        let all = devs.is_empty() && aps.is_empty();
+        if filter_chip(&mut child, &st, "All traffic", all).clicked() {
+            devs.clear();
+            aps.clear();
+        }
+        child.add_space(6.0);
+        for (id, name) in &devices {
+            let on = devs.contains(id);
+            if filter_chip(&mut child, &st, name, on).clicked() {
+                if on {
+                    devs.retain(|d| d != id);
+                } else {
+                    devs.push(id.clone());
+                }
+            }
+        }
+        if apps.len() > 1 {
+            child.add_space(10.0);
+            for a in &apps {
+                let on = aps.contains(a);
+                if filter_chip(&mut child, &st, a, on).clicked() {
+                    if on {
+                        aps.retain(|x| x != a);
+                    } else {
+                        aps.push(a.clone());
+                    }
+                }
+            }
+        }
+        self.set_device_filter(devs, aps);
+        H
+    }
+
     /// Scroll so `row` is fully visible.
     pub fn reveal_row(&mut self, row: usize) {
         let top = row as f32 * ROW_H;
@@ -57,7 +157,13 @@ impl App {
     pub fn table(&mut self, ui: &mut Ui, rect: Rect) {
         let st = self.st.clone();
         let p = ui.painter().clone();
-        let c = cols(rect.width());
+        let c = cols(
+            rect.width(),
+            self.table.saw_sdk || !self.devices.devices.is_empty(),
+            self.col_name,
+            self.col_screen,
+            self.col_route,
+        );
         let header = Rect::from_min_size(rect.min, vec2(rect.width(), HEADER_H));
         let body = Rect::from_min_max(header.left_bottom(), rect.right_bottom());
 
@@ -152,9 +258,21 @@ impl App {
             x += w;
         };
         head("#", c.id, false);
+        if c.src > 0.0 {
+            head("SOURCE", c.src, false);
+        }
         head("METHOD", c.method, false);
         head("HOST", c.host, false);
         head("PATH", c.path, false);
+        if c.name > 0.0 {
+            head("NAME", c.name, false);
+        }
+        if c.screen > 0.0 {
+            head("SCREEN", c.screen, false);
+        }
+        if c.route > 0.0 {
+            head("ROUTE", c.route, false);
+        }
         head("STATUS", c.status, false);
         if c.kind > 0.0 {
             head("TYPE", c.kind, false);
@@ -165,6 +283,24 @@ impl App {
         head("TIME", c.time, true);
         paint::hairline(&p, &st, header.left_bottom(), header.right_bottom());
         paint::edge_fade_below(&p, &st, header, 6.0);
+        // Right-click the header for the optional columns.
+        if self.table.saw_sdk || !self.devices.devices.is_empty() {
+            let hresp = ui.interact(header, self.id("table-header"), Sense::click());
+            hresp.context_menu(|ui| {
+                widgets::menu_title(ui, &st, "Columns");
+                for (label, on) in [
+                    ("Name", &mut self.col_name),
+                    ("Screen", &mut self.col_screen),
+                    ("Route template", &mut self.col_route),
+                ] {
+                    let icon = if *on { Some(Icon::Check) } else { None };
+                    if widgets::menu_item(ui, &st, icon, label, "", true).clicked() {
+                        *on = !*on;
+                        ui.close();
+                    }
+                }
+            });
+        }
 
         // "Latest" pill when new flows arrived below the fold.
         if !self.follow && self.unseen > 0 {
@@ -260,6 +396,22 @@ impl App {
             dim(st.p.text3),
         );
         x += c.id;
+        if c.src > 0.0 {
+            let (label, col) = match pb::FlowSource::try_from(s.source).unwrap_or_default() {
+                pb::FlowSource::Sdk => ("SDK", st.p.purple),
+                pb::FlowSource::Merged => ("BOTH", st.p.teal),
+                pb::FlowSource::Proxy => ("PROXY", st.p.text3),
+            };
+            let g = paint::galley(ui, label, Role::Overline, if selected { st.p.on_accent } else { col });
+            let r = Rect::from_min_size(pos2(x, mid - 8.0), vec2(g.size().x + 10.0, 16.0));
+            p.rect_filled(
+                r,
+                cr(4),
+                if selected { paint::with_alpha(st.p.on_accent, 0.2) } else { paint::with_alpha(col, 0.14) },
+            );
+            p.galley(pos2(r.left() + 5.0, mid - g.size().y / 2.0), g, col);
+            x += c.src;
+        }
         paint::text_fit(
             p,
             ui,
@@ -304,6 +456,12 @@ impl App {
             dim(st.p.text2),
         );
         x += c.path;
+        for (w, text) in [(c.name, &s.name), (c.screen, &s.screen), (c.route, &s.route_template)] {
+            if w > 0.0 {
+                paint::text_fit(p, ui, pos2(x, mid), w - 10.0, text, Role::Callout, dim(st.p.text2));
+                x += w;
+            }
+        }
 
         // Status: dot + code. Pending flows show a quiet ellipsis.
         if pending && s.status == 0 {

@@ -983,7 +983,13 @@ fn demo_proxy_flow(id: u64) -> pb::FlowDetail {
     }
 }
 
-fn demo_matches(f: &pb::FlowSummary, kind: i32, text: &str, hosts: &[String]) -> bool {
+fn demo_matches(f: &pb::FlowSummary, kind: i32, text: &str, hosts: &[String], devices: &[String], apps: &[String]) -> bool {
+    if !devices.is_empty() && !devices.contains(&f.device_id) {
+        return false;
+    }
+    if !apps.is_empty() && !apps.contains(&f.app_id) {
+        return false;
+    }
     if !hosts.is_empty() && !hosts.iter().any(|h| h.eq_ignore_ascii_case(&f.host)) {
         return false;
     }
@@ -1218,15 +1224,15 @@ impl Backend for DemoBackend {
         let mut s = self.inner.lock().unwrap();
         let res = match body {
             Req::Search(r) => {
-                let (kind, text, hosts) = r
+                let (kind, text, hosts, devices, apps) = r
                     .filter
-                    .map(|f| (f.kind, f.text, f.hosts))
-                    .unwrap_or((0, String::new(), Vec::new()));
+                    .map(|f| (f.kind, f.text, f.hosts, f.devices, f.apps))
+                    .unwrap_or((0, String::new(), Vec::new(), Vec::new(), Vec::new()));
                 let all: Vec<_> = s
                     .flows
                     .iter()
                     .filter_map(|d| d.summary.as_ref())
-                    .filter(|f| demo_matches(f, kind, &text, &hosts))
+                    .filter(|f| demo_matches(f, kind, &text, &hosts, &devices, &apps))
                     .cloned()
                     .collect();
                 let limit = if r.limit == 0 { 200 } else { r.limit } as usize;

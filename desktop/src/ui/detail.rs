@@ -89,6 +89,39 @@ fn kv(ui: &mut Ui, st: &Style, label: &str, value: &str, mono: bool) {
     });
 }
 
+/// A body that is not in the core: still on the device, skipped, or gone.
+fn lazy_notice(ui: &mut Ui, st: &Style, state: i32, size: u64, loading: bool) {
+    card(ui, st, |ui| {
+        ui.horizontal(|ui| {
+            match state {
+                1 => {
+                    widgets::spinner(ui, st, 14.0);
+                    let msg = if loading {
+                        format!("Loading {} from the device…", if size > 0 { fmt::size(size) } else { "the body".into() })
+                    } else {
+                        "Asking the device for the body…".to_string()
+                    };
+                    ui.add(egui::Label::new(job(&msg, Role::Callout, st.p.text2)).selectable(false));
+                }
+                2 => {
+                    ui.add(egui::Label::new(job(
+                        &format!("Not captured{}. The app left it out on purpose (a media type, or Strict redaction).", if size > 0 { format!(" ({})", fmt::size(size)) } else { String::new() }),
+                        Role::Callout,
+                        st.p.text2,
+                    )).wrap().selectable(false));
+                }
+                _ => {
+                    ui.add(egui::Label::new(job(
+                        "Body no longer available. The device dropped it (its buffer filled, or the app restarted) before it was opened.",
+                        Role::Callout,
+                        st.p.text2,
+                    )).wrap().selectable(false));
+                }
+            }
+        });
+    });
+}
+
 fn banner(ui: &mut Ui, st: &Style, color: Color32, icon: Icon, title: &str, body: &str) {
     Frame::new()
         .fill(st.p.tint(color, 0.14))
@@ -153,6 +186,9 @@ impl App {
             );
             body.min.y = r.bottom();
         }
+
+        // Device and app chips, when SDK devices are paired.
+        body.min.y += self.device_chips(ui, body);
 
         // Divider: the pane follows the pointer 1:1, resists past its bounds,
         // and settles on a spring that inherits the release velocity.
@@ -358,7 +394,20 @@ impl App {
             if !s.protocol.is_empty() && s.protocol != "tunnel" {
                 widgets::badge(ui, &s.protocol, st.p.text2, st.p.fill);
             }
+            match pb::FlowSource::try_from(s.source).unwrap_or_default() {
+                pb::FlowSource::Sdk => {
+                    widgets::badge(ui, "SDK", st.p.purple, st.p.tint(st.p.purple, 0.16));
+                }
+                pb::FlowSource::Merged => {
+                    widgets::badge(ui, "SDK + proxy", st.p.teal, st.p.tint(st.p.teal, 0.16));
+                }
+                pb::FlowSource::Proxy => {}
+            }
         });
+        if !s.name.is_empty() {
+            let who = if s.owner.is_empty() { s.name.clone() } else { format!("{}  ·  {}", s.name, s.owner) };
+            head.add(egui::Label::new(job(&who, Role::Headline, st.p.text)).selectable(true));
+        }
         let host_port = if s.port != 443 && s.port != 80 && s.port != 0 {
             format!("{}:{}", s.host, s.port)
         } else {
@@ -447,6 +496,18 @@ impl App {
             }
         });
         head.add_space(6.0);
+        // A merged flow has two views: the app's, and the wire's.
+        let has_wire = self.details.get(&id).is_some_and(|e| e.wire.is_some());
+        if has_wire {
+            let sel = self.wire_view as usize;
+            let w = head.available_width();
+            if let Some(i) = widgets::segmented_w(&mut head, &st, self.id("app-wire"), &["App", "Wire"], sel, Some(w)) {
+                self.wire_view = i == 1;
+            }
+            head.add_space(6.0);
+        } else if self.wire_view {
+            self.wire_view = false;
+        }
         let tab_idx = Tab::ALL.iter().position(|t| *t == self.tab).unwrap_or(0);
         let labels: Vec<&str> = Tab::ALL.iter().map(|t| t.label()).collect();
         let tab_w = head.available_width();
@@ -500,12 +561,20 @@ impl App {
     }
 
     fn tab_overview(&mut self, ui: &mut Ui, st: &Style, id: u64, s: &pb::FlowSummary) {
-        let Some(entry) = self.details.get(&id) else {
+        let Some(entry) = self.view_entry(id) else {
             return;
         };
         let d = &entry.detail;
         let url = d.url.clone();
+        // The SDK's context belongs to the App half; the Wire half is the proxy's.
+        let wire_half = self.wire_view && self.details.get(&id).is_some_and(|e| e.wire.is_some());
+        let sdk = if wire_half {
+            None
+        } else {
+            self.details.get(&id).and_then(|e| e.detail.sdk.clone())
+        };
         let mut open_settings = false;
+        let mut open_device: Option<(String, String)> = None;
         ScrollArea::vertical().id_salt("overview").auto_shrink([false, false]).show(ui, |ui| {
             ui.add_space(12.0);
             if s.flags & 1 != 0 {
@@ -525,6 +594,41 @@ impl App {
                 ui.add_space(10.0);
             } else if !s.error.is_empty() {
                 banner(ui, st, st.p.red, Icon::Warning, "Request failed", &s.error);
+                ui.add_space(10.0);
+            }
+            if let Some(c) = &sdk {
+                caption(ui, st, "From the app");
+                ui.add_space(4.0);
+                card(ui, st, |ui| {
+                    kv(ui, st, "Name", &c.name, false);
+                    kv(ui, st, "Owner", &c.owner, false);
+                    kv(ui, st, "Tag", &c.tag, false);
+                    kv(ui, st, "Screen", &c.screen, false);
+                    kv(ui, st, "Route", &c.route_template, true);
+                    kv(ui, st, "Client", &c.client_stack, false);
+                    let app = if c.app_name.is_empty() { c.app_id.clone() } else { format!("{} ({})", c.app_name, c.app_id) };
+                    kv(ui, st, "App", &app, false);
+                    let ver = if c.build.is_empty() { c.app_version.clone() } else { format!("{} (build {})", c.app_version, c.build) };
+                    kv(ui, st, "Version", &ver, false);
+                    kv(ui, st, "Device", &format!("{} · {} · {}", c.device_name, c.device_model, c.os_version), false);
+                    kv(ui, st, "SDK", &format!("{} {}", c.sdk_name, c.sdk_version), false);
+                    if c.from_cache {
+                        kv(ui, st, "Cache", "Answered from the app's HTTP cache", false);
+                    }
+                });
+                if c.request_redacted || c.response_redacted {
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        widgets::badge(ui, "Redacted", st.p.orange, st.p.tint(st.p.orange, 0.16));
+                        ui.add(egui::Label::new(job("Some values were hidden on the device.", Role::Callout, st.p.text2)).selectable(false));
+                        if widgets::button(ui, st, "Redaction settings", Kind::Plain, None, true).clicked() {
+                            open_device = Some((c.device_id.clone(), c.app_id.clone()));
+                        }
+                    });
+                }
+                ui.add_space(14.0);
+            } else if wire_half {
+                ui.add(egui::Label::new(job("This is what the proxy saw on the wire: real headers, TLS and timings.", Role::Callout, st.p.text2)).wrap().selectable(false));
                 ui.add_space(10.0);
             }
             caption(ui, st, "Request");
@@ -562,13 +666,34 @@ impl App {
         if open_settings {
             self.section = Section::Settings;
         }
+        if let Some((d, a)) = open_device {
+            self.open_device_settings(&d, &a);
+        }
     }
 
     fn tab_http(&mut self, ui: &mut Ui, st: &Style, id: u64, response: bool) {
-        let which = response as u8;
-        let Some(entry) = self.details.get(&id) else {
+        let wire_half = self.wire_view && self.details.get(&id).is_some_and(|e| e.wire.is_some());
+        let which = response as u8 + if wire_half { 2 } else { 0 };
+        let Some(entry) = self.view_entry(id) else {
             return;
         };
+        let sdk = if wire_half {
+            None
+        } else {
+            self.details.get(&id).and_then(|e| e.detail.sdk.clone())
+        };
+        let body_state = sdk.as_ref().map(|c| {
+            if response { c.response_body_state } else { c.request_body_state }
+        });
+        let body_size = self
+            .table
+            .row_of(id)
+            .and_then(|r| self.table.get(r))
+            .map(|s| if response { s.res_size } else { s.req_size })
+            .unwrap_or(0);
+        let loading = self.fetching.contains(&(id, response));
+        let mut need_fetch = false;
+        let mut open_device: Option<(String, String)> = None;
         let headers: Vec<pb::Header> = if response {
             entry.detail.response_headers.clone()
         } else {
@@ -678,7 +803,18 @@ impl App {
                                             .selectable(true),
                                         );
                                     });
-                                    selectable(ui, &h.value, Role::MonoSmall, st.p.text);
+                                    if h.value == "[redacted]" {
+                                        let r = widgets::badge(ui, "Redacted", st.p.orange, st.p.tint(st.p.orange, 0.16))
+                                            .on_hover_text("Hidden on the device before it was sent. Click to change the redaction setting.")
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                        if r.interact(Sense::click()).clicked() {
+                                            if let Some(c) = &sdk {
+                                                open_device = Some((c.device_id.clone(), c.app_id.clone()));
+                                            }
+                                        }
+                                    } else {
+                                        selectable(ui, &h.value, Role::MonoSmall, st.p.text);
+                                    }
                                 });
                             }
                         });
@@ -688,6 +824,16 @@ impl App {
                 caption(ui, st, &format!("{title} body"));
                 ui.add_space(6.0);
                 match view {
+                    _ if matches!(body_state, Some(1)) => {
+                        // Kept on the device: ask for it, show that we are.
+                        if !loading {
+                            need_fetch = true;
+                        }
+                        lazy_notice(ui, st, 1, body_size, loading);
+                    }
+                    _ if matches!(body_state, Some(2) | Some(3)) => {
+                        lazy_notice(ui, st, body_state.unwrap_or(2), body_size, false);
+                    }
                     Some(v) if v.kind != pb::BodyKind::Empty as i32 || !v.note.is_empty() => {
                         self.body_panel(ui, st, id, which, &v, lines, tex, pane_h);
                     }
@@ -706,6 +852,12 @@ impl App {
             });
         if toggle_headers {
             self.headers_open = !self.headers_open;
+        }
+        if need_fetch && !self.wire_view {
+            self.fetch_body(id, response);
+        }
+        if let Some((d, a)) = open_device {
+            self.open_device_settings(&d, &a);
         }
     }
 
@@ -1018,10 +1170,45 @@ impl App {
     }
 
     fn tab_timing(&mut self, ui: &mut Ui, st: &Style, id: u64, s: &pb::FlowSummary) {
-        let Some(entry) = self.details.get(&id) else {
+        // For a merged flow, show both, labelled: the client stack's own
+        // timings and the proxy's. Unknown client phases (-1) show as dashes.
+        let main = self.details.get(&id).map(|e| e.detail.clone());
+        let (Some(main), Some(wire)) = (main.clone(), self.details.get(&id).and_then(|e| e.wire.as_ref())) else {
+            let Some(entry) = self.view_entry(id) else {
+                return;
+            };
+            let t = entry.detail.timings.clone().unwrap_or_default();
+            let sdk_t = if self.wire_view { None } else { entry.detail.sdk.as_ref().and_then(|c| c.timings.clone()) };
+            let t = sdk_t.unwrap_or(t);
+            let pending = s.state == pb::FlowState::Pending as i32;
+            ScrollArea::vertical().id_salt("timing").auto_shrink([false, false]).show(ui, |ui| {
+                timing_block(ui, st, None, &t, pending);
+            });
             return;
         };
-        let t = entry.detail.timings.clone().unwrap_or_default();
+        let app_t = main.sdk.as_ref().and_then(|c| c.timings.clone()).or(main.timings.clone()).unwrap_or_default();
+        let wire_t = wire.detail.timings.clone().unwrap_or_default();
+        let pending = s.state == pb::FlowState::Pending as i32;
+        ScrollArea::vertical().id_salt("timing").auto_shrink([false, false]).show(ui, |ui| {
+            timing_block(ui, st, Some("As the app saw it"), &app_t, pending);
+            ui.add_space(8.0);
+            timing_block(ui, st, Some("On the wire (proxy)"), &wire_t, pending);
+        });
+    }
+}
+
+/// One waterfall. Phases the source did not measure (negative) show as dashes.
+fn timing_block(ui: &mut Ui, st: &Style, heading: Option<&str>, t: &pb::Timings, pending: bool) {
+    {
+        let t = &pb::Timings {
+            dns_ms: t.dns_ms.max(0.0),
+            connect_ms: t.connect_ms.max(0.0),
+            tls_ms: t.tls_ms.max(0.0),
+            send_ms: t.send_ms.max(0.0),
+            wait_ms: t.wait_ms.max(0.0),
+            receive_ms: t.receive_ms.max(0.0),
+            ..t.clone()
+        };
         let phases: [(&str, f64, Color32, &str); 6] = [
             ("DNS", t.dns_ms, st.p.teal, "Resolving the host name"),
             (
@@ -1042,12 +1229,13 @@ impl App {
         ];
         let sum: f64 = phases.iter().map(|p| p.1).sum();
         let total = t.total_ms.max(sum).max(0.001);
-        let pending = s.state == pb::FlowState::Pending as i32;
-        ScrollArea::vertical()
-            .id_salt("timing")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
+        {
+            {
                 ui.add_space(14.0);
+                if let Some(h) = heading {
+                    caption(ui, st, h);
+                    ui.add_space(4.0);
+                }
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::Label::new(job(
@@ -1146,6 +1334,7 @@ impl App {
                 )).wrap().selectable(false));
                 }
                 ui.add_space(16.0);
-            });
+            }
+        }
     }
 }

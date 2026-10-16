@@ -243,3 +243,90 @@ fn devices_empty_state_and_actions() {
     assert!(app(&mut h).devices.devices.is_empty());
     save(&mut h, "devices-empty");
 }
+
+#[test]
+fn sdk_flows_in_the_inspector() {
+    for (dark, tag) in [(false, "light"), (true, "dark")] {
+        let mut h = harness(dark, (1480.0, 860.0), 60);
+        settle(&mut h);
+        app(&mut h).col_screen = true;
+        // Flow 4 was seen by the SDK and the proxy; 2 is SDK only, with a lazy body.
+        app(&mut h).select(Some(4));
+        settle(&mut h);
+        save(&mut h, &format!("sdk-merged-app-{tag}"));
+        assert!(app(&mut h).details.get(&4).unwrap().wire.is_some());
+        app(&mut h).tab = Tab::Request;
+        settle(&mut h);
+        save(&mut h, &format!("sdk-request-redacted-{tag}"));
+        app(&mut h).tab = Tab::Timing;
+        settle(&mut h);
+        save(&mut h, &format!("sdk-timing-both-{tag}"));
+        app(&mut h).tab = Tab::Overview;
+        app(&mut h).wire_view = true;
+        settle(&mut h);
+        save(&mut h, &format!("sdk-merged-wire-{tag}"));
+        app(&mut h).wire_view = false;
+    }
+}
+
+#[test]
+fn lazy_bodies_load_on_demand() {
+    let mut h = harness(false, (1480.0, 860.0), 60);
+    settle(&mut h);
+    app(&mut h).select(Some(2));
+    app(&mut h).tab = Tab::Response;
+    app(&mut h).headers_open = false;
+    settle(&mut h);
+    // Opening the tab asked the device for the body; the fixture answers.
+    let c = app(&mut h).details.get(&2).unwrap().detail.sdk.clone().unwrap();
+    assert_eq!(c.response_body_state, proto::pb::BodyState::BodyPresent as i32);
+    assert!(app(&mut h).fetching.is_empty());
+    save(&mut h, "sdk-lazy-loaded");
+}
+
+#[test]
+fn device_chips_narrow_the_list() {
+    let mut h = harness(false, (1480.0, 860.0), 60);
+    settle(&mut h);
+    let before = app(&mut h).table.total();
+    app(&mut h).set_device_filter(vec!["pixel-8".into()], vec![]);
+    settle(&mut h);
+    let after = app(&mut h).table.total();
+    assert!(after > 0 && after < before, "{after} of {before}");
+    save(&mut h, "device-chip-filter");
+    app(&mut h).set_device_filter(vec![], vec![]);
+    settle(&mut h);
+    assert_eq!(app(&mut h).table.total(), before);
+}
+
+#[test]
+fn ten_thousand_flows_scroll_and_filter_smoothly() {
+    let mut h = harness(false, (1480.0, 860.0), 10_000);
+    settle(&mut h);
+    assert_eq!(app(&mut h).table.total(), 10_000);
+    // Scroll through the list: only visible rows are laid out, so a frame
+    // costs the same at row 10 and row 9,000.
+    let mut worst = std::time::Duration::ZERO;
+    let t0 = std::time::Instant::now();
+    for i in 0..120 {
+        app(&mut h).scroll_to = Some(i as f32 * 80.0 * 30.0 / 30.0);
+        app(&mut h).follow = false;
+        let t = std::time::Instant::now();
+        h.step();
+        worst = worst.max(t.elapsed());
+    }
+    let avg = t0.elapsed() / 120;
+    eprintln!("10,000 rows: avg frame {avg:?}, worst {worst:?}");
+    assert!(avg < std::time::Duration::from_millis(16), "avg frame {avg:?}");
+
+    // Narrowing by device is one request to the core; the table is ready
+    // within a few frames.
+    let t = std::time::Instant::now();
+    app(&mut h).set_device_filter(vec!["pixel-8".into()], vec![]);
+    for _ in 0..6 {
+        h.step();
+    }
+    assert!(app(&mut h).table.total() < 10_000);
+    eprintln!("device filter applied in {:?}", t.elapsed());
+    assert!(t.elapsed() < std::time::Duration::from_millis(100));
+}

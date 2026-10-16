@@ -104,6 +104,8 @@ pub struct DetailEntry {
     pub res_lines: Option<Arc<Vec<String>>>,
     pub req_tex: Option<egui::TextureHandle>,
     pub res_tex: Option<egui::TextureHandle>,
+    /// What the proxy saw, for a merged flow.
+    pub wire: Option<Box<DetailEntry>>,
 }
 
 pub struct App {
@@ -173,6 +175,10 @@ pub struct App {
     pub fetching: std::collections::HashSet<(u64, bool)>,
     /// Which timings view a merged flow shows.
     pub wire_view: bool,
+    /// Optional table columns, from the header's context menu.
+    pub col_name: bool,
+    pub col_screen: bool,
+    pub col_route: bool,
 
     // rules
     pub rules: pb::RulesResponse,
@@ -270,6 +276,9 @@ impl App {
             app_filter: Vec::new(),
             fetching: Default::default(),
             wire_view: false,
+            col_name: true,
+            col_screen: false,
+            col_route: false,
             rules: pb::RulesResponse::default(),
             proxy_tab: 0,
             ssl_input: String::new(),
@@ -1031,7 +1040,8 @@ impl App {
         }
     }
 
-    fn make_entry(&self, ctx: &Context, d: pb::FlowDetail) -> DetailEntry {
+    fn make_entry(&self, ctx: &Context, mut d: pb::FlowDetail) -> DetailEntry {
+        let wire = d.wire.take().map(|w| Box::new(self.make_entry(ctx, *w)));
         let lines = |b: &Option<pb::BodyView>| -> Option<Arc<Vec<String>>> {
             let b = b.as_ref()?;
             if b.text.is_empty() {
@@ -1068,6 +1078,7 @@ impl App {
             req_tex: tex(&d.request_body, &format!("req-{id}")),
             res_tex: tex(&d.response_body, &format!("res-{id}")),
             detail: d,
+            wire,
         }
     }
 
@@ -1089,6 +1100,28 @@ impl App {
     }
 
     // ------------------------------------------------------------ helpers
+
+    /// The detail being shown: for a merged flow, the App or the Wire half.
+    pub fn view_entry(&self, id: u64) -> Option<&DetailEntry> {
+        let e = self.details.get(&id)?;
+        if self.wire_view {
+            if let Some(w) = &e.wire {
+                return Some(w);
+            }
+        }
+        Some(e)
+    }
+
+    /// Jump to the settings of the device a flow came from.
+    pub fn open_device_settings(&mut self, device_id: &str, app_id: &str) {
+        self.section = Section::Devices;
+        self.device_drawer = self
+            .devices
+            .devices
+            .iter()
+            .find(|d| d.device_id == device_id && d.app_id == app_id)
+            .map(crate::edit::DeviceForm::new);
+    }
 
     pub fn proxy_addr(&self) -> String {
         self.status
