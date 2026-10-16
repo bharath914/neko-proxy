@@ -619,6 +619,77 @@ async fn proxy_serves_its_own_ca() {
 }
 
 #[tokio::test]
+async fn cert_page_explains_and_serves_every_format() {
+    let h = start_proxy().await;
+    let get = |path: &str| {
+        send_raw(
+            h.addr,
+            format!("GET {path} HTTP/1.1\r\nHost: proxy.local\r\nConnection: close\r\n\r\n"),
+        )
+    };
+
+    let page = get("/").await;
+    assert!(page.starts_with("HTTP/1.1 200"), "{page}");
+    assert!(page.contains("Install the proxy certificate"));
+    assert!(page.contains(h.ca.sha256()), "fingerprint is embedded");
+    assert!(!page.contains("/*INFO*/"), "template placeholder was filled");
+
+    let pem = get("/ca.pem").await;
+    assert!(pem.contains("BEGIN CERTIFICATE"));
+    assert!(pem.contains("filename=\"proxy-ca.pem\""));
+
+    let mut raw = TcpStream::connect(h.addr).await.unwrap();
+    raw.write_all(b"GET /ca.cer HTTP/1.1\r\nHost: proxy.local\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut cer = Vec::new();
+    raw.read_to_end(&mut cer).await.unwrap();
+    let split = cer.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+    let head = String::from_utf8_lossy(&cer[..split]).to_string();
+    assert!(head.contains("application/x-x509-ca-cert"), "{head}");
+    assert_eq!(&cer[split..], h.ca.cert_der().as_ref(), "body is the DER certificate");
+
+    let profile = get("/ca.mobileconfig").await;
+    assert!(profile.contains("application/x-apple-aspen-config"));
+    assert!(profile.contains("com.apple.security.root"));
+    assert!(profile.contains("<data>"));
+
+    let status = get("/status.json").await;
+    assert!(status.to_ascii_lowercase().contains("access-control-allow-origin: *"));
+    assert!(status.contains(&format!("\"sha256\":\"{}\"", h.ca.sha256())));
+
+    assert!(get("/nope").await.starts_with("HTTP/1.1 404"));
+    assert_eq!(h.sink.count(), 0, "local pages are not flows");
+}
+
+#[tokio::test]
+async fn trust_probe_works_over_https_and_never_marks_the_proxy_pinned() {
+    let h = start_proxy().await;
+    let name = ServerName::try_from("proxy.local").unwrap();
+
+    // A device that has not installed the CA fails the handshake. That must
+    // not make the proxy tunnel proxy.local from now on.
+    let tcp = connect_tunnel(h.addr, "proxy.local:443").await;
+    let res = TlsConnector::from(client_config(None, &[b"http/1.1"]))
+        .connect(name.clone(), tcp)
+        .await;
+    assert!(res.is_err());
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(h.proxy.pinned_hosts().is_empty());
+
+    // Once the CA is trusted the same probe answers, and it is not a flow.
+    let tcp = connect_tunnel(h.addr, "proxy.local:443").await;
+    let tls = TlsConnector::from(client_config(Some(h.ca.cert_der()), &[b"http/1.1"]))
+        .connect(name, tcp)
+        .await
+        .expect("trusted after install");
+    let (status, body) = get_over(tls, false, "GET", "/trust-check", b"").await;
+    assert_eq!(status, 200);
+    assert!(String::from_utf8_lossy(&body).contains(h.ca.sha256()));
+    assert_eq!(h.sink.count(), 0);
+}
+
+#[tokio::test]
 async fn keep_alive_reuse_reports_reused_connection() {
     let h = start_proxy().await;
     let origin = start_origin_http().await;

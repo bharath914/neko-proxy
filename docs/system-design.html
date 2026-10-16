@@ -114,10 +114,10 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--app);outline-offset
 <header>
   <span class="eyebrow">System design · v0.1 · 12 Oct 2026</span>
   <h1>A fast, open-source traffic inspector that AI can drive</h1>
-  <p class="lead">One Rust core does all the work: proxying, TLS, storage, search, rules. Compose Multiplatform apps on desktop, Android and iOS are thin clients. Claude and any other MCP client connect to the same core.</p>
+  <p class="lead">One Rust core does all the work: proxying, TLS, storage, search, rules. The desktop app is a thin client, and a small debug SDK inside the developer's own Android or iOS app handles phones. Claude and any other MCP client connect to the same core.</p>
   <div class="chips">
     <span class="chip">Rust core</span>
-    <span class="chip">Compose Multiplatform apps</span>
+    <span class="chip">Mobile SDK</span>
     <span class="chip">Built-in MCP server</span>
     <span class="chip">MIT / Apache-2.0</span>
   </div>
@@ -125,25 +125,17 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--app);outline-offset
 
 <section>
   <h2>Architecture</h2>
-  <div class="stack" role="img" aria-label="Layered architecture: apps over shared Kotlin over a WebSocket API over the Rust core over network traffic">
+  <div class="stack" role="img" aria-label="Layered architecture: desktop app, mobile SDK and AI clients over a WebSocket API over the Rust core over network traffic">
     <div class="layer apps">
-      <span class="layer-label">Apps · Compose Multiplatform</span>
+      <span class="layer-label">Clients</span>
       <div class="nodes">
-        <div class="node app"><b>Desktop</b><small>macOS · Linux · Windows. Full inspector UI</small></div>
-        <div class="node app"><b>Android companion</b><small>QR pairing, cert guide, quick look, VPN capture</small></div>
-        <div class="node app"><b>iOS companion</b><small>QR pairing, profile install guide, quick look</small></div>
+        <div class="node app"><b>Desktop</b><small>Native Rust, Linux first. Full inspector UI</small></div>
+        <div class="node app"><b>Android SDK</b><small>Debug-only library in your app: routes traffic, trusts the CA at runtime</small></div>
+        <div class="node app"><b>iOS SDK</b><small>Same for URLSession, no profile install for your own app</small></div>
         <div class="node ai"><b>AI clients</b><small>Claude Code, Claude Desktop, any MCP client</small></div>
       </div>
     </div>
-    <div class="layer shared" style="margin-top:10px">
-      <span class="layer-label">Shared Kotlin module</span>
-      <div class="nodes">
-        <div class="node app"><b>State &amp; view-models</b><small>Flow list paging, filters, selection</small></div>
-        <div class="node app"><b>API client</b><small>Ktor WebSocket + protobuf, all targets</small></div>
-        <div class="node app"><b>Design system</b><small>Tokens, flow table, body viewers</small></div>
-      </div>
-    </div>
-    <div class="wire"><span>WebSocket + protobuf · Unix socket / named pipe on desktop · LAN with token for phones</span></div>
+    <div class="wire"><span>WebSocket + protobuf · Unix socket on desktop · LAN with token for pairing</span></div>
     <div class="layer core">
       <span class="layer-label">Rust core · proxyd (also the headless CLI)</span>
       <div class="nodes">
@@ -166,7 +158,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--app);outline-offset
   </div>
   <div class="legend">
     <span><i style="background:var(--core)"></i>Rust</span>
-    <span><i style="background:var(--app)"></i>Kotlin / Compose</span>
+    <span><i style="background:var(--app)"></i>Rust, SDK clients</span>
     <span><i style="background:var(--ai)"></i>MCP</span>
   </div>
 </section>
@@ -246,25 +238,25 @@ flow_fts(host, path, req_headers, res_headers, body_text)</pre>
 </section>
 
 <section>
-  <h2>Phone pairing and certificate setup</h2>
-  <p>The QR payload carries everything the phone needs: <code>{ host, port, token, ca_sha256 }</code>. The companion app checks the CA fingerprint it later downloads against that value.</p>
+  <h2>Phone pairing, SDK and certificate setup</h2>
+  <p>The QR payload carries everything the phone needs: <code>{ host, port, token, ca_sha256 }</code>. The SDK checks the CA fingerprint it downloads against that value. For anything outside your own app, the core serves a certificate page at <code>http://proxy.local</code> with per-platform steps, PEM, DER and Apple profile downloads, and a live trust check. See <code>docs/sdk.md</code>.</p>
   <div class="cols">
     <div class="card">
       <h3>Android</h3>
       <ul>
-        <li>Scan QR, then the app opens the Wi-Fi proxy screen with values to paste</li>
-        <li>Or turn on VPN mode: the app routes traffic through the core with no manual proxy</li>
-        <li>Guided CA install through system settings</li>
-        <li>Apps targeting API 24+ ignore user CAs. The wizard detects this and shows the <code>network_security_config</code> snippet for debug builds</li>
+        <li>The SDK pairs by QR and routes the host app's OkHttp traffic through the proxy</li>
+        <li>It trusts the CA at runtime in debug builds, so no <code>network_security_config</code> edit</li>
+        <li>Other apps: the cert page guides the install through system settings</li>
+        <li>VPN mode comes later</li>
       </ul>
     </div>
     <div class="card">
       <h3>iOS</h3>
       <ul>
-        <li>Scan QR, then download the CA profile from the core over LAN</li>
-        <li>Walk through Settings → Profile Downloaded → Install</li>
-        <li>Then Certificate Trust Settings → enable full trust</li>
-        <li>App confirms trust by making a test HTTPS call through the proxy</li>
+        <li>The SDK pairs by QR and configures the host app's URLSession through the proxy</li>
+        <li>It trusts the CA for that app only, so no profile install</li>
+        <li>Whole device: the cert page offers the <code>.mobileconfig</code>, then Certificate Trust Settings → full trust</li>
+        <li>The page confirms trust with a real HTTPS call through the proxy</li>
       </ul>
     </div>
   </div>
@@ -302,14 +294,13 @@ flow_fts(host, path, req_headers, res_headers, body_text)</pre>
 </section>
 
 <section>
-  <h2>Compose Multiplatform apps</h2>
+  <h2>Desktop app and mobile SDK</h2>
   <div class="cols">
     <div class="card">
       <h3>Structure</h3>
       <ul>
-        <li><code>shared</code>: commonMain with state, API client, UI components</li>
-        <li><code>desktopApp</code>: JVM target for macOS, Linux, Windows</li>
-        <li><code>androidApp</code> and <code>iosApp</code>: companion shells</li>
+        <li><code>desktop</code>: native Rust (egui), Linux first</li>
+        <li><code>sdk/android</code> and <code>sdk/ios</code>: debug-only libraries, not apps</li>
         <li>The core runs as a sidecar process on desktop, started and supervised by the app</li>
       </ul>
     </div>
@@ -366,12 +357,9 @@ flow_fts(host, path, req_headers, res_headers, body_text)</pre>
 <pre>proxy/
 ├─ core/                  Cargo workspace
 │  └─ crates/  net  tls  flow  rules  store  decode  api  mcp  cli
-├─ proto/                 api.proto, shared by Rust and Kotlin
-├─ app/                   Gradle, Kotlin Multiplatform
-│  ├─ shared/             commonMain: state, API client, UI
-│  ├─ desktopApp/
-│  ├─ androidApp/
-│  └─ iosApp/
+├─ proto/                 api.proto
+├─ desktop/               Rust, egui
+├─ sdk/                   later: android (Kotlin), ios (Swift)
 ├─ rules-examples/        YAML mocks and rewrites
 └─ docs/</pre>
 </section>
@@ -379,8 +367,8 @@ flow_fts(host, path, req_headers, res_headers, body_text)</pre>
 <section>
   <h2>Decisions</h2>
   <div>
-    <div class="decision"><b>Sidecar core, not in-process FFI</b><p>Crash isolation, and the desktop app, phones, CLI and MCP all use one API. No JNI or cinterop layer to maintain for the main path.</p></div>
-    <div class="decision"><b>WebSocket with protobuf, not gRPC</b><p>Ktor's WebSocket client runs on every Compose target. gRPC on Kotlin/Native iOS is the weaker option.</p></div>
+    <div class="decision"><b>Sidecar core, not in-process FFI</b><p>Crash isolation, and the desktop app, SDK, CLI and MCP all use one API. No JNI or cinterop layer to maintain for the main path.</p></div>
+    <div class="decision"><b>WebSocket with protobuf, not gRPC</b><p>Easy to speak from Rust, Kotlin and Swift. gRPC adds weight the SDK does not need.</p></div>
     <div class="decision"><b>SQLite plus blob files</b><p>Queryable metadata with a full-text index, and large bodies kept out of the database so scrolling and search stay fast.</p></div>
     <div class="decision"><b>Rules as files</b><p>YAML or JSON rules live in git, work in CI, and are easy for AI to write and review.</p></div>
     <div class="decision"><b>Read-only AI by default</b><p>Inspecting traffic is safe. Changing it needs a human click.</p></div>
@@ -393,7 +381,7 @@ flow_fts(host, path, req_headers, res_headers, body_text)</pre>
     <li><b>Capture core</b><span>HTTP and HTTPS proxy, TLS, store, CLI, HAR export.</span></li>
     <li><b>Desktop app</b><span>Flow table, detail viewers, search, filters on macOS first.</span></li>
     <li><b>Rules and MCP</b><span>Mock, map, breakpoint, throttle. MCP read tools, then approved writes.</span></li>
-    <li><b>Phone pairing</b><span>QR flow, Android and iOS companions, cert wizards.</span></li>
+    <li><b>Phone pairing and SDK</b><span>QR flow, Android SDK first, then iOS SDK.</span></li>
     <li><b>Reach</b><span>Linux and Windows packaging, HTTP/3, on-device Android capture, scripting.</span></li>
   </ol>
 </section>

@@ -24,7 +24,7 @@ Target: Linux only (x86_64 and aarch64, glibc distros such as Ubuntu 22.04+, Fed
 
 ## Not in Phase 1
 
-Rules (mock, map, rewrite, throttle), breakpoints, replay, diff, MCP server, phone pairing and companion apps, macOS, Windows, HTTP/3, SOCKS5, transparent mode, WebSocket / SSE / gRPC viewers, scripting, AI features.
+Rules (mock, map, rewrite, throttle), breakpoints, replay, diff, MCP server, phone pairing and the mobile SDK, macOS, Windows, HTTP/3, SOCKS5, transparent mode, WebSocket / SSE / gRPC viewers, scripting, AI features.
 
 Keep the seams so these slot in later without touching the data path:
 - The `flow` pipeline must expose request and response interceptor hooks, with an empty chain for now

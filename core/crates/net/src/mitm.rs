@@ -192,14 +192,17 @@ impl Inner {
     ) where
         T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
-        if self.pinned.lock().unwrap().contains(&host) {
+        // The proxy's own page is always decrypted: it is how a device finds
+        // out whether it trusts the CA yet.
+        let local = host == crate::ca_page::LOCAL_HOST;
+        if !local && self.pinned.lock().unwrap().contains(&host) {
             self.passthrough(io, host, port, flags::PINNED | flags::TUNNEL, app)
                 .await;
             return;
         }
         // The person's list: hosts outside it are tunneled without a handshake.
         let policy = self.policy.lock().unwrap().clone();
-        if let Some(p) = policy {
+        if let Some(p) = policy.filter(|_| !local) {
             if !p.should_decrypt(&host, port) {
                 self.passthrough(io, host, port, flags::TUNNEL | flags::SSL_BYPASSED, app)
                     .await;
@@ -302,6 +305,10 @@ impl Inner {
     /// A client refused the minted certificate. Remember the host so the next
     /// CONNECT is tunneled, and leave a flow behind so it shows in the list.
     fn mark_pinned(&self, host: &str, port: u16, reason: &str, app: &Arc<AppSlot>) {
+        // Refusing the proxy's own page just means the CA is not installed yet.
+        if host == crate::ca_page::LOCAL_HOST {
+            return;
+        }
         self.pinned.lock().unwrap().insert(host.to_string());
         tracing::info!("{host}:{port} rejected the certificate ({reason}); tunneling from now on");
         if !self.recording.load(std::sync::atomic::Ordering::Relaxed) {

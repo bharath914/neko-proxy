@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Proxy certificate</title>
+<style>
+:root {
+  --bg: #f6f6f4; --card: #ffffff; --ink: #1c1c1a; --muted: #6a6a64; --line: #e3e3de;
+  --accent: #2b59ff; --accent-ink: #ffffff; --ok: #1a7f45; --ok-bg: #e5f4ea;
+  --warn: #9a5b00; --warn-bg: #fdf0d9; --bad: #b3261e; --bad-bg: #fbe6e4; --code: #efefea;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131312; --card: #1c1c1a; --ink: #ecece8; --muted: #a2a29a; --line: #2e2e2a;
+    --accent: #6d8dff; --accent-ink: #0b0b0a; --ok: #5fd08a; --ok-bg: #16301f;
+    --warn: #f0b45a; --warn-bg: #33270f; --bad: #ff8a80; --bad-bg: #3a1a17; --code: #262623;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 46rem; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+h2 { font-size: 1.1rem; margin: 0 0 10px; }
+h3 { font-size: 1rem; margin: 18px 0 6px; }
+p { margin: 0 0 10px; }
+.lede { color: var(--muted); margin-bottom: 20px; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px; margin-bottom: 14px;
+}
+.step { display: flex; gap: 12px; align-items: baseline; }
+.num {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--ink);
+  color: var(--bg); font-size: 0.8rem; font-weight: 600; display: grid; place-items: center;
+  position: relative; top: -1px;
+}
+.muted { color: var(--muted); }
+.small { font-size: 0.875rem; }
+
+/* status */
+.status { display: grid; gap: 8px; }
+.row {
+  display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px;
+  background: var(--code); font-size: 0.95rem;
+}
+.row b { font-weight: 600; }
+.dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.row.ok { background: var(--ok-bg); } .row.ok .dot { background: var(--ok); }
+.row.bad { background: var(--bad-bg); } .row.bad .dot { background: var(--bad); }
+.row.wait .dot { animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .row.wait .dot { animation: none; } }
+.row .why { margin-left: auto; color: var(--muted); font-size: 0.8rem; text-align: right; }
+
+/* tabs */
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: 4px -2px 14px; }
+.tabs button {
+  flex: none; font: inherit; font-size: 0.9rem; padding: 7px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.panel[hidden] { display: none; }
+.detected { font-size: 0.8rem; color: var(--muted); margin: -6px 0 10px; }
+
+a.btn, button.btn {
+  display: inline-block; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px;
+  padding: 11px 18px; margin: 4px 0 10px;
+}
+a.btn.quiet, button.btn.quiet {
+  background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500;
+}
+ol { padding-left: 1.3rem; margin: 0 0 10px; }
+li { margin-bottom: 6px; }
+code, pre, .mono { font: 0.85rem/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+code { background: var(--code); padding: 1px 5px; border-radius: 5px; word-break: break-word; }
+.cmd {
+  position: relative; background: var(--code); border-radius: 10px; margin: 6px 0 12px;
+  padding: 10px 70px 10px 12px; overflow-x: auto;
+}
+.cmd pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
+.cmd button {
+  position: absolute; top: 6px; right: 6px; font: inherit; font-size: 0.75rem; padding: 3px 9px;
+  border-radius: 7px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  cursor: pointer;
+}
+.note { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: 0.9rem; }
+
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
+dt { color: var(--muted); font-size: 0.9rem; }
+dd { margin: 0; word-break: break-all; }
+
+details { border-top: 1px solid var(--line); padding: 12px 0; }
+details:first-of-type { border-top: 0; padding-top: 0; }
+summary { cursor: pointer; font-weight: 600; }
+details[open] summary { margin-bottom: 8px; }
+
+.files { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 0.9rem; }
+.files a { color: var(--accent); }
+footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Install the proxy certificate</h1>
+  <p class="lede">Your device is talking to a debugging proxy. To read HTTPS traffic, it has to trust this proxy's certificate. It takes about a minute.</p>
+
+  <section class="card" aria-live="polite">
+    <h2>Status</h2>
+    <div class="status">
+      <div class="row wait" id="st-proxy"><span class="dot"></span><span><b>Proxy</b> <span id="st-proxy-t">checking…</span></span></div>
+      <div class="row wait" id="st-trust"><span class="dot"></span><span><b>Certificate</b> <span id="st-trust-t">checking…</span></span></div>
+    </div>
+    <p class="small muted" id="st-help" style="margin:10px 0 0"></p>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="num">1</span><h2>Download and install</h2></div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <p class="detected" id="detected"></p>
+
+    <div class="panel" data-os="ios" hidden>
+      <p>Use <b>Safari</b>. Other browsers on iPhone can't install profiles.</p>
+      <a class="btn" href="/ca.mobileconfig">Download profile</a>
+      <ol>
+        <li>Tap <b>Allow</b> when Safari says the website is trying to download a configuration profile.</li>
+        <li>Open <b>Settings</b>. Tap <b>Profile Downloaded</b> near the top, or go to <b>General → VPN &amp; Device Management</b>.</li>
+        <li>Tap the profile, then <b>Install</b>, and enter your passcode.</li>
+        <li class="strong">Then turn on full trust. Without this step, HTTPS still fails: <b>Settings → General → About → Certificate Trust Settings</b>, and switch on <span class="subject">the proxy certificate</span>.</li>
+      </ol>
+      <p class="small muted">Come back to this page. The status above turns green once it works.</p>
+    </div>
+
+    <div class="panel" data-os="android" hidden>
+      <a class="btn" href="/ca.crt">Download certificate</a>
+      <ol>
+        <li>Open <b>Settings</b> and search for <b>CA certificate</b>. On most phones it is under <b>Security → Encryption &amp; credentials → Install a certificate</b>.</li>
+        <li>Choose <b>CA certificate</b> and confirm the warning.</li>
+        <li>Pick <code>proxy-ca.pem</code> from your Downloads.</li>
+      </ol>
+      <p class="small muted">Android won't install a certificate straight from the browser. It has to go through Settings, as above. Set a screen lock first if you have none.</p>
+      <div class="note"><b>Apps ignore it by default.</b> Since Android 7, apps only trust certificates you install if their developers allow it. Browsers like Chrome work. For your own app, add this to <code>res/xml/network_security_config.xml</code> in a debug build:
+        <div class="cmd" style="margin-bottom:0"><pre>&lt;network-security-config&gt;
+  &lt;debug-overrides&gt;
+    &lt;trust-anchors&gt;
+      &lt;certificates src="user"/&gt;
+    &lt;/trust-anchors&gt;
+  &lt;/debug-overrides&gt;
+&lt;/network-security-config&gt;</pre></div>
+        and reference it with <code>android:networkSecurityConfig="@xml/network_security_config"</code> on <code>&lt;application&gt;</code>.</div>
+    </div>
+
+    <div class="panel" data-os="mac" hidden>
+      <a class="btn" href="/ca.pem">Download certificate</a>
+      <p>Double-click the file, or install it from Terminal in one step:</p>
+      <div class="cmd"><pre data-cmd>sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/Downloads/proxy-ca.pem</pre><button type="button">Copy</button></div>
+      <p class="small muted">By hand: double-click the file, add it to <b>System</b> in Keychain Access, open it, expand <b>Trust</b> and set <b>Always Trust</b>.</p>
+    </div>
+
+    <div class="panel" data-os="win" hidden>
+      <a class="btn" href="/ca.cer">Download certificate</a>
+      <ol>
+        <li>Open the file, choose <b>Install Certificate</b>, then <b>Local Machine</b>.</li>
+        <li>Choose <b>Place all certificates in the following store</b> and select <b>Trusted Root Certification Authorities</b>.</li>
+        <li>Finish, and restart your browser.</li>
+      </ol>
+      <p>Or, from an administrator Command Prompt:</p>
+      <div class="cmd"><pre data-cmd>certutil -addstore -f Root %USERPROFILE%\Downloads\proxy-ca.cer</pre><button type="button">Copy</button></div>
+    </div>
+
+    <div class="panel" data-os="linux" hidden>
+      <a class="btn" href="/ca.pem">Download certificate</a>
+      <p>Pick the line for your distribution. It covers curl, wget, Python, Go and most command-line tools.</p>
+      <h3>Fedora, RHEL</h3>
+      <div class="cmd"><pre data-cmd>sudo cp ~/Downloads/proxy-ca.pem /etc/pki/ca-trust/source/anchors/ &amp;&amp; sudo update-ca-trust</pre><button type="button">Copy</button></div>
+      <h3>Debian, Ubuntu</h3>
+      <div class="cmd"><pre data-cmd>sudo cp ~/Downloads/proxy-ca.pem /usr/local/share/ca-certificates/proxy-ca.crt &amp;&amp; sudo update-ca-certificates</pre><button type="button">Copy</button></div>
+      <h3>Arch</h3>
+      <div class="cmd"><pre data-cmd>sudo trust anchor --store ~/Downloads/proxy-ca.pem</pre><button type="button">Copy</button></div>
+      <p class="small muted">Chrome, Chromium and Firefox keep their own store. See the <b>Firefox</b> tab.</p>
+    </div>
+
+    <div class="panel" data-os="firefox" hidden>
+      <p>Firefox ignores the operating system's certificates by default.</p>
+      <a class="btn" href="/ca.pem">Download certificate</a>
+      <ol>
+        <li>Open <code>about:preferences#privacy</code>, scroll to <b>Certificates</b> and choose <b>View Certificates</b>.</li>
+        <li>On the <b>Authorities</b> tab choose <b>Import</b> and pick <code>proxy-ca.pem</code>.</li>
+        <li>Tick <b>Trust this CA to identify websites</b>.</li>
+      </ol>
+      <p class="small muted">On Linux, Chrome and Chromium read the NSS database. Import the same file under <b>Settings → Privacy and security → Manage certificates → Authorities</b>.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="num">2</span><h2>Check it worked</h2></div>
+    <p>This page tries a real HTTPS connection through the proxy every few seconds. When your device trusts the certificate, the status above turns green by itself.</p>
+    <button class="btn quiet" id="recheck" type="button">Check now</button>
+    <p class="small muted">The check runs in this browser. Apps that bring their own trust rules, such as Firefox or an app that pins certificates, can behave differently.</p>
+  </section>
+
+  <section class="card">
+    <h2>Check the fingerprint</h2>
+    <p class="small muted">Compare it with <b>Settings → Certificate</b> in the desktop app. If they differ, don't install. You are not talking to your own proxy.</p>
+    <dl>
+      <dt>SHA-256</dt><dd><span class="mono" id="fp"></span></dd>
+      <dt>Name</dt><dd id="subject"></dd>
+      <dt>Expires</dt><dd id="expires"></dd>
+      <dt>Proxy</dt><dd><span class="mono" id="addr"></span></dd>
+    </dl>
+    <p style="margin-top:10px"><button class="btn quiet" id="copyfp" type="button">Copy fingerprint</button></p>
+  </section>
+
+  <section class="card">
+    <h2>What is this?</h2>
+    <details open>
+      <summary>Why does my device need a certificate?</summary>
+      <p>HTTPS is encrypted from your app to the server. To show you the requests, the proxy has to open that connection, read it, and make a new one to the server. It signs a certificate for each site on the fly, and your device only accepts those if it trusts the authority that signed them. This file <i>is</i> that authority.</p>
+    </details>
+    <details>
+      <summary>Is it safe?</summary>
+      <p>The private key was created on the computer running the proxy and stays there. It never leaves it, and it isn't in the file you download. Anyone holding the key could read your HTTPS traffic, so install this only on devices you are debugging, and remove it when you finish.</p>
+      <p>Everything is stored locally. Nothing is sent to a server.</p>
+    </details>
+    <details>
+      <summary>What can't it see?</summary>
+      <p>Apps that pin their certificate refuse the proxy's. The proxy notices, passes that traffic through untouched, and flags the connection in the desktop app. Apps that only trust built-in certificates, which includes many Android apps, need the setup shown on the Android tab.</p>
+    </details>
+    <details>
+      <summary>How do I remove it?</summary>
+      <p><b>iPhone:</b> Settings → General → VPN &amp; Device Management → the profile → Remove Profile.<br>
+         <b>Android:</b> Settings → Security → Encryption &amp; credentials → Trusted credentials → User → select it and remove.<br>
+         <b>macOS:</b> Keychain Access → System → delete the proxy certificate.<br>
+         <b>Windows:</b> run <code>certmgr.msc</code> → Trusted Root Certification Authorities → delete it.<br>
+         <b>Linux:</b> delete the file you copied, then run <code>update-ca-trust</code> or <code>update-ca-certificates --fresh</code>.</p>
+    </details>
+    <details>
+      <summary>It still says not trusted</summary>
+      <ul style="padding-left:1.3rem;margin:0">
+        <li><b>iPhone:</b> did you switch on full trust under Certificate Trust Settings? Installing alone isn't enough.</li>
+        <li><b>The proxy line is red:</b> this device isn't using the proxy. Set the Wi-Fi proxy to the address under <i>Proxy</i> above, manual mode, and make sure it is on the same network as the computer.</li>
+        <li><b>The date is wrong:</b> a device whose clock is off rejects every certificate. Turn on automatic date and time.</li>
+        <li><b>Firefox:</b> it has its own store. Use the Firefox tab.</li>
+        <li><b>Only one app fails:</b> it probably pins its certificate or ignores user certificates. Look for it in the desktop app: it shows up flagged.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>All formats</h2>
+    <div class="files">
+      <a href="/ca.pem">proxy-ca.pem</a><span class="muted">PEM text. Linux, macOS, Firefox, most tools.</span>
+      <a href="/ca.cer">proxy-ca.cer</a><span class="muted">DER binary. Windows, Java keystores.</span>
+      <a href="/ca.crt">proxy-ca.crt</a><span class="muted">Same as PEM. For Android's installer.</span>
+      <a href="/ca.mobileconfig">proxy-ca.mobileconfig</a><span class="muted">Profile. iPhone, iPad, macOS.</span>
+    </div>
+  </section>
+
+  <footer>Served by the local debugging proxy on your network. Not reachable from the internet.</footer>
+</main>
+
+<script type="application/json" id="info">/*INFO*/null</script>
+<script>
+(function () {
+  "use strict";
+  var info = JSON.parse(document.getElementById("info").textContent) || {};
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---- certificate details
+  var fp = (info.sha256 || "").toUpperCase().replace(/(..)(?=.)/g, "$1:");
+  $("fp").textContent = fp;
+  $("subject").textContent = info.subject || "";
+  var exp = new Date(info.notAfter);
+  $("expires").textContent = isNaN(exp) ? (info.notAfter || "") : exp.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  Array.prototype.forEach.call(document.querySelectorAll(".subject"), function (e) { e.textContent = info.subject || "the proxy certificate"; });
+
+  var port = (info.listen || "").split(":").pop();
+  var addr = location.hostname === "proxy.local" || !location.host
+    ? (info.listenAny ? "this computer's IP address, port " + port : info.listen)
+    : location.host;
+  $("addr").textContent = addr;
+
+  // ---- platform tabs
+  var OS = [
+    ["ios", "iPhone / iPad"], ["android", "Android"], ["mac", "macOS"],
+    ["win", "Windows"], ["linux", "Linux"], ["firefox", "Firefox"]
+  ];
+  var ua = navigator.userAgent || "";
+  var guess = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "ios"
+    : /Android/.test(ua) ? "android"
+    : /Firefox\//.test(ua) && !/Mobile|Tablet/.test(ua) ? "firefox"
+    : /Windows/.test(ua) ? "win"
+    : /Mac OS X|Macintosh/.test(ua) ? "mac"
+    : /Linux|X11|CrOS/.test(ua) ? "linux" : "ios";
+  var tabs = $("tabs");
+  function select(os) {
+    Array.prototype.forEach.call(tabs.children, function (b) { b.setAttribute("aria-selected", String(b.dataset.os === os)); });
+    Array.prototype.forEach.call(document.querySelectorAll(".panel"), function (p) { p.hidden = p.dataset.os !== os; });
+  }
+  OS.forEach(function (o) {
+    var b = document.createElement("button");
+    b.type = "button"; b.role = "tab"; b.dataset.os = o[0]; b.textContent = o[1];
+    b.onclick = function () { select(o[0]); };
+    tabs.appendChild(b);
+  });
+  select(guess);
+  $("detected").textContent = "We picked this tab from your browser. Switch if it is wrong.";
+
+  // ---- copy buttons
+  function copy(text, btn) {
+    var done = function () { var t = btn.textContent; btn.textContent = "Copied"; setTimeout(function () { btn.textContent = t; }, 1400); };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+    var ta = document.createElement("textarea");   // plain http: the clipboard API is unavailable
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".cmd button"), function (b) {
+    b.onclick = function () { copy(b.parentNode.querySelector("pre").textContent, b); };
+  });
+  $("copyfp").onclick = function () { copy(fp, $("copyfp")); };
+
+  // ---- live checks
+  function setRow(id, state, text) {
+    $(id).className = "row " + state;
+    $(id + "-t").textContent = text;
+  }
+  function probe(url) {
+    var ctl = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 5000);
+    return fetch(url, { cache: "no-store", mode: "cors", signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { clearTimeout(timer); return j && j.ok ? j : null; })
+      .catch(function () { clearTimeout(timer); return null; });
+  }
+  var trusted = false, running = false, timer = null;
+  function check() {
+    if (running) return;
+    running = true;
+    probe("http://proxy.local/status.json").then(function (viaProxy) {
+      if (!viaProxy) {
+        setRow("st-proxy", "bad", "isn't reaching this device");
+        setRow("st-trust", "wait", "can't be checked yet");
+        $("st-help").textContent = "This device isn't sending traffic through the proxy. Set the Wi-Fi proxy to manual, with the address shown under Proxy below, then check again.";
+        return;
+      }
+      setRow("st-proxy", "ok", "is receiving this device's traffic");
+      return probe("https://proxy.local/trust-check").then(function (secure) {
+        if (secure && secure.sha256 === info.sha256) {
+          trusted = true;
+          setRow("st-trust", "ok", "is trusted. HTTPS traffic can be read.");
+          $("st-help").textContent = "You're done. You can close this page.";
+        } else {
+          setRow("st-trust", "bad", "is not trusted yet");
+          $("st-help").textContent = "Install the certificate below. This page checks again on its own.";
+        }
+      });
+    }).then(function () { running = false; schedule(); }, function () { running = false; schedule(); });
+  }
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(check, trusted ? 15000 : 3000);
+  }
+  $("recheck").onclick = function () { setRow("st-trust", "wait", "checking…"); check(); };
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+  check();
+})();
+</script>
+</body>
+</html>

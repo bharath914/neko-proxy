@@ -5,6 +5,7 @@
 //! [`flow::FlowSink`] that must not block.
 
 mod body;
+mod ca_page;
 mod connector;
 mod flowctx;
 mod handler;

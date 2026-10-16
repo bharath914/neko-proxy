@@ -1,6 +1,6 @@
 # Phase 2: rules, breakpoints, replay and AI access (MCP)
 
-Linux only, on top of Phase 1. Phone pairing (Phase 3) is not started.
+Linux only, on top of Phase 1. Phone pairing and the mobile SDK (Phase 3, `docs/sdk.md`) are not started.
 
 ## Ships
 

@@ -21,6 +21,7 @@ rustls-native-certs.workspace = true
 tower-service.workspace = true
 tracing.workspace = true
 webpki-roots = "1"
+base64.workspace = true
 
 [dev-dependencies]
 rules.workspace = true

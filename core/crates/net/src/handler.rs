@@ -295,8 +295,8 @@ impl Inner {
                 resolve_tunneled(req.method(), req.uri(), host, *port)
             }
         };
-        if matches!(ctx.kind, ConnKind::Plain) && self.is_self(&target) {
-            return Ok(self.local_page(&target));
+        if self.is_self(&target, &ctx.kind) {
+            return Ok(crate::ca_page::serve(&self.ca, self.cfg.listen, &target));
         }
         if is_upgrade(&req) {
             return Ok(self.proxy_upgrade(req, target, &ctx).await);
@@ -400,12 +400,12 @@ impl Inner {
         })
     }
 
-    fn is_self(&self, t: &Target) -> bool {
-        if t.scheme != "http" {
-            return false;
-        }
-        if t.host == "proxy.local" {
+    fn is_self(&self, t: &Target, kind: &ConnKind) -> bool {
+        if t.host == crate::ca_page::LOCAL_HOST {
             return true;
+        }
+        if !matches!(kind, ConnKind::Plain) || t.scheme != "http" {
+            return false;
         }
         let listen = self.cfg.listen;
         t.port == listen.port()
@@ -414,40 +414,6 @@ impl Inner {
                     .parse::<IpAddr>()
                     .map(|ip| ip.is_loopback() || ip == listen.ip())
                     .unwrap_or(false))
-    }
-
-    fn local_page(&self, t: &Target) -> Response<ProxyBody> {
-        match t.path() {
-            "/ca.pem" | "/ca.crt" => {
-                let mut res = Response::new(full(self.ca.cert_pem().to_string()));
-                let h = res.headers_mut();
-                h.insert(CONTENT_TYPE, "application/x-pem-file".parse().unwrap());
-                h.insert(
-                    "content-disposition",
-                    "attachment; filename=\"proxy-ca.pem\"".parse().unwrap(),
-                );
-                res
-            }
-            "/" => {
-                let html = format!(
-                    "<!doctype html><meta charset=utf-8><title>Proxy</title>\
-                     <body style=\"font:15px system-ui;max-width:42rem;margin:4rem auto;padding:0 1rem\">\
-                     <h1 style=\"font-size:1.4rem\">Proxy is running</h1>\
-                     <p><a href=\"/ca.pem\">Download the CA certificate</a></p>\
-                     <p style=\"color:#666\">SHA-256 <code>{}</code></p>",
-                    self.ca.sha256()
-                );
-                let mut res = Response::new(full(html));
-                res.headers_mut()
-                    .insert(CONTENT_TYPE, "text/html; charset=utf-8".parse().unwrap());
-                res
-            }
-            _ => text_response(
-                StatusCode::NOT_FOUND,
-                "Not found",
-                "This is the proxy itself.",
-            ),
-        }
     }
 
     fn begin_flow(

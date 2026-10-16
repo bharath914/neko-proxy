@@ -2869,6 +2869,7 @@ dependencies = [
 name = "proxy-net"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bytes",
  "flow",
  "http",

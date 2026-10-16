@@ -52,12 +52,15 @@ Milestones refer to the build order in `CLAUDE.md` (M1 capture core, M2 desktop 
 - Sensitive-data scanner for tokens, PII, secrets in cleartext (M5)
 - Basic checks: insecure headers, cleartext HTTP (M5)
 
-## Mobile companion
-- QR pairing, certificate wizards for Android and iOS (M4)
-- Android VPN mode (M4)
-- Live traffic list and detail on the phone (M4)
-- Toggle mocks and throttling from the phone (M4)
+## Mobile SDK (see `docs/sdk.md`)
+- Certificate page at `http://proxy.local`: per-platform steps, PEM, DER and Apple profile downloads, live trust check (done)
+- QR pairing (M4)
+- Android SDK: route the app's traffic, trust the CA at runtime in debug builds (M4)
+- iOS SDK, same for URLSession (M4)
+- Tag flows by app, build and device (M4)
+- Pinning override in debug builds (M5)
 - Shake to report: attach recent flows to a bug report (M5)
+- Android VPN mode and on-device capture (M5)
 
 ## AI layer (MCP)
 - Read tools: list, search, get, diff, export HAR (M3)
