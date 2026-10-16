@@ -112,9 +112,23 @@ impl Client {
 }
 
 async fn setup() -> (Client, Arc<ApiContext>, tempfile::TempDir) {
+    setup_with(false).await
+}
+
+async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let store = store::Store::open(&dir.path().join("data")).unwrap();
     let hub = Hub::new();
+    let sdk = with_sdk.then(|| {
+        let mut o = sdk::SdkOptions::new(dir.path().join("sdk"));
+        o.port = 0;
+        o.bind = [127, 0, 0, 1].into();
+        o.advertise = false;
+        o.watch_adb = false;
+        Arc::new(
+            sdk::Sdk::new(o, Arc::new(hub.clone()), store.clone(), Arc::new(flow::IdGen::starting_after(0))).unwrap(),
+        )
+    });
     let ctx = Arc::new(ApiContext {
         store,
         hub,
@@ -124,7 +138,7 @@ async fn setup() -> (Client, Arc<ApiContext>, tempfile::TempDir) {
         rules: Arc::new(rules::RuleSet::in_memory()),
         approvals: Arc::new(proxy_api::Approvals::default()),
         mcp: None,
-        sdk: None,
+        sdk,
         info: CoreInfo {
             version: "test".into(),
             listen: "127.0.0.1:8899".into(),
@@ -793,4 +807,105 @@ async fn replay_edits_a_stored_flow_and_mcp_settings_round_trip() {
     assert_eq!(i.writes, pb::McpWrites::McpAuto as i32);
     assert!(!i.enabled, "no MCP endpoint in this context");
     assert_eq!(ctx.rules.mcp_writes(), rules::McpWrites::Auto);
+}
+
+#[tokio::test]
+async fn sdk_calls_are_unavailable_without_a_listener() {
+    let (mut c, _ctx, _dir) = setup().await;
+    match c.call(Req::SdkStatus(pb::SdkStatusRequest {})).await {
+        Res::SdkStatus(s) => assert!(!s.available),
+        other => panic!("{other:?}"),
+    }
+    match c.call(Req::DevicesSubscribe(pb::DevicesSubscribeRequest {})).await {
+        Res::Error(e) => assert_eq!(e.code, "unavailable"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn devices_pairing_flow_over_the_api() {
+    let (mut c, ctx, _dir) = setup_with(true).await;
+    // Off until enabled.
+    match c.call(Req::SdkStatus(pb::SdkStatusRequest {})).await {
+        Res::SdkStatus(s) => assert!(s.available && !s.enabled),
+        other => panic!("{other:?}"),
+    }
+    let port = match c.call(Req::SdkSetEnabled(pb::SdkSetEnabledRequest { enabled: true })).await {
+        Res::SdkStatus(s) => {
+            assert!(s.enabled);
+            assert_eq!(s.fingerprint.len(), 64);
+            s.listening[0].rsplit(':').next().unwrap().parse::<u16>().unwrap()
+        }
+        other => panic!("{other:?}"),
+    };
+    match c.call(Req::DevicesSubscribe(pb::DevicesSubscribeRequest {})).await {
+        Res::Devices(d) => assert!(d.enabled && d.devices.is_empty() && d.pending.is_empty()),
+        other => panic!("{other:?}"),
+    }
+
+    // A device asks to pair; the prompt is pushed to the subscriber.
+    let mut dev = sdk::fake_client::Client::connect(port).await.unwrap();
+    dev.hello("inst-1", "com.demo", &[]).await;
+    let device = tokio::spawn(async move {
+        let (code, res) = dev.pair_wait(|_| {}).await;
+        (code, res, dev)
+    });
+    let prompt = loop {
+        let m = c.recv().await;
+        if let Some(Res::Devices(d)) = m.body {
+            assert_eq!(m.id, 0, "pushed, not an answer");
+            if let Some(p) = d.pending.into_iter().next() {
+                break p;
+            }
+        }
+    };
+    assert_eq!(prompt.app_id, "com.demo");
+    assert_eq!(prompt.code.len(), 6);
+    match c.call(Req::DeviceAction(pb::DeviceActionRequest {
+        kind: pb::device_action_request::Kind::Allow as i32,
+        pending_id: prompt.id,
+        ..Default::default()
+    })).await {
+        Res::Ok(_) => {}
+        other => panic!("{other:?}"),
+    }
+    let (code, res, _dev) = device.await.unwrap();
+    assert_eq!(code, prompt.code, "the device computed the code the desktop showed");
+    assert!(res.allowed);
+
+    // The device list now has it; push config and revoke.
+    let cfg = pb::DeviceConfig {
+        capture_enabled: false,
+        redaction: pb::Redaction::RedactStrict as i32,
+        body_cap_bytes: 2048,
+        eager_body_bytes: 1024,
+        ..Default::default()
+    };
+    match c.call(Req::SetDeviceConfig(pb::SetDeviceConfigRequest {
+        device_id: "inst-1".into(),
+        app_id: "com.demo".into(),
+        config: Some(cfg),
+    })).await {
+        Res::Ok(_) => {}
+        other => panic!("{other:?}"),
+    }
+    let sdk = ctx.sdk.as_ref().unwrap();
+    let snap = sdk.snapshot();
+    let d = snap.devices.iter().find(|d| d.facts.device_id == "inst-1").unwrap();
+    assert!(!d.config.capture_enabled);
+    assert_eq!(d.config.body_cap_bytes, 2048);
+    match c.call(Req::DeviceAction(pb::DeviceActionRequest {
+        kind: pb::device_action_request::Kind::Revoke as i32,
+        device_id: "inst-1".into(),
+        app_id: "com.demo".into(),
+        ..Default::default()
+    })).await {
+        Res::Ok(_) => {}
+        other => panic!("{other:?}"),
+    }
+    // Unknown prompt ids are an error, not a crash.
+    match c.call(Req::DeviceAction(pb::DeviceActionRequest { pending_id: 999, ..Default::default() })).await {
+        Res::Error(e) => assert_eq!(e.code, "not_found"),
+        other => panic!("{other:?}"),
+    }
 }
