@@ -29,6 +29,20 @@ pub fn summary(s: &FlowSummary) -> pb::FlowSummary {
             flags: s.flags,
             content_type: s.content_type.clone(),
             error: s.error.clone(),
+            source: match s.source {
+                flow::Source::Proxy => pb::FlowSource::Proxy,
+                flow::Source::Sdk => pb::FlowSource::Sdk,
+                flow::Source::Merged => pb::FlowSource::Merged,
+            } as i32,
+            merged_with: s.merged_with,
+            device_id: s.device_id.clone(),
+            app_id: s.app_id.clone(),
+            name: s.name.clone(),
+            tag: s.tag.clone(),
+            owner: s.owner.clone(),
+            screen: s.screen.clone(),
+            route_template: s.route_template.clone(),
+            client_stack: s.client_stack.clone(),
         }
     }
 }

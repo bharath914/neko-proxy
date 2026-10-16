@@ -10,6 +10,7 @@ members = [
   "core/crates/proto",
   "core/crates/api",
   "core/crates/mcp",
+  "core/crates/sdk",
   "core/crates/cli",
   "desktop",
 ]
@@ -23,6 +24,7 @@ default-members = [
   "core/crates/proto",
   "core/crates/api",
   "core/crates/mcp",
+  "core/crates/sdk",
   "core/crates/cli",
 ]
 
@@ -76,6 +78,7 @@ decode = { path = "core/crates/decode", package = "proxy-decode" }
 rules = { path = "core/crates/rules", package = "proxy-rules" }
 api = { path = "core/crates/api", package = "proxy-api" }
 mcp = { path = "core/crates/mcp", package = "proxy-mcp" }
+sdk = { path = "core/crates/sdk" }
 proto = { path = "core/crates/proto", package = "proxy-proto" }
 
 [profile.release]

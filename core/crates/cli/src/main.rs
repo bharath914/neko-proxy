@@ -1,5 +1,6 @@
 //! proxyd: the headless capture core.
 
+mod client;
 mod paths;
 mod run;
 
@@ -26,10 +27,73 @@ enum Command {
     Export(ExportArgs),
     /// Show how to connect a local AI client (Claude Code) to the MCP server.
     Mcp(McpArgs),
+    /// Turn SDK connections on or off, and see their state (needs a running core).
+    Sdk {
+        #[command(subcommand)]
+        action: SdkAction,
+    },
+    /// Paired devices and pairing requests (needs a running core).
+    Devices {
+        #[command(subcommand)]
+        action: DevicesAction,
+    },
     /// Inspect the proxy CA.
     Ca {
         #[command(subcommand)]
         action: CaAction,
+    },
+}
+
+#[derive(clap::Args, Clone)]
+struct SocketArg {
+    /// API socket path.
+    #[arg(long)]
+    socket: Option<PathBuf>,
+    /// Machine-readable output.
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Subcommand)]
+enum SdkAction {
+    /// Start accepting SDK connections on the LAN.
+    Enable(SocketArg),
+    /// Stop accepting SDK connections and close the open ones.
+    Disable(SocketArg),
+    /// Port, certificate fingerprint, adb and discovery state, drop counters.
+    Status(SocketArg),
+}
+
+#[derive(Subcommand)]
+enum DevicesAction {
+    /// Paired and pending devices.
+    List(SocketArg),
+    /// Approve a pairing request after checking the code matches the app's log.
+    Allow {
+        /// Pending request id from `devices list`.
+        id: u64,
+        #[command(flatten)]
+        s: SocketArg,
+    },
+    Deny {
+        id: u64,
+        #[command(flatten)]
+        s: SocketArg,
+    },
+    /// Delete a device's token; it has to pair again.
+    Revoke {
+        device_id: String,
+        /// The app id (see `devices list`).
+        #[arg(long)]
+        app: String,
+        #[command(flatten)]
+        s: SocketArg,
+    },
+    /// Remove a device and all its apps.
+    Forget {
+        device_id: String,
+        #[command(flatten)]
+        s: SocketArg,
     },
 }
 
@@ -54,6 +118,9 @@ struct FlowsArgs {
     /// Only errors (status >= 400 or failed).
     #[arg(long)]
     errors: bool,
+    /// Only flows from one source. `sdk` includes merged ones.
+    #[arg(long, value_parser = ["sdk", "proxy", "merged"])]
+    source: Option<String>,
     /// One JSON object per line.
     #[arg(long)]
     json: bool,
@@ -121,6 +188,14 @@ fn main() -> Result<()> {
         Command::Flows(a) => flows(a),
         Command::Export(a) => export(a),
         Command::Ca { action } => ca(action),
+        Command::Sdk { action } => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(sdk_cmd(action)),
+        Command::Devices { action } => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(devices_cmd(action)),
         Command::Mcp(a) => mcp_info(a),
     }
 }
@@ -169,8 +244,12 @@ fn open_store(dir: Option<PathBuf>) -> Result<store::Store> {
 
 fn flows(a: FlowsArgs) -> Result<()> {
     let store = open_store(a.data_dir)?;
+    let mut text = a.query.unwrap_or_default();
+    if let Some(src) = &a.source {
+        text = format!("source:{src} {text}");
+    }
     let q = store::Query {
-        text: a.query.unwrap_or_default(),
+        text,
         kind: if a.errors {
             store::Kind::Errors
         } else {
@@ -195,6 +274,13 @@ fn flows(a: FlowsArgs) -> Result<()> {
                 "scheme": s.scheme, "host": s.host, "path": s.path, "status": s.status,
                 "protocol": s.protocol, "duration_ms": s.duration_ms, "req_size": s.req_size,
                 "res_size": s.res_size, "app": s.app, "flags": s.flags, "error": s.error,
+                "source": match s.source {
+                    flow::Source::Proxy => "proxy",
+                    flow::Source::Sdk => "sdk",
+                    flow::Source::Merged => "merged",
+                },
+                "device_id": s.device_id, "app_id": s.app_id, "name": s.name,
+                "screen": s.screen, "route_template": s.route_template,
             });
             writeln!(out, "{v}")?;
         } else {
@@ -284,4 +370,134 @@ fn ca(action: CaAction) -> Result<()> {
         _ => println!("{}", ca.sha256()),
     }
     Ok(())
+}
+
+async fn connect(s: &SocketArg) -> Result<client::Client> {
+    client::Client::connect(&s.socket.clone().unwrap_or_else(paths::socket_path)).await
+}
+
+fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
+    if json {
+        let v = serde_json::json!({
+            "available": st.available, "enabled": st.enabled, "port": st.port,
+            "fingerprint": st.fingerprint, "desktop_name": st.desktop_name,
+            "listening": st.listening, "adb": st.adb_state, "adb_devices": st.adb_devices,
+            "discovery": st.discovery_state, "sessions": st.sessions,
+            "dropped_events": st.stats.as_ref().map(|s| s.dropped_events),
+            "dropped_chunks": st.stats.as_ref().map(|s| s.dropped_chunks),
+        });
+        println!("{v}");
+        return;
+    }
+    if !st.available {
+        println!("This core runs without the SDK listener.");
+        return;
+    }
+    println!("SDK connections  {}", if st.enabled { "on" } else { "off" });
+    println!("Port             {}", st.port);
+    println!("Fingerprint      {}", st.fingerprint);
+    for l in &st.listening {
+        println!("Listening on     {l}");
+    }
+    println!("adb              {}", st.adb_label);
+    println!(
+        "Discovery        {}{}",
+        st.discovery_state,
+        if st.discovery_error.is_empty() { String::new() } else { format!(" ({})", st.discovery_error) }
+    );
+    println!("Sessions         {}", st.sessions);
+    if let Some(s) = &st.stats {
+        println!(
+            "Calls            {} (dropped: {} events, {} chunks, {} calls)",
+            s.calls, s.dropped_events, s.dropped_chunks, s.dropped_calls
+        );
+    }
+}
+
+async fn sdk_cmd(action: SdkAction) -> Result<()> {
+    use api::pb::{client_message::Body as Req, server_message::Body as Res};
+    let (s, req) = match action {
+        SdkAction::Enable(s) => (s, Req::SdkSetEnabled(api::pb::SdkSetEnabledRequest { enabled: true })),
+        SdkAction::Disable(s) => (s, Req::SdkSetEnabled(api::pb::SdkSetEnabledRequest { enabled: false })),
+        SdkAction::Status(s) => (s, Req::SdkStatus(api::pb::SdkStatusRequest {})),
+    };
+    let mut c = connect(&s).await?;
+    match c.call(req).await? {
+        Res::SdkStatus(st) => {
+            print_sdk_status(&st, s.json);
+            Ok(())
+        }
+        _ => bail!("unexpected answer from the core"),
+    }
+}
+
+async fn devices_cmd(action: DevicesAction) -> Result<()> {
+    use api::pb::{client_message::Body as Req, device_action_request::Kind, server_message::Body as Res};
+    let act = |kind: Kind, pending_id: u64, device_id: String, app_id: String| {
+        Req::DeviceAction(api::pb::DeviceActionRequest {
+            kind: kind as i32,
+            pending_id,
+            device_id,
+            app_id,
+        })
+    };
+    let (s, req) = match action {
+        DevicesAction::List(s) => (s, Req::DevicesSubscribe(api::pb::DevicesSubscribeRequest {})),
+        DevicesAction::Allow { id, s } => (s, act(Kind::Allow, id, String::new(), String::new())),
+        DevicesAction::Deny { id, s } => (s, act(Kind::Deny, id, String::new(), String::new())),
+        DevicesAction::Revoke { device_id, app, s } => (s, act(Kind::Revoke, 0, device_id, app)),
+        DevicesAction::Forget { device_id, s } => (s, act(Kind::Forget, 0, device_id, String::new())),
+    };
+    let mut c = connect(&s).await?;
+    match c.call(req).await? {
+        Res::Devices(d) => {
+            if s.json {
+                let v = serde_json::json!({
+                    "enabled": d.enabled,
+                    "pending": d.pending.iter().map(|p| serde_json::json!({
+                        "id": p.id, "device_id": p.device_id, "app_id": p.app_id,
+                        "device_name": p.device_name, "code": p.code, "repair": p.repair,
+                    })).collect::<Vec<_>>(),
+                    "devices": d.devices.iter().map(|x| serde_json::json!({
+                        "device_id": x.device_id, "app_id": x.app_id, "device_name": x.device_name,
+                        "sdk": x.sdk_name, "sdk_version": x.sdk_version, "status": x.status,
+                        "connection": x.connection, "flows": x.flows,
+                    })).collect::<Vec<_>>(),
+                });
+                println!("{v}");
+                return Ok(());
+            }
+            if !d.enabled {
+                println!("SDK connections are off. Run `proxyd sdk enable`.");
+            }
+            for p in &d.pending {
+                println!(
+                    "PENDING #{}  {} ({}) wants to pair as {}  code {} {}",
+                    p.id, p.device_name, p.device_model, p.app_id, &p.code[..p.code.len().min(3)], p.code.get(3..).unwrap_or("")
+                );
+                println!("             Check the same code is in the app's log, then `proxyd devices allow {}`.", p.id);
+            }
+            for x in &d.devices {
+                let status = match api::pb::DeviceStatus::try_from(x.status).unwrap_or_default() {
+                    api::pb::DeviceStatus::DeviceConnected => "connected",
+                    api::pb::DeviceStatus::DeviceIdle => "idle",
+                    api::pb::DeviceStatus::DeviceDenied => "denied",
+                    api::pb::DeviceStatus::DeviceRevoked => "revoked",
+                };
+                println!(
+                    "{:<10} {:<18} {:<28} {:<8} {:<9} {} flows   id {}",
+                    status, x.device_name, x.app_id, x.sdk_name, x.connection, x.flows, x.device_id
+                );
+            }
+            if d.devices.is_empty() && d.pending.is_empty() {
+                println!("No devices yet.");
+            }
+            Ok(())
+        }
+        Res::Ok(_) => {
+            println!("done");
+            Ok(())
+        }
+        _ => bail!("unexpected answer from the core"),
+    }
 }

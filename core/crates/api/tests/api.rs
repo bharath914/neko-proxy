@@ -124,6 +124,7 @@ async fn setup() -> (Client, Arc<ApiContext>, tempfile::TempDir) {
         rules: Arc::new(rules::RuleSet::in_memory()),
         approvals: Arc::new(proxy_api::Approvals::default()),
         mcp: None,
+        sdk: None,
         info: CoreInfo {
             version: "test".into(),
             listen: "127.0.0.1:8899".into(),

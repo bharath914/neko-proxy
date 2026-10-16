@@ -20,6 +20,12 @@ pub struct Query {
     pub until_ms: i64,
     /// Exact host names (case-insensitive). Empty means every host.
     pub hosts: Vec<String>,
+    /// Exact SDK device ids. Empty means every device (and proxy traffic).
+    pub devices: Vec<String>,
+    /// Exact SDK app ids. Empty means every app.
+    pub apps: Vec<String>,
+    /// Also return proxy records that are hidden behind a merged SDK record.
+    pub include_hidden: bool,
 }
 
 pub struct Page {
@@ -70,6 +76,19 @@ fn build_where(q: &Query) -> (String, Vec<Value>) {
     let mut args: Vec<Value> = Vec::new();
 
     let mut kind = q.kind;
+    if !q.include_hidden {
+        // The wire half of a merged pair is shown through its SDK record.
+        clauses.push("NOT (source = 'proxy' AND merged_with != 0)".into());
+    }
+    for (col, vals) in [("device_id", &q.devices), ("app_id", &q.apps)] {
+        if !vals.is_empty() {
+            let marks = vec!["?"; vals.len()].join(",");
+            clauses.push(format!("{col} IN ({marks})"));
+            for v in vals {
+                args.push(v.clone().into());
+            }
+        }
+    }
     if !q.hosts.is_empty() {
         let marks = vec!["?"; q.hosts.len()].join(",");
         clauses.push(format!("host COLLATE NOCASE IN ({marks})"));
@@ -129,6 +148,32 @@ fn build_where(q: &Query) -> (String, Vec<Value>) {
                     args.push(val.to_string().into());
                     continue;
                 }
+                "source" if matches!(val, "proxy" | "sdk" | "merged") => {
+                    // A merged pair counts as both: it is an SDK record that
+                    // also has a wire view.
+                    if val == "sdk" {
+                        clauses.push("source IN ('sdk', 'merged')".into());
+                    } else {
+                        clauses.push("source = ?".into());
+                        args.push(val.to_string().into());
+                    }
+                    continue;
+                }
+                "name" | "tag" | "owner" | "screen" => {
+                    clauses.push(format!("{key} LIKE ? ESCAPE '\\'"));
+                    args.push(like(val).into());
+                    continue;
+                }
+                "route" => {
+                    clauses.push("route_template LIKE ? ESCAPE '\\'".into());
+                    args.push(like(val).into());
+                    continue;
+                }
+                "device" => {
+                    clauses.push("id IN (SELECT rowid FROM flow_sdk_fts WHERE flow_sdk_fts MATCH ?)".into());
+                    args.push(format!("device:{}", fts_term(val).unwrap_or_else(|| "\"\"".into())).into());
+                    continue;
+                }
                 "is" => {
                     match val {
                         "error" | "errors" | "failed" => kind = Kind::Errors,
@@ -151,6 +196,8 @@ fn build_where(q: &Query) -> (String, Vec<Value>) {
         args.push(like(&term).into());
         if let Some(m) = fts_term(&term) {
             any.push("id IN (SELECT rowid FROM flow_fts WHERE flow_fts MATCH ?)".into());
+            args.push(m.clone().into());
+            any.push("id IN (SELECT rowid FROM flow_sdk_fts WHERE flow_sdk_fts MATCH ?)".into());
             args.push(m.into());
         }
         if term.len() == 3 && term.bytes().all(|b| b.is_ascii_digit()) {
@@ -197,7 +244,9 @@ pub fn run(conn: &Connection, q: &Query, offset: u32, limit: u32) -> Result<Page
     all.push((offset as i64).into());
     let mut stmt = conn.prepare(&format!(
         "SELECT id, started_at, duration_ms, scheme, host, port, method, path, query, status,
-                protocol, app, req_size, res_size, state, flags, content_type, error
+                protocol, app, req_size, res_size, state, flags, content_type, error,
+                source, merged_with, device_id, app_id, name, tag, owner, screen,
+                route_template, client_stack
          FROM flow{where_sql} ORDER BY id ASC LIMIT ? OFFSET ?"
     ))?;
     let items = stmt
@@ -226,6 +275,16 @@ pub fn run(conn: &Connection, q: &Query, offset: u32, limit: u32) -> Result<Page
                 flags: r.get::<_, i64>(15)? as u32,
                 content_type: r.get(16)?,
                 error: r.get(17)?,
+                source: flow::Source::parse(&r.get::<_, String>(18)?),
+                merged_with: r.get::<_, i64>(19)? as u64,
+                device_id: r.get(20)?,
+                app_id: r.get(21)?,
+                name: r.get(22)?,
+                tag: r.get(23)?,
+                owner: r.get(24)?,
+                screen: r.get(25)?,
+                route_template: r.get(26)?,
+                client_stack: r.get(27)?,
             })
         })?
         .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -258,7 +317,8 @@ pub fn hosts(conn: &Connection, limit: u32) -> Result<Vec<HostRow>> {
                 SUM(CASE WHEN (flags & 2) != 0 THEN 1 ELSE 0 END),
                 SUM(CASE WHEN (flags & 64) != 0 THEN 1 ELSE 0 END),
                 SUM(CASE WHEN (flags & 128) != 0 THEN 1 ELSE 0 END)
-         FROM flow GROUP BY host ORDER BY MAX(id) DESC LIMIT ?",
+         FROM flow WHERE NOT (source = 'proxy' AND merged_with != 0)
+         GROUP BY host ORDER BY MAX(id) DESC LIMIT ?",
     )?;
     let rows = stmt
         .query_map([limit as i64], |r| {
@@ -277,6 +337,34 @@ pub fn hosts(conn: &Connection, limit: u32) -> Result<Vec<HostRow>> {
     Ok(rows)
 }
 
+/// Stored SDK traffic of one device and app.
+#[derive(Clone, Debug, Default)]
+pub struct DeviceRow {
+    pub device_id: String,
+    pub app_id: String,
+    pub flows: u64,
+    pub last_started_ms: i64,
+}
+
+/// Flow counts per SDK device and app.
+pub fn devices(conn: &Connection) -> Result<Vec<DeviceRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT device_id, app_id, COUNT(*), MAX(started_at) FROM flow
+         WHERE device_id != '' GROUP BY device_id, app_id",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(DeviceRow {
+                device_id: r.get(0)?,
+                app_id: r.get(1)?,
+                flows: r.get::<_, i64>(2)? as u64,
+                last_started_ms: r.get(3)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Cheap in-memory version of [`Query`] for live events. Only sees what a
 /// summary carries (method, host, path, status, app, type), so words that
 /// would match headers or bodies in a stored search do not match here.
@@ -287,6 +375,15 @@ pub fn matches_summary(q: &Query, s: &FlowSummary) -> bool {
     if !q.hosts.is_empty() && !q.hosts.iter().any(|h| h.eq_ignore_ascii_case(&s.host)) {
         return false;
     }
+    if !q.include_hidden && s.source == flow::Source::Proxy && s.merged_with != 0 {
+        return false;
+    }
+    if !q.devices.is_empty() && !q.devices.contains(&s.device_id) {
+        return false;
+    }
+    if !q.apps.is_empty() && !q.apps.contains(&s.app_id) {
+        return false;
+    }
     for term in terms(&q.text) {
         let lower = term.to_ascii_lowercase();
         if let Some((key, val)) = lower
@@ -294,6 +391,36 @@ pub fn matches_summary(q: &Query, s: &FlowSummary) -> bool {
             .filter(|(k, v)| !k.is_empty() && !v.is_empty())
         {
             let handled = match key {
+                "source" if matches!(val, "proxy" | "sdk" | "merged") => {
+                    let ok = match (val, s.source) {
+                        ("sdk", flow::Source::Sdk | flow::Source::Merged) => true,
+                        ("proxy", flow::Source::Proxy) => true,
+                        ("merged", flow::Source::Merged) => true,
+                        _ => false,
+                    };
+                    if !ok {
+                        return false;
+                    }
+                    true
+                }
+                "name" | "tag" | "owner" | "screen" => {
+                    let field = match key {
+                        "name" => &s.name,
+                        "tag" => &s.tag,
+                        "owner" => &s.owner,
+                        _ => &s.screen,
+                    };
+                    if !field.to_ascii_lowercase().contains(val) {
+                        return false;
+                    }
+                    true
+                }
+                "route" => {
+                    if !s.route_template.to_ascii_lowercase().contains(val) {
+                        return false;
+                    }
+                    true
+                }
                 "method" => {
                     if !s.method.eq_ignore_ascii_case(val) {
                         return false;
@@ -366,7 +493,10 @@ pub fn matches_summary(q: &Query, s: &FlowSummary) -> bool {
             }
         }
         let status_hit = term.len() == 3 && term.parse::<u16>().ok() == Some(s.status);
-        if !(host.contains(&lower) || hay_path.contains(&lower) || status_hit) {
+        let sdk_hit = [&s.name, &s.tag, &s.owner, &s.screen, &s.route_template]
+            .iter()
+            .any(|f| f.to_ascii_lowercase().contains(&lower));
+        if !(host.contains(&lower) || hay_path.contains(&lower) || status_hit || sdk_hit) {
             return false;
         }
     }

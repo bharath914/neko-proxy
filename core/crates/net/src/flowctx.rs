@@ -10,15 +10,16 @@ use std::time::Instant;
 
 /// Name of the local app behind a connection, filled in off the data path.
 #[derive(Default)]
-pub struct AppSlot(OnceLock<String>);
+pub struct AppSlot(OnceLock<String>, String);
 
 impl AppSlot {
     pub fn lookup(
         resolver: Arc<AppResolverHandle>,
+        client_ip: std::net::IpAddr,
         client_port: u16,
         proxy_port: u16,
     ) -> Arc<AppSlot> {
-        let slot = Arc::new(AppSlot::default());
+        let slot = Arc::new(AppSlot(OnceLock::new(), client_ip.to_string()));
         let s = slot.clone();
         tokio::task::spawn_blocking(move || {
             if let Some(name) = resolver.0.resolve(client_port, proxy_port) {
@@ -41,6 +42,11 @@ impl AppSlot {
 
     pub fn get(&self) -> String {
         self.0.get().cloned().unwrap_or_default()
+    }
+
+    /// Address the client connected from; empty for replays.
+    pub fn client_ip(&self) -> &str {
+        &self.1
     }
 }
 
@@ -101,6 +107,7 @@ impl FlowCtx {
             req_headers: new.req_headers,
             flags: new.flags,
             state: FlowState::Pending,
+            client_ip: app.client_ip().to_string(),
             ..Default::default()
         };
         let ctx = Arc::new(FlowCtx {

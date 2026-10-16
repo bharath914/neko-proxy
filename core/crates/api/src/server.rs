@@ -86,7 +86,7 @@ pub async fn serve(
 type ConnResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 fn to_query(f: Option<&pb::Filter>, since_ms: i64, until_ms: i64) -> Query {
-    let (text, kind, hosts) = match f {
+    let (text, kind, hosts, devices, apps) = match f {
         Some(f) => (
             f.text.clone(),
             match pb::filter::Kind::try_from(f.kind).unwrap_or(pb::filter::Kind::All) {
@@ -96,8 +96,16 @@ fn to_query(f: Option<&pb::Filter>, since_ms: i64, until_ms: i64) -> Query {
                 pb::filter::Kind::Pinned => Kind::Pinned,
             },
             f.hosts.clone(),
+            f.devices.clone(),
+            f.apps.clone(),
         ),
-        None => (String::new(), Kind::All, Vec::new()),
+        None => (
+            String::new(),
+            Kind::All,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ),
     };
     Query {
         text,
@@ -105,6 +113,9 @@ fn to_query(f: Option<&pb::Filter>, since_ms: i64, until_ms: i64) -> Query {
         since_ms,
         until_ms,
         hosts,
+        devices,
+        apps,
+        include_hidden: false,
     }
 }
 
@@ -140,9 +151,11 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
     // Pushed notices, once the client sends `watch`.
     let mut pause_rx: Option<broadcast::Receiver<rules::PauseEvent>> = None;
     let mut approval_rx: Option<broadcast::Receiver<ApprovalEvent>> = None;
+    let mut devices_rx: Option<tokio::sync::watch::Receiver<Arc<sdk::Snapshot>>> = None;
     let mut batch: Vec<FlowSummary> = Vec::new();
     let mut batch_index: HashMap<u64, usize> = HashMap::new();
     let mut batch_cleared = false;
+    let mut batch_removed: Vec<u64> = Vec::new();
     let mut ticker = tokio::time::interval(BATCH_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
@@ -162,6 +175,12 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
         let approval_event = async {
             match &mut approval_rx {
                 Some(rx) => rx.recv().await,
+                None => std::future::pending().await,
+            }
+        };
+        let devices_event = async {
+            match &mut devices_rx {
+                Some(rx) => rx.changed().await.map(|_| rx.borrow_and_update().clone()),
                 None => std::future::pending().await,
             }
         };
@@ -206,6 +225,20 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
                         approval_rx = Some(ctx.approvals.subscribe());
                         let _ = out_tx.send(paused_list(&ctx, id));
                     }
+                    Some(Req::DevicesSubscribe(_)) => match &ctx.sdk {
+                        Some(sdk) => {
+                            let mut rx = sdk.subscribe();
+                            let snap = rx.borrow_and_update().clone();
+                            devices_rx = Some(rx);
+                            let _ = out_tx.send(pb::ServerMessage {
+                                id,
+                                body: Some(Res::Devices(crate::sdk_api::snapshot(&snap))),
+                            });
+                        }
+                        None => {
+                            let _ = out_tx.send(error(id, "unavailable", "this core runs without the SDK listener"));
+                        }
+                    },
                     Some(Req::Unsubscribe(_)) => {
                         sub = None;
                         batch.clear();
@@ -226,6 +259,17 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
                     None => {
                         let _ = out_tx.send(error(id, "bad_request", "empty request"));
                     }
+                }
+            }
+            ev = devices_event => {
+                match ev {
+                    Ok(snap) => {
+                        let _ = out_tx.send(pb::ServerMessage {
+                            id: 0,
+                            body: Some(Res::Devices(crate::sdk_api::snapshot(&snap))),
+                        });
+                    }
+                    Err(_) => devices_rx = None,
                 }
             }
             ev = pause_event => {
@@ -293,7 +337,21 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
                             }
                         }
                     }
+                    Ok(HubEvent::Remove(id)) => {
+                        if sub.is_some() {
+                            if let Some(i) = batch_index.remove(&id) {
+                                batch.remove(i);
+                                for v in batch_index.values_mut() {
+                                    if *v > i {
+                                        *v -= 1;
+                                    }
+                                }
+                            }
+                            batch_removed.push(id);
+                        }
+                    }
                     Ok(HubEvent::Cleared) => {
+                        batch_removed.clear();
                         batch.clear();
                         batch_index.clear();
                         batch_cleared = true;
@@ -309,15 +367,16 @@ async fn connection(ctx: Arc<ApiContext>, stream: UnixStream) -> ConnResult {
                     Err(broadcast::error::RecvError::Closed) => sub = None,
                 }
             }
-            _ = ticker.tick(), if !batch.is_empty() || batch_cleared => {
+            _ = ticker.tick(), if !batch.is_empty() || batch_cleared || !batch_removed.is_empty() => {
                 let upserts: Vec<pb::FlowSummary> = batch.iter().map(convert::summary).collect();
                 batch.clear();
                 batch_index.clear();
                 let cleared = std::mem::take(&mut batch_cleared);
+                let removed = std::mem::take(&mut batch_removed);
                 let total = ctx.store.count().unwrap_or(0);
                 let _ = out_tx.send(pb::ServerMessage {
                     id: 0,
-                    body: Some(Res::Batch(pb::FlowBatch { upserts, cleared, total })),
+                    body: Some(Res::Batch(pb::FlowBatch { upserts, cleared, total, removed })),
                 });
             }
         }
@@ -584,7 +643,84 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             }
         }
         Req::McpInfo(_) => mcp_info(&ctx, id),
-        Req::Watch(_) | Req::Subscribe(_) | Req::Unsubscribe(_) => {
+        Req::SdkStatus(_) => pb::ServerMessage {
+            id,
+            body: Some(Res::SdkStatus(crate::sdk_api::status(ctx.sdk.as_deref()))),
+        },
+        Req::SdkSetEnabled(r) => {
+            let Some(sdk) = &ctx.sdk else {
+                return error(id, "unavailable", "this core runs without the SDK listener");
+            };
+            match sdk.set_enabled(r.enabled).await {
+                Ok(()) => pb::ServerMessage {
+                    id,
+                    body: Some(Res::SdkStatus(crate::sdk_api::status(Some(sdk)))),
+                },
+                Err(e) => error(id, "sdk", format!("could not change SDK connections: {e}")),
+            }
+        }
+        Req::RegenerateSdkCert(_) => {
+            let Some(sdk) = &ctx.sdk else {
+                return error(id, "unavailable", "this core runs without the SDK listener");
+            };
+            match sdk.regenerate_certificate().await {
+                Ok(()) => pb::ServerMessage {
+                    id,
+                    body: Some(Res::SdkStatus(crate::sdk_api::status(Some(sdk)))),
+                },
+                Err(e) => error(id, "sdk", e.to_string()),
+            }
+        }
+        Req::DeviceAction(r) => {
+            let Some(sdk) = &ctx.sdk else {
+                return error(id, "unavailable", "this core runs without the SDK listener");
+            };
+            use pb::device_action_request::Kind;
+            let ok = match Kind::try_from(r.kind).unwrap_or(Kind::Allow) {
+                Kind::Allow => sdk.allow(r.pending_id),
+                Kind::Deny => sdk.deny(r.pending_id),
+                Kind::Revoke => sdk.revoke(&r.device_id, &r.app_id),
+                Kind::Forget => sdk.forget(&r.device_id),
+            };
+            if ok {
+                pb::ServerMessage {
+                    id,
+                    body: Some(Res::Ok(pb::OkResponse {})),
+                }
+            } else {
+                error(id, "not_found", "nothing to do: it may have expired or been answered already")
+            }
+        }
+        Req::SetDeviceConfig(r) => {
+            let Some(sdk) = &ctx.sdk else {
+                return error(id, "unavailable", "this core runs without the SDK listener");
+            };
+            let cfg = r.config.as_ref().map(crate::sdk_api::config_from_pb).unwrap_or_default();
+            if sdk.set_config(&r.device_id, &r.app_id, cfg) {
+                pb::ServerMessage {
+                    id,
+                    body: Some(Res::Ok(pb::OkResponse {})),
+                }
+            } else {
+                error(id, "not_found", "that device is not known")
+            }
+        }
+        Req::FetchBody(r) => {
+            let Some(sdk) = &ctx.sdk else {
+                return error(id, "unavailable", "this core runs without the SDK listener");
+            };
+            let part = if r.response { store::BodyPart::Response } else { store::BodyPart::Request };
+            match sdk.fetch_body(r.flow_id, part).await {
+                Ok(_) => {
+                    let store = ctx.store.clone();
+                    let _ = tokio::task::spawn_blocking(move || store.flush()).await;
+                    let parts = if r.response { PART_OVERVIEW | PART_RESPONSE_BODY } else { PART_OVERVIEW | PART_REQUEST_BODY };
+                    get_flow(ctx, id, pb::GetFlowRequest { id: r.flow_id, parts }).await
+                }
+                Err(e) => error(id, "fetch_failed", e.to_string()),
+            }
+        }
+        Req::Watch(_) | Req::Subscribe(_) | Req::Unsubscribe(_) | Req::DevicesSubscribe(_) => {
             error(id, "internal", "handled elsewhere")
         }
     }
@@ -680,6 +816,57 @@ const PART_OVERVIEW: u32 = 1;
 const PART_REQUEST_BODY: u32 = 2;
 const PART_RESPONSE_BODY: u32 = 4;
 
+fn build_detail(rec: &flow::FlowRecord, parts: u32) -> pb::FlowDetail {
+    let opts = decode::ViewOptions::default();
+    let view = |ct: &str, enc: &str, bytes: &[u8], size: u64, trunc: bool| -> pb::BodyView {
+        convert::body(decode::build_view(ct, enc, bytes, size, trunc, &opts))
+    };
+    let mut d = pb::FlowDetail {
+        summary: Some(convert::summary(&rec.summary())),
+        url: rec.url(),
+        ..Default::default()
+    };
+    if parts & PART_OVERVIEW != 0 {
+        d.request_headers = rec
+            .req_headers
+            .iter()
+            .map(|(n, v)| pb::Header {
+                name: n.clone(),
+                value: v.clone(),
+            })
+            .collect();
+        d.response_headers = rec
+            .res_headers
+            .iter()
+            .map(|(n, v)| pb::Header {
+                name: n.clone(),
+                value: v.clone(),
+            })
+            .collect();
+        d.timings = Some(convert::timings(&rec.timings));
+        d.curl = decode::curl_command(rec);
+    }
+    if parts & PART_REQUEST_BODY != 0 {
+        d.request_body = Some(view(
+            rec.request_header("content-type"),
+            rec.request_header("content-encoding"),
+            &rec.req_body,
+            rec.req_size,
+            rec.flags & flow::flags::REQ_TRUNCATED != 0,
+        ));
+    }
+    if parts & PART_RESPONSE_BODY != 0 {
+        d.response_body = Some(view(
+            rec.response_header("content-type"),
+            rec.response_header("content-encoding"),
+            &rec.res_body,
+            rec.res_size,
+            rec.flags & flow::flags::RES_TRUNCATED != 0,
+        ));
+    }
+    d
+}
+
 async fn get_flow(ctx: Arc<ApiContext>, id: u64, r: pb::GetFlowRequest) -> pb::ServerMessage {
     let parts = if r.parts == 0 { PART_OVERVIEW } else { r.parts };
     let ctx2 = ctx.clone();
@@ -703,53 +890,14 @@ async fn get_flow(ctx: Arc<ApiContext>, id: u64, r: pb::GetFlowRequest) -> pb::S
         Err(e) => return error(id, "internal", e.to_string()),
     };
 
+    let store = ctx.store.clone();
     let res = tokio::task::spawn_blocking(move || {
-        let opts = decode::ViewOptions::default();
-        let view = |ct: &str, enc: &str, bytes: &[u8], size: u64, trunc: bool| -> pb::BodyView {
-            convert::body(decode::build_view(ct, enc, bytes, size, trunc, &opts))
-        };
-        let mut d = pb::FlowDetail {
-            summary: Some(convert::summary(&rec.summary())),
-            url: rec.url(),
-            ..Default::default()
-        };
-        if parts & PART_OVERVIEW != 0 {
-            d.request_headers = rec
-                .req_headers
-                .iter()
-                .map(|(n, v)| pb::Header {
-                    name: n.clone(),
-                    value: v.clone(),
-                })
-                .collect();
-            d.response_headers = rec
-                .res_headers
-                .iter()
-                .map(|(n, v)| pb::Header {
-                    name: n.clone(),
-                    value: v.clone(),
-                })
-                .collect();
-            d.timings = Some(convert::timings(&rec.timings));
-            d.curl = decode::curl_command(&rec);
-        }
-        if parts & PART_REQUEST_BODY != 0 {
-            d.request_body = Some(view(
-                rec.request_header("content-type"),
-                rec.request_header("content-encoding"),
-                &rec.req_body,
-                rec.req_size,
-                rec.flags & flow::flags::REQ_TRUNCATED != 0,
-            ));
-        }
-        if parts & PART_RESPONSE_BODY != 0 {
-            d.response_body = Some(view(
-                rec.response_header("content-type"),
-                rec.response_header("content-encoding"),
-                &rec.res_body,
-                rec.res_size,
-                rec.flags & flow::flags::RES_TRUNCATED != 0,
-            ));
+        let mut d = build_detail(&rec, parts);
+        d.sdk = crate::sdk_api::context(&rec);
+        if rec.source == flow::Source::Merged && rec.merged_with != 0 {
+            if let Ok(Some(wire)) = store.get(rec.merged_with) {
+                d.wire = Some(Box::new(build_detail(&wire, parts)));
+            }
         }
         d
     })

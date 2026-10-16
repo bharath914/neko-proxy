@@ -86,6 +86,7 @@ async fn setup(writes: rules::McpWrites) -> Env {
         rules,
         approvals: Arc::new(api::Approvals::default()),
         mcp: None,
+        sdk: None,
         info: CoreInfo {
             version: "test".into(),
             listen: "127.0.0.1:8899".into(),

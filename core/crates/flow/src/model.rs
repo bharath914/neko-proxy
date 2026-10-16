@@ -28,6 +28,123 @@ pub mod flags {
     pub const BREAKPOINT: u32 = 512;
     /// The request was sent again by the proxy (replay).
     pub const REPLAYED: u32 = 1024;
+    /// SDK flow whose session dropped before the call finished.
+    pub const INCOMPLETE: u32 = 2048;
+    /// The SDK replaced values in this flow before sending it.
+    pub const REDACTED: u32 = 4096;
+    /// Events for this SDK flow were dropped under load.
+    pub const DROPPED: u32 = 8192;
+}
+
+/// Where a flow was observed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Source {
+    /// Seen on the wire by the proxy.
+    #[default]
+    Proxy,
+    /// Reported by the in-app SDK.
+    Sdk,
+    /// An SDK record and a proxy record for the same call. The SDK record is
+    /// the primary row; the proxy record stays stored as the wire view.
+    Merged,
+}
+
+impl Source {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Source::Proxy => "proxy",
+            Source::Sdk => "sdk",
+            Source::Merged => "merged",
+        }
+    }
+
+    pub fn parse(s: &str) -> Source {
+        match s {
+            "sdk" => Source::Sdk,
+            "merged" => Source::Merged,
+            _ => Source::Proxy,
+        }
+    }
+}
+
+/// What the SDK did with a body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum BodyState {
+    /// Sent with the flow, or there is none.
+    #[default]
+    Present = 0,
+    /// Kept on the device; the core can ask for it.
+    Lazy = 1,
+    /// Not captured by policy (media type, strict redaction).
+    Skipped = 2,
+    /// Was on the device but is gone (evicted, app restarted).
+    Gone = 3,
+}
+
+impl BodyState {
+    pub fn from_u8(v: u8) -> BodyState {
+        match v {
+            1 => BodyState::Lazy,
+            2 => BodyState::Skipped,
+            3 => BodyState::Gone,
+            _ => BodyState::Present,
+        }
+    }
+}
+
+/// Timings the client stack measured, in milliseconds, -1 when unknown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SdkTimings {
+    pub dns: i32,
+    pub connect: i32,
+    pub tls: i32,
+    pub request_sent: i32,
+    pub ttfb: i32,
+    pub download: i32,
+}
+
+impl Default for SdkTimings {
+    fn default() -> Self {
+        SdkTimings {
+            dns: -1,
+            connect: -1,
+            tls: -1,
+            request_sent: -1,
+            ttfb: -1,
+            download: -1,
+        }
+    }
+}
+
+/// Context only the SDK knows. `device_id`, `app_id` and the device and app
+/// facts come from the authenticated session, never from call payloads.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SdkInfo {
+    pub device_id: String,
+    pub app_id: String,
+    pub call_id: String,
+    pub name: String,
+    pub tag: String,
+    pub owner: String,
+    pub screen: String,
+    pub route_template: String,
+    pub client_stack: String,
+    pub device_name: String,
+    pub device_model: String,
+    pub os_version: String,
+    pub app_name: String,
+    pub app_version: String,
+    pub build: String,
+    pub sdk_name: String,
+    pub sdk_version: String,
+    pub connection: String,
+    pub from_cache: bool,
+    pub req_redacted: bool,
+    pub res_redacted: bool,
+    pub req_body: BodyState,
+    pub res_body: BodyState,
+    pub timings: Option<SdkTimings>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -86,6 +203,18 @@ pub struct FlowSummary {
     pub flags: u32,
     pub content_type: String,
     pub error: String,
+    pub source: Source,
+    /// The other half of a merged pair (the proxy record for an SDK row, the
+    /// SDK record for a hidden proxy row). Zero when not merged.
+    pub merged_with: FlowId,
+    pub device_id: String,
+    pub app_id: String,
+    pub name: String,
+    pub tag: String,
+    pub owner: String,
+    pub screen: String,
+    pub route_template: String,
+    pub client_stack: String,
 }
 
 /// A flow with everything captured. Bodies are the bytes on the wire, still
@@ -113,6 +242,11 @@ pub struct FlowRecord {
     pub req_body: Bytes,
     pub res_body: Bytes,
     pub timings: Timings,
+    pub source: Source,
+    /// Remote address of the client for proxied flows; empty if unknown.
+    pub client_ip: String,
+    pub merged_with: FlowId,
+    pub sdk: Option<std::sync::Arc<SdkInfo>>,
 }
 
 impl FlowRecord {
@@ -140,6 +274,24 @@ impl FlowRecord {
             flags: self.flags,
             content_type: short_content_type(self.header(&self.res_headers, "content-type")),
             error: self.error.clone(),
+            source: self.source,
+            merged_with: self.merged_with,
+            device_id: self.sdk.as_ref().map(|i| i.device_id.clone()).unwrap_or_default(),
+            app_id: self.sdk.as_ref().map(|i| i.app_id.clone()).unwrap_or_default(),
+            name: self.sdk.as_ref().map(|i| i.name.clone()).unwrap_or_default(),
+            tag: self.sdk.as_ref().map(|i| i.tag.clone()).unwrap_or_default(),
+            owner: self.sdk.as_ref().map(|i| i.owner.clone()).unwrap_or_default(),
+            screen: self.sdk.as_ref().map(|i| i.screen.clone()).unwrap_or_default(),
+            route_template: self
+                .sdk
+                .as_ref()
+                .map(|i| i.route_template.clone())
+                .unwrap_or_default(),
+            client_stack: self
+                .sdk
+                .as_ref()
+                .map(|i| i.client_stack.clone())
+                .unwrap_or_default(),
         }
     }
 

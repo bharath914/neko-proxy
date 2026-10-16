@@ -125,7 +125,12 @@ impl Inner {
         T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
         let app = if self.recording.load(std::sync::atomic::Ordering::Relaxed) {
-            AppSlot::lookup(self.apps.clone(), peer.port(), self.cfg.listen.port())
+            AppSlot::lookup(
+                self.apps.clone(),
+                peer.ip(),
+                peer.port(),
+                self.cfg.listen.port(),
+            )
         } else {
             AppSlot::none()
         };

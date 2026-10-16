@@ -36,6 +36,16 @@ pub struct RunArgs {
     /// Do not start the MCP server.
     #[arg(long)]
     pub no_mcp: bool,
+    /// Port the in-app SDK listener uses while it is turned on.
+    #[arg(long, default_value_t = sdk::DEFAULT_PORT)]
+    pub sdk_port: u16,
+    /// Accept SDK connections from the start (otherwise turn them on from the
+    /// app or with `proxyd sdk enable`).
+    #[arg(long)]
+    pub sdk: bool,
+    /// Never start the SDK listener.
+    #[arg(long, conflicts_with = "sdk")]
+    pub no_sdk: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -67,6 +77,22 @@ impl FlowSink for Fanout {
             self.store.publish(event.clone());
         }
         self.hub.publish(event);
+    }
+}
+
+/// The proxy's sink: the usual fan-out, plus a tap that offers finished proxy
+/// flows to the SDK merger.
+struct ProxySink {
+    inner: Fanout,
+    sdk: Option<Arc<sdk::Sdk>>,
+}
+
+impl FlowSink for ProxySink {
+    fn publish(&self, event: FlowEvent) {
+        if let (Some(sdk), FlowEvent::Finished(rec)) = (&self.sdk, &event) {
+            sdk.observe_proxy_flow(rec);
+        }
+        self.inner.publish(event);
     }
 }
 
@@ -114,9 +140,38 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     let store = store::Store::open(&data_dir).context("opening the store")?;
     let ids = Arc::new(IdGen::starting_after(store.last_id().unwrap_or(0)));
     let hub = api::Hub::new();
-    let sink = Arc::new(Fanout {
+    let fanout = Fanout {
         hub: hub.clone(),
         store: store.clone(),
+    };
+
+    // The in-app SDK listener. Created turned off: it accepts connections on
+    // the LAN only once someone enables it.
+    let sdk = if args.no_sdk {
+        None
+    } else {
+        let mut opts = sdk::SdkOptions::new(data_dir.clone());
+        opts.port = args.sdk_port;
+        let sdk_sink = Arc::new(Fanout {
+            hub: hub.clone(),
+            store: store.clone(),
+        });
+        match sdk::Sdk::new(opts, sdk_sink, store.clone(), ids.clone()) {
+            Ok(s) => Some(Arc::new(s)),
+            Err(e) => {
+                tracing::warn!("SDK listener unavailable: {e}");
+                None
+            }
+        }
+    };
+    if let (Some(s), true) = (&sdk, args.sdk) {
+        if let Err(e) = s.set_enabled(true).await {
+            tracing::warn!("could not start the SDK listener on port {}: {e}", args.sdk_port);
+        }
+    }
+    let sink = Arc::new(ProxySink {
+        inner: fanout,
+        sdk: sdk.clone(),
     });
 
     let mut cfg = net::ProxyConfig::new(args.listen);
@@ -169,6 +224,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
         rules: rules.clone(),
         approvals: Arc::new(api::Approvals::default()),
         mcp: mcp_endpoint.clone(),
+        sdk: sdk.clone(),
         info: api::CoreInfo {
             version: env!("CARGO_PKG_VERSION").to_string(),
             listen: listen.to_string(),
@@ -229,7 +285,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     }
 
     eprintln!(
-        "proxyd {} ready in {} ms\n  proxy   {}\n  api     {}\n  mcp     {}\n  ca      {} ({})\n  data    {}\n  record  {}",
+        "proxyd {} ready in {} ms\n  proxy   {}\n  api     {}\n  mcp     {}\n  sdk     {}\n  ca      {} ({})\n  data    {}\n  record  {}",
         env!("CARGO_PKG_VERSION"),
         started.elapsed().as_millis(),
         listen,
@@ -238,6 +294,11 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
             .as_ref()
             .map(|m| m.url.as_str())
             .unwrap_or("off"),
+        match (&sdk, args.sdk) {
+            (None, _) => "unavailable".to_string(),
+            (Some(_), true) => format!("listening on port {}", args.sdk_port),
+            (Some(_), false) => format!("off (port {} once enabled)", args.sdk_port),
+        },
         ca.cert_path().display(),
         ca.key_storage().as_str(),
         data_dir.display(),
@@ -247,6 +308,9 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     wait_for_signal().await;
     tracing::info!("shutting down");
     let _ = stop_tx.send(true);
+    if let Some(s) = &sdk {
+        let _ = s.set_enabled(false).await;
+    }
     let _ = proxy_task.await;
     let _ = api_task.await;
     if let Some(t) = mcp_task {

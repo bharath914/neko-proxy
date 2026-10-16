@@ -1,0 +1,30 @@
+[package]
+name = "sdk-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+sdk = { path = ".." }
+tokio = { version = "1", features = ["rt", "io-util", "time"] }
+prost = "0.14"
+flow = { path = "../../flow" }
+store = { path = "../../store", package = "proxy-store" }
+
+[workspace]
+
+[[bin]]
+name = "frame_reader"
+path = "fuzz_targets/frame_reader.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "envelope_decoder"
+path = "fuzz_targets/envelope_decoder.rs"
+test = false
+doc = false

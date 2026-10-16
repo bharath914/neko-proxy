@@ -1,0 +1,217 @@
+syntax = "proto3";
+
+// Device-to-core protocol for the in-app SDK. TLS over TCP, each frame is a
+// 4-byte big-endian length followed by one Envelope. See docs/sdk/docs/03-protocol.md.
+//
+// Rules for evolution: never reuse a field number, never change a type. Readers
+// ignore unknown fields. Bump protocol_version only for incompatible changes.
+package sdk.v1;
+
+option java_package = "dev.proxy.inspector.wire";
+
+message Envelope {
+  oneof msg {
+    Hello hello = 1;                 // client -> server
+    HelloAck hello_ack = 2;          // server -> client
+    PairRequest pair_request = 3;    // client -> server
+    PairChallenge pair_challenge = 4;// server -> client
+    PairReveal pair_reveal = 5;      // client -> server
+    PairResult pair_result = 6;      // server -> client
+    Config config = 7;               // server -> client
+    CallStart call_start = 8;        // client -> server
+    BodyChunk body_chunk = 9;        // client -> server
+    ResponseStart response_start = 10;
+    CallComplete call_complete = 11;
+    CallFailed call_failed = 12;
+    BodyFetch body_fetch = 13;       // server -> client
+    BodyFetchResult body_fetch_result = 14; // client -> server
+    Ping ping = 15;                  // either direction
+    Pong pong = 16;                  // either direction
+    Error error = 17;                // server -> client, then the connection closes
+  }
+}
+
+enum Encoding {
+  NONE = 0;
+  DEFLATE = 1;                       // raw deflate (RFC 1951), no zlib header; each chunk stands alone
+}
+
+message Header {
+  string name = 1;
+  string value = 2;
+}
+
+message Hello {
+  uint32 protocol_version = 1;       // this build speaks exactly one; see Error.UNSUPPORTED_VERSION
+  string sdk_name = 2;               // "android" | "ios"
+  string sdk_version = 3;
+  string app_id = 4;                 // package name or bundle id
+  string app_name = 5;
+  string app_version = 6;
+  string build = 7;
+  string device_install_id = 8;      // random id kept in app-private storage
+  string device_name = 9;
+  string device_model = 10;
+  string os_version = 11;
+  int64 device_time_ms = 12;         // unix ms on the device clock
+  bytes token = 13;                  // empty if not paired
+  string connection = 14;            // hint: "emulator" | "usb" | "wifi" | "simulator" | ""
+}
+
+message HelloAck {
+  enum State {
+    AUTHENTICATED = 0;
+    PAIRING_REQUIRED = 1;
+    DENIED = 2;
+    INGEST_DISABLED = 3;
+  }
+  State state = 1;
+  string desktop_name = 2;
+  string session_id = 3;
+  int64 server_time_ms = 4;
+  uint32 retry_after_s = 5;          // for DENIED and INGEST_DISABLED
+  string message = 6;                // human readable, for the SDK log
+}
+
+message PairRequest {
+  bytes commit = 1;                  // SHA-256(client_nonce)
+}
+
+message PairChallenge {
+  bytes server_nonce = 1;            // 32 bytes
+  uint32 timeout_s = 2;              // how long the prompt stays open
+}
+
+message PairReveal {
+  bytes client_nonce = 1;            // 32 bytes
+}
+
+message PairResult {
+  bool allowed = 1;
+  bytes token = 2;                   // 32 random bytes when allowed
+  string message = 3;
+}
+
+message CallStart {
+  string call_id = 1;                // UUID made by the SDK, unique per call
+  int64 started_at_ms = 2;           // device clock, corrected by the core
+  string method = 3;
+  string url = 4;
+  repeated Header headers = 5;
+  string http_version = 6;           // best effort
+  string client_stack = 7;           // "okhttp" | "ktor" | "urlsession" | "alamofire"
+  string route_template = 8;         // e.g. /cart/{id}/coupon, empty if unknown
+  string name = 9;                   // from @Inspect or inspect()
+  string owner = 10;
+  string tag = 11;
+  string screen = 12;
+  bool request_body_truncated = 13;
+  uint64 request_body_size = 14;     // 0 if unknown
+}
+
+message BodyChunk {
+  enum Part {
+    REQUEST = 0;
+    RESPONSE = 1;
+  }
+  string call_id = 1;
+  Part part = 2;
+  uint32 seq = 3;                    // starts at 0 per call and part
+  bytes data = 4;
+  Encoding encoding = 5;
+  bool last = 6;
+  bool truncated = 7;                // cap reached, no more bytes follow
+}
+
+message ResponseStart {
+  string call_id = 1;
+  uint32 status = 2;
+  repeated Header headers = 3;
+  string http_version = 4;
+  uint64 response_body_size = 5;     // 0 if unknown
+}
+
+// Milliseconds, -1 if unknown.
+message Timings {
+  int32 dns = 1;
+  int32 connect = 2;
+  int32 tls = 3;
+  int32 request_sent = 4;
+  int32 ttfb = 5;
+  int32 download = 6;
+}
+
+message CallComplete {
+  string call_id = 1;
+  int64 ended_at_ms = 2;
+  Timings timings = 3;
+  bool from_cache = 4;
+  bool response_body_available = 5;  // false if skipped, or kept on the device for BodyFetch
+  bool request_body_available = 6;
+  bool request_redacted = 7;         // the SDK replaced values in the request
+  bool response_redacted = 8;
+  bool response_body_skipped = 9;    // by policy (media type, redaction STRICT): nothing to fetch
+  bool request_body_skipped = 10;
+  uint64 response_body_size = 11;    // total bytes the app received, 0 if unknown
+  uint64 request_body_size = 12;
+}
+
+message CallFailed {
+  string call_id = 1;
+  string kind = 2;                   // timeout | dns | tls | cancelled | io | other
+  string message = 3;
+  Timings timings = 4;
+  int64 ended_at_ms = 5;
+}
+
+message Config {
+  enum Redaction {
+    DEFAULT = 0;
+    STRICT = 1;
+    NONE = 2;
+  }
+  bool capture_enabled = 1;
+  repeated string host_allow = 2;
+  repeated string host_deny = 3;
+  uint32 body_cap_bytes = 4;         // default 1 MiB
+  uint32 eager_body_bytes = 5;       // default 64 KiB; larger bodies wait for BodyFetch
+  Redaction redaction = 6;
+  repeated string extra_redact_keys = 7;
+}
+
+message BodyFetch {
+  string call_id = 1;
+  BodyChunk.Part part = 2;
+}
+
+// Answer to BodyFetch. When available, BodyChunks for the same call and part
+// follow, the last one with last = true.
+message BodyFetchResult {
+  string call_id = 1;
+  BodyChunk.Part part = 2;
+  bool available = 3;
+}
+
+message Ping {
+  int64 time_ms = 1;                 // sender's clock
+}
+
+message Pong {
+  int64 echo_ms = 1;                 // Ping.time_ms
+  int64 time_ms = 2;                 // responder's clock
+}
+
+message Error {
+  enum Code {
+    OTHER = 0;
+    PROTOCOL_VIOLATION = 1;
+    UNSUPPORTED_VERSION = 2;
+    RATE_LIMITED = 3;
+    TOO_MANY_SESSIONS = 4;
+    FRAME_TOO_LARGE = 5;
+  }
+  Code code = 1;
+  string message = 2;
+  uint32 min_protocol_version = 3;   // set for UNSUPPORTED_VERSION
+  uint32 max_protocol_version = 4;
+}

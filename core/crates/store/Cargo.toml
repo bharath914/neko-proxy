@@ -7,6 +7,7 @@ description = "SQLite WAL metadata, content-addressed zstd blobs, FTS index and 
 
 [dependencies]
 flow.workspace = true
+bytes.workspace = true
 decode.workspace = true
 rusqlite.workspace = true
 zstd.workspace = true
@@ -19,4 +20,3 @@ tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-bytes.workspace = true

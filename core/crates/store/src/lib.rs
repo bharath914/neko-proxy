@@ -8,11 +8,13 @@ mod query;
 mod schema;
 
 pub use har::to_har;
-pub use query::{matches_summary, HostRow, Kind, Page, Query};
+pub use query::{matches_summary, DeviceRow, HostRow, Kind, Page, Query};
 
 use blobs::BlobStore;
+use bytes::Bytes;
 use flow::{
-    flags, FlowEvent, FlowId, FlowRecord, FlowSink, FlowState, FlowSummary, Header, Timings,
+    flags, BodyState, FlowEvent, FlowId, FlowRecord, FlowSink, FlowState, FlowSummary, Header,
+    SdkInfo, SdkTimings, Source, Timings,
 };
 use rusqlite::{params, Connection, OpenFlags};
 use std::collections::HashMap;
@@ -39,8 +41,25 @@ const BATCH_MAX: usize = 256;
 const BATCH_WINDOW: Duration = Duration::from_millis(20);
 const FTS_BODY_LIMIT: usize = 64 * 1024;
 
+/// Which body of a flow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BodyPart {
+    Request,
+    Response,
+}
+
 enum Msg {
     Flow(Arc<FlowRecord>),
+    /// A body that arrived after its flow was stored (lazy SDK bodies).
+    Body {
+        id: FlowId,
+        part: BodyPart,
+        data: bytes::Bytes,
+        state: BodyState,
+        truncated: bool,
+    },
+    /// Link an SDK record and a proxy record, or unlink with `other = 0`.
+    Merge { id: FlowId, other: FlowId },
     Clear(mpsc::Sender<u64>),
     Flush(mpsc::Sender<()>),
     Shutdown,
@@ -170,6 +189,12 @@ impl Store {
         query::hosts(&c, limit)
     }
 
+    /// Stored flow counts per SDK device and app.
+    pub fn devices(&self) -> Result<Vec<DeviceRow>> {
+        let c = self.shared.reader.lock().unwrap();
+        query::devices(&c)
+    }
+
     /// Ids matching a query, for exports.
     pub fn ids(&self, q: &Query, limit: u32) -> Result<Vec<FlowId>> {
         Ok(self
@@ -186,57 +211,33 @@ impl Store {
             return Ok(Some(r.clone()));
         }
         let c = self.shared.reader.lock().unwrap();
-        let row = c.query_row(
-            "SELECT id, started_at, scheme, host, port, method, path, query, status, protocol, app,
-                    req_size, res_size, req_blob, res_blob, req_headers, res_headers, timings_json,
-                    flags, state, error
-             FROM flow WHERE id = ?1",
-            [id as i64],
-            |r| {
-                Ok((
-                    FlowRecord {
-                        id: r.get::<_, i64>(0)? as u64,
-                        started_at_ms: r.get(1)?,
-                        scheme: r.get(2)?,
-                        host: r.get(3)?,
-                        port: r.get::<_, i64>(4)? as u16,
-                        method: r.get(5)?,
-                        path: r.get(6)?,
-                        query: r.get(7)?,
-                        status: r.get::<_, i64>(8)? as u16,
-                        protocol: r.get(9)?,
-                        app: r.get(10)?,
-                        req_size: r.get::<_, i64>(11)? as u64,
-                        res_size: r.get::<_, i64>(12)? as u64,
-                        flags: r.get::<_, i64>(18)? as u32,
-                        state: FlowState::from_u8(r.get::<_, i64>(19)? as u8),
-                        error: r.get(20)?,
-                        ..Default::default()
-                    },
-                    r.get::<_, Option<String>>(13)?,
-                    r.get::<_, Option<String>>(14)?,
-                    r.get::<_, String>(15)?,
-                    r.get::<_, String>(16)?,
-                    r.get::<_, String>(17)?,
-                ))
-            },
-        );
-        drop(c);
-        let (mut rec, req_blob, res_blob, rh, sh, th) = match row {
-            Ok(v) => v,
-            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-            Err(e) => return Err(e.into()),
-        };
-        rec.req_headers = parse_headers(&rh);
-        rec.res_headers = parse_headers(&sh);
-        rec.timings = parse_timings(&th);
-        if let Some(h) = req_blob {
-            rec.req_body = self.shared.blobs.get(&h).unwrap_or_default().into();
-        }
-        if let Some(h) = res_blob {
-            rec.res_body = self.shared.blobs.get(&h).unwrap_or_default().into();
-        }
-        Ok(Some(Arc::new(rec)))
+        Ok(load_record(&c, &self.shared.blobs, id)?.map(Arc::new))
+    }
+
+    /// Store a body that arrived after its flow (a lazy SDK body fetched on
+    /// demand). Never blocks.
+    pub fn update_body(
+        &self,
+        id: FlowId,
+        part: BodyPart,
+        data: Bytes,
+        state: BodyState,
+        truncated: bool,
+    ) {
+        let _ = self.tx.send(Msg::Body {
+            id,
+            part,
+            data,
+            state,
+            truncated,
+        });
+    }
+
+    /// Link two records as a merged pair (`id` is the SDK record, `other` the
+    /// proxy record), or unlink `id` and whatever it pointed at with
+    /// `other = 0`. The records themselves are untouched.
+    pub fn set_merge(&self, id: FlowId, other: FlowId) {
+        let _ = self.tx.send(Msg::Merge { id, other });
     }
 
     /// Summaries for a set of ids, in id order.
@@ -258,6 +259,157 @@ impl FlowSink for Store {
             self.enqueue(rec);
         }
     }
+}
+
+fn sdk_to_json(i: &SdkInfo) -> String {
+    let t = i.timings.map(|t| {
+        serde_json::json!([t.dns, t.connect, t.tls, t.request_sent, t.ttfb, t.download])
+    });
+    serde_json::json!({
+        "device_name": i.device_name, "device_model": i.device_model, "os_version": i.os_version,
+        "app_name": i.app_name, "app_version": i.app_version, "build": i.build,
+        "sdk_name": i.sdk_name, "sdk_version": i.sdk_version, "connection": i.connection,
+        "from_cache": i.from_cache, "req_redacted": i.req_redacted, "res_redacted": i.res_redacted,
+        "req_body": i.req_body as u8, "res_body": i.res_body as u8, "timings": t,
+    })
+    .to_string()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sdk_from_row(
+    json: &str,
+    device_id: String,
+    app_id: String,
+    call_id: String,
+    name: String,
+    tag: String,
+    owner: String,
+    screen: String,
+    route_template: String,
+    client_stack: String,
+) -> SdkInfo {
+    let v: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+    let st = |k: &str| {
+        v.get(k)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let bl = |k: &str| v.get(k).and_then(|x| x.as_bool()).unwrap_or(false);
+    let timings = v.get("timings").and_then(|t| t.as_array()).and_then(|a| {
+        let n = |i: usize| a.get(i).and_then(|x| x.as_i64()).unwrap_or(-1) as i32;
+        (a.len() == 6).then(|| SdkTimings {
+            dns: n(0),
+            connect: n(1),
+            tls: n(2),
+            request_sent: n(3),
+            ttfb: n(4),
+            download: n(5),
+        })
+    });
+    SdkInfo {
+        device_id,
+        app_id,
+        call_id,
+        name,
+        tag,
+        owner,
+        screen,
+        route_template,
+        client_stack,
+        device_name: st("device_name"),
+        device_model: st("device_model"),
+        os_version: st("os_version"),
+        app_name: st("app_name"),
+        app_version: st("app_version"),
+        build: st("build"),
+        sdk_name: st("sdk_name"),
+        sdk_version: st("sdk_version"),
+        connection: st("connection"),
+        from_cache: bl("from_cache"),
+        req_redacted: bl("req_redacted"),
+        res_redacted: bl("res_redacted"),
+        req_body: BodyState::from_u8(v.get("req_body").and_then(|x| x.as_u64()).unwrap_or(0) as u8),
+        res_body: BodyState::from_u8(v.get("res_body").and_then(|x| x.as_u64()).unwrap_or(0) as u8),
+        timings,
+    }
+}
+
+/// Load one stored flow with headers, bodies and SDK context.
+fn load_record(conn: &Connection, blobs: &BlobStore, id: FlowId) -> Result<Option<FlowRecord>> {
+    let row = conn.query_row(
+        "SELECT id, started_at, scheme, host, port, method, path, query, status, protocol, app,
+                req_size, res_size, req_blob, res_blob, req_headers, res_headers, timings_json,
+                flags, state, error, source, merged_with, client_ip, sdk_json, device_id, app_id,
+                sdk_call_id, name, tag, owner, screen, route_template, client_stack
+         FROM flow WHERE id = ?1",
+        [id as i64],
+        |r| {
+            let source = Source::parse(&r.get::<_, String>(21)?);
+            let sdk_json: String = r.get(24)?;
+            let sdk = if source != Source::Proxy || !sdk_json.is_empty() {
+                Some(Arc::new(sdk_from_row(
+                    &sdk_json,
+                    r.get(25)?,
+                    r.get(26)?,
+                    r.get(27)?,
+                    r.get(28)?,
+                    r.get(29)?,
+                    r.get(30)?,
+                    r.get(31)?,
+                    r.get(32)?,
+                    r.get(33)?,
+                )))
+            } else {
+                None
+            };
+            Ok((
+                FlowRecord {
+                    id: r.get::<_, i64>(0)? as u64,
+                    started_at_ms: r.get(1)?,
+                    scheme: r.get(2)?,
+                    host: r.get(3)?,
+                    port: r.get::<_, i64>(4)? as u16,
+                    method: r.get(5)?,
+                    path: r.get(6)?,
+                    query: r.get(7)?,
+                    status: r.get::<_, i64>(8)? as u16,
+                    protocol: r.get(9)?,
+                    app: r.get(10)?,
+                    req_size: r.get::<_, i64>(11)? as u64,
+                    res_size: r.get::<_, i64>(12)? as u64,
+                    flags: r.get::<_, i64>(18)? as u32,
+                    state: FlowState::from_u8(r.get::<_, i64>(19)? as u8),
+                    error: r.get(20)?,
+                    source,
+                    merged_with: r.get::<_, i64>(22)? as u64,
+                    client_ip: r.get(23)?,
+                    sdk,
+                    ..Default::default()
+                },
+                r.get::<_, Option<String>>(13)?,
+                r.get::<_, Option<String>>(14)?,
+                r.get::<_, String>(15)?,
+                r.get::<_, String>(16)?,
+                r.get::<_, String>(17)?,
+            ))
+        },
+    );
+    let (mut rec, req_blob, res_blob, rh, sh, th) = match row {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    rec.req_headers = parse_headers(&rh);
+    rec.res_headers = parse_headers(&sh);
+    rec.timings = parse_timings(&th);
+    if let Some(h) = req_blob {
+        rec.req_body = blobs.get(&h).unwrap_or_default().into();
+    }
+    if let Some(h) = res_blob {
+        rec.res_body = blobs.get(&h).unwrap_or_default().into();
+    }
+    Ok(Some(rec))
 }
 
 fn parse_headers(json: &str) -> Vec<Header> {
@@ -358,6 +510,22 @@ fn writer_loop(mut conn: Connection, shared: Arc<Shared>, rx: mpsc::Receiver<Msg
                 Msg::Flush(reply) => {
                     let _ = reply.send(());
                 }
+                Msg::Body {
+                    id,
+                    part,
+                    data,
+                    state,
+                    truncated,
+                } => {
+                    if let Err(e) = apply_body(&mut conn, &shared, id, part, data, state, truncated) {
+                        tracing::error!("late body write failed: {e}");
+                    }
+                }
+                Msg::Merge { id, other } => {
+                    if let Err(e) = apply_merge(&conn, id, other) {
+                        tracing::error!("merge write failed: {e}");
+                    }
+                }
                 _ => {}
             }
         }
@@ -416,8 +584,16 @@ fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]
         let mut ins = tx.prepare_cached(
             "INSERT OR REPLACE INTO flow(id, started_at, duration_ms, scheme, host, port, method,
                 path, query, status, protocol, app, req_size, res_size, req_blob, res_blob,
-                req_headers, res_headers, timings_json, flags, state, error, content_type)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)",
+                req_headers, res_headers, timings_json, flags, state, error, content_type,
+                source, device_id, app_id, tag, name, owner, screen, route_template, client_stack,
+                sdk_call_id, merged_with, client_ip, sdk_json)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,
+                ?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35,?36)",
+        )?;
+        let mut del_sdk_fts = tx.prepare_cached("DELETE FROM flow_sdk_fts WHERE rowid = ?1")?;
+        let mut ins_sdk_fts = tx.prepare_cached(
+            "INSERT INTO flow_sdk_fts(rowid, name, tag, owner, screen, route_template, app_id, device)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
         )?;
         let mut del_fts = tx.prepare_cached("DELETE FROM flow_fts WHERE rowid = ?1")?;
         let mut ins_fts = tx.prepare_cached(
@@ -426,6 +602,8 @@ fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]
         )?;
         for (f, (req_blob, res_blob, body_text)) in flows.iter().zip(prepared) {
             let s = f.summary();
+            let sdk = f.sdk.as_deref();
+            let sdk_str = |g: fn(&SdkInfo) -> &str| sdk.map(g).unwrap_or("").to_string();
             let req_h = serde_json::to_string(&f.req_headers).unwrap_or_else(|_| "[]".into());
             let res_h = serde_json::to_string(&f.res_headers).unwrap_or_else(|_| "[]".into());
             ins.execute(params![
@@ -452,7 +630,33 @@ fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]
                 f.state as u8 as i64,
                 f.error,
                 s.content_type,
+                f.source.as_str(),
+                sdk_str(|i| &i.device_id),
+                sdk_str(|i| &i.app_id),
+                sdk_str(|i| &i.tag),
+                sdk_str(|i| &i.name),
+                sdk_str(|i| &i.owner),
+                sdk_str(|i| &i.screen),
+                sdk_str(|i| &i.route_template),
+                sdk_str(|i| &i.client_stack),
+                sdk_str(|i| &i.call_id),
+                f.merged_with as i64,
+                f.client_ip,
+                sdk.map(sdk_to_json).unwrap_or_default(),
             ])?;
+            del_sdk_fts.execute([f.id as i64])?;
+            if let Some(i) = sdk {
+                ins_sdk_fts.execute(params![
+                    f.id as i64,
+                    i.name,
+                    i.tag,
+                    i.owner,
+                    i.screen,
+                    i.route_template,
+                    i.app_id,
+                    format!("{} {}", i.device_name, i.device_model),
+                ])?;
+            }
             del_fts.execute([f.id as i64])?;
             let path_q = if f.query.is_empty() {
                 f.path.clone()
@@ -478,9 +682,72 @@ fn clear_all(conn: &mut Connection, shared: &Shared) -> Result<u64> {
     let tx = conn.transaction()?;
     tx.execute("DELETE FROM flow", [])?;
     tx.execute("DELETE FROM flow_fts", [])?;
+    tx.execute("DELETE FROM flow_sdk_fts", [])?;
     tx.commit()?;
     shared.pending.lock().unwrap().clear();
     shared.blobs.wipe()?;
     let _ = conn.pragma_update(None, "wal_checkpoint", "TRUNCATE");
     Ok(removed as u64)
+}
+
+/// Replace one body of an already stored flow and re-index it.
+fn apply_body(
+    conn: &mut Connection,
+    shared: &Shared,
+    id: FlowId,
+    part: BodyPart,
+    data: Bytes,
+    state: BodyState,
+    truncated: bool,
+) -> Result<()> {
+    let Some(mut rec) = load_record(conn, &shared.blobs, id)? else {
+        return Ok(());
+    };
+    let mut sdk = rec.sdk.as_deref().cloned().unwrap_or_default();
+    match part {
+        BodyPart::Request => {
+            rec.req_body = data;
+            sdk.req_body = state;
+            if truncated {
+                rec.flags |= flags::REQ_TRUNCATED;
+            }
+        }
+        BodyPart::Response => {
+            rec.res_body = data;
+            sdk.res_body = state;
+            if truncated {
+                rec.flags |= flags::RES_TRUNCATED;
+            }
+        }
+    }
+    rec.sdk = Some(Arc::new(sdk));
+    write_batch(conn, shared, &[Arc::new(rec)])
+}
+
+fn apply_merge(conn: &Connection, id: FlowId, other: FlowId) -> Result<()> {
+    if other == 0 {
+        // Unlink both halves of whatever `id` was part of.
+        let prev: i64 = conn
+            .query_row("SELECT merged_with FROM flow WHERE id = ?1", [id as i64], |r| r.get(0))
+            .unwrap_or(0);
+        for x in [id as i64, prev] {
+            if x == 0 {
+                continue;
+            }
+            conn.execute(
+                "UPDATE flow SET merged_with = 0, source = CASE WHEN source = 'merged' THEN 'sdk' ELSE source END WHERE id = ?1",
+                [x],
+            )?;
+        }
+        return Ok(());
+    }
+    conn.execute(
+        "UPDATE flow SET merged_with = ?2, source = 'merged' WHERE id = ?1",
+        [id as i64, other as i64],
+    )?;
+    conn.execute(
+        "UPDATE flow SET merged_with = ?2 WHERE id = ?1",
+        [other as i64, id as i64],
+    )?;
+    Ok(())
 }

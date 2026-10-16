@@ -222,3 +222,114 @@ fn tunnels_are_not_exported() {
     let har = proxy_store::to_har(&[Arc::new(r)], true, "0.1.0");
     assert_eq!(har["log"]["entries"].as_array().unwrap().len(), 0);
 }
+
+fn sdk_rec(id: u64, device: &str, name: &str, body: &str) -> Arc<FlowRecord> {
+    let mut r = (*rec(id, "api.shop.test", "/v1/cart/7/coupon", 200, 50, body)).clone();
+    r.source = flow::Source::Sdk;
+    r.app = "com.shop.app".into();
+    r.sdk = Some(Arc::new(flow::SdkInfo {
+        device_id: device.into(),
+        app_id: "com.shop.app".into(),
+        call_id: format!("call-{id}"),
+        name: name.into(),
+        owner: "payments".into(),
+        screen: "CartActivity".into(),
+        route_template: "/v1/cart/{id}/coupon".into(),
+        client_stack: "okhttp".into(),
+        device_name: "Pixel 8".into(),
+        app_version: "1.2.3".into(),
+        timings: Some(flow::SdkTimings {
+            dns: 3,
+            ..Default::default()
+        }),
+        res_body: flow::BodyState::Lazy,
+        ..Default::default()
+    }));
+    Arc::new(r)
+}
+
+#[test]
+fn sdk_fields_roundtrip_search_and_lazy_body() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    store.enqueue(sdk_rec(1, "dev-a", "Apply coupon", ""));
+    store.enqueue(rec(2, "other.test", "/x", 200, 5, "{}"));
+    store.flush();
+
+    let got = store.get(1).unwrap().unwrap();
+    assert_eq!(got.source, flow::Source::Sdk);
+    let sdk = got.sdk.as_ref().unwrap();
+    assert_eq!(sdk.name, "Apply coupon");
+    assert_eq!(sdk.route_template, "/v1/cart/{id}/coupon");
+    assert_eq!(sdk.app_version, "1.2.3");
+    assert_eq!(sdk.timings.unwrap().dns, 3);
+    assert_eq!(sdk.res_body, flow::BodyState::Lazy);
+    assert!(store.get(2).unwrap().unwrap().sdk.is_none());
+
+    let q = |t: &str| Query {
+        text: t.into(),
+        ..Default::default()
+    };
+    // Plain words reach SDK fields; operators filter on them.
+    assert_eq!(store.search(&q("coupon"), 0, 10).unwrap().total, 1);
+    assert_eq!(store.search(&q("payments"), 0, 10).unwrap().total, 1);
+    assert_eq!(store.search(&q("CartActivity"), 0, 10).unwrap().total, 1);
+    assert_eq!(store.search(&q("name:apply"), 0, 10).unwrap().total, 1);
+    assert_eq!(store.search(&q("source:sdk"), 0, 10).unwrap().total, 1);
+    assert_eq!(store.search(&q("source:proxy"), 0, 10).unwrap().total, 1);
+    assert_eq!(store.search(&q("device:pixel"), 0, 10).unwrap().total, 1);
+    let by_device = Query {
+        devices: vec!["dev-a".into()],
+        ..Default::default()
+    };
+    assert_eq!(store.search(&by_device, 0, 10).unwrap().total, 1);
+    let rows = store.devices().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].flows, 1);
+
+    // A lazy body arriving later is stored and becomes searchable.
+    store.update_body(
+        1,
+        proxy_store::BodyPart::Response,
+        Bytes::from_static(br#"{"discount":"SPRING25"}"#),
+        flow::BodyState::Present,
+        false,
+    );
+    store.flush();
+    let got = store.get(1).unwrap().unwrap();
+    assert_eq!(&got.res_body[..], br#"{"discount":"SPRING25"}"#);
+    assert_eq!(got.sdk.as_ref().unwrap().res_body, flow::BodyState::Present);
+    assert_eq!(store.search(&q("SPRING25"), 0, 10).unwrap().total, 1);
+}
+
+#[test]
+fn merged_pair_shows_one_row_and_unmerges() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    store.enqueue(sdk_rec(1, "dev-a", "Apply coupon", "{}"));
+    store.enqueue(rec(2, "api.shop.test", "/v1/cart/7/coupon", 200, 50, "{}"));
+    store.flush();
+    let all = |s: &Store| s.search(&Query::default(), 0, 10).unwrap();
+    assert_eq!(all(&store).total, 2);
+
+    store.set_merge(1, 2);
+    store.flush();
+    let page = all(&store);
+    assert_eq!(page.total, 1, "the wire half is hidden");
+    assert_eq!(page.items[0].id, 1);
+    assert_eq!(page.items[0].source, flow::Source::Merged);
+    assert_eq!(page.items[0].merged_with, 2);
+    assert_eq!(store.get(2).unwrap().unwrap().merged_with, 1);
+    let with_hidden = Query {
+        include_hidden: true,
+        ..Default::default()
+    };
+    assert_eq!(store.search(&with_hidden, 0, 10).unwrap().total, 2);
+
+    // Unmerging restores both rows.
+    store.set_merge(1, 0);
+    store.flush();
+    let page = all(&store);
+    assert_eq!(page.total, 2);
+    assert_eq!(store.get(1).unwrap().unwrap().source, flow::Source::Sdk);
+}

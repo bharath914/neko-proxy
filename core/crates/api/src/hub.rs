@@ -8,6 +8,8 @@ use tokio::sync::broadcast;
 #[derive(Clone, Debug)]
 pub enum HubEvent {
     Upsert(FlowSummary),
+    /// The row is no longer listed on its own (merged into another).
+    Remove(FlowId),
     Cleared,
 }
 
@@ -64,6 +66,11 @@ impl FlowSink for Hub {
             FlowEvent::Finished(rec) => {
                 self.inflight.lock().unwrap().remove(&rec.id);
                 rec.summary()
+            }
+            FlowEvent::Removed(id) => {
+                self.inflight.lock().unwrap().remove(&id);
+                let _ = self.tx.send(HubEvent::Remove(id));
+                return;
             }
             FlowEvent::Cleared => {
                 self.cleared();

@@ -7,6 +7,7 @@ mod approvals;
 mod convert;
 mod hub;
 mod ops;
+mod sdk_api;
 mod server;
 
 pub use proto::pb;
@@ -84,5 +85,7 @@ pub struct ApiContext {
     pub approvals: Arc<Approvals>,
     /// None when the MCP server is not running.
     pub mcp: Option<McpEndpoint>,
+    /// None when the core runs without the in-app SDK listener.
+    pub sdk: Option<Arc<sdk::Sdk>>,
     pub info: CoreInfo,
 }

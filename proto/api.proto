@@ -47,6 +47,13 @@ message ClientMessage {
     DecideApprovalRequest decide_approval = 33;
     SetMcpWritesRequest set_mcp_writes = 34;
     McpInfoRequest mcp_info = 35;
+    SdkStatusRequest sdk_status = 36;
+    SdkSetEnabledRequest sdk_set_enabled = 37;
+    DevicesSubscribeRequest devices_subscribe = 38;
+    DeviceActionRequest device_action = 39;
+    SetDeviceConfigRequest set_device_config = 40;
+    FetchBodyRequest fetch_body = 41;
+    RegenerateSdkCertRequest regenerate_sdk_cert = 42;
   }
 }
 
@@ -69,6 +76,9 @@ message ServerMessage {
     ReplayResponse replay = 22;
     ApprovalsResponse approvals = 23;
     McpInfo mcp_info = 24;
+    SdkStatus sdk_status = 25;
+    DevicesSnapshot devices = 26;
+    OkResponse ok = 27;
     FlowBatch batch = 30;
     Resync resync = 31;
     PauseNotice pause_notice = 32;
@@ -97,6 +107,9 @@ message Filter {
   // Exact host names (case-insensitive); empty means every host. This is how
   // the app focuses on a host: unlike `host:` it never matches a longer name.
   repeated string hosts = 3;
+  // Exact SDK device ids and app ids (the Devices filter chips); empty = all.
+  repeated string devices = 4;
+  repeated string apps = 5;
 }
 
 // ---------------------------------------------------------------- flows
@@ -139,6 +152,23 @@ message FlowSummary {
   uint32 flags = 15;
   string content_type = 16;  // short form of the response type, e.g. "json"
   string error = 17;
+  // In-app SDK context. Empty for proxy-only flows.
+  FlowSource source = 18;
+  uint64 merged_with = 19;  // the other half of a merged pair, 0 if none
+  string device_id = 20;
+  string app_id = 21;
+  string name = 22;
+  string tag = 23;
+  string owner = 24;
+  string screen = 25;
+  string route_template = 26;
+  string client_stack = 27;
+}
+
+enum FlowSource {
+  PROXY = 0;
+  SDK = 1;
+  MERGED = 2;  // an SDK record that also has a wire view (see FlowDetail.wire)
 }
 
 message Header {
@@ -278,6 +308,42 @@ message FlowDetail {
   string curl = 6;
   BodyView request_body = 7;
   BodyView response_body = 8;
+  SdkContext sdk = 9;     // set for SDK and merged flows
+  FlowDetail wire = 10;   // set for merged flows: what the proxy saw
+}
+
+enum BodyState {
+  BODY_PRESENT = 0;
+  BODY_LAZY = 1;     // still on the device; fetch_body asks for it
+  BODY_SKIPPED = 2;  // not captured by policy
+  BODY_GONE = 3;     // was on the device, no longer
+}
+
+// What only the SDK knows about a call.
+message SdkContext {
+  string device_id = 1;
+  string app_id = 2;
+  string device_name = 3;
+  string device_model = 4;
+  string os_version = 5;
+  string app_name = 6;
+  string app_version = 7;
+  string build = 8;
+  string sdk_name = 9;
+  string sdk_version = 10;
+  string connection = 11;
+  string name = 12;
+  string owner = 13;
+  string tag = 14;
+  string screen = 15;
+  string route_template = 16;
+  string client_stack = 17;
+  bool from_cache = 18;
+  bool request_redacted = 19;
+  bool response_redacted = 20;
+  BodyState request_body_state = 21;
+  BodyState response_body_state = 22;
+  Timings timings = 23;  // as measured by the client stack; unknown parts are -1
 }
 
 // ---------------------------------------------------------------- subscribe
@@ -296,6 +362,9 @@ message FlowBatch {
   repeated FlowSummary upserts = 1;
   bool cleared = 2;   // the store was cleared; drop everything
   uint64 total = 3;   // total stored flows after this batch
+  // Rows that are no longer listed on their own (the wire half of an SDK and
+  // proxy pair that was merged). Refresh the visible page.
+  repeated uint64 removed = 4;
 }
 
 // The subscriber fell behind and events were dropped. Re-run search.
@@ -656,4 +725,136 @@ message ApprovalNotice {
   Approval requested = 1;  // set when a new one is waiting
   string decided_id = 2;   // set when one was answered or expired
   bool allowed = 3;
+}
+
+// ---------------------------------------------------------------- in-app SDK
+
+message SdkStatusRequest {}
+message SdkSetEnabledRequest {
+  bool enabled = 1;
+}
+message RegenerateSdkCertRequest {}
+message OkResponse {}
+
+message SdkStats {
+  uint64 calls = 1;
+  uint64 events = 2;
+  uint64 dropped_chunks = 3;
+  uint64 dropped_calls = 4;
+  uint64 dropped_events = 5;
+  uint64 protocol_violations = 6;
+  uint64 rejected_connections = 7;
+  uint64 incomplete_calls = 8;
+}
+
+message SdkStatus {
+  bool available = 1;      // false if this core was built or started without the SDK listener
+  bool enabled = 2;
+  uint32 port = 3;
+  string fingerprint = 4;  // SHA-256 of the ingest certificate, hex
+  string desktop_name = 5;
+  repeated string listening = 6;      // "192.168.1.24:8897"
+  repeated string lan_addresses = 7;
+  string adb_state = 8;    // off | unavailable | ready | error
+  string adb_label = 9;    // "adb ready, 1 device(s)"
+  repeated string adb_devices = 10;
+  string discovery_state = 11;  // off | advertising | error
+  string discovery_error = 12;
+  uint32 sessions = 13;
+  SdkStats stats = 14;
+}
+
+message DevicesSubscribeRequest {}
+
+enum DeviceStatus {
+  DEVICE_IDLE = 0;
+  DEVICE_CONNECTED = 1;
+  DEVICE_DENIED = 2;
+  DEVICE_REVOKED = 3;
+}
+
+enum Redaction {
+  REDACT_DEFAULT = 0;
+  REDACT_STRICT = 1;
+  REDACT_NONE = 2;
+}
+
+message DeviceConfig {
+  bool capture_enabled = 1;
+  repeated string host_allow = 2;
+  repeated string host_deny = 3;
+  uint32 body_cap_bytes = 4;
+  uint32 eager_body_bytes = 5;
+  Redaction redaction = 6;
+  repeated string extra_redact_keys = 7;
+}
+
+message Device {
+  string device_id = 1;
+  string app_id = 2;
+  string device_name = 3;
+  string device_model = 4;
+  string os_version = 5;
+  string app_name = 6;
+  string app_version = 7;
+  string sdk_name = 8;
+  string sdk_version = 9;
+  DeviceStatus status = 10;
+  string connection = 11;  // emulator | usb | wifi | simulator
+  string remote_ip = 12;
+  int64 last_seen_ms = 13;
+  uint64 flows = 14;
+  uint64 dropped = 15;
+  DeviceConfig config = 16;
+}
+
+message PendingPrompt {
+  uint64 id = 1;
+  string device_id = 2;
+  string app_id = 3;
+  string device_name = 4;
+  string device_model = 5;
+  string os_version = 6;
+  string app_name = 7;
+  string sdk_name = 8;
+  string sdk_version = 9;
+  string connection = 10;
+  string remote_ip = 11;
+  string code = 12;        // six digits; the app shows it as "482 913"
+  int64 created_ms = 13;
+  int64 expires_ms = 14;
+  bool repair = 15;
+}
+
+// The answer to devices_subscribe, then pushed (id = 0) on every change.
+message DevicesSnapshot {
+  uint64 rev = 1;
+  bool enabled = 2;
+  repeated Device devices = 3;
+  repeated PendingPrompt pending = 4;
+}
+
+message DeviceActionRequest {
+  enum Kind {
+    ALLOW = 0;   // pending_id
+    DENY = 1;    // pending_id
+    REVOKE = 2;  // device_id + app_id
+    FORGET = 3;  // device_id (all its apps)
+  }
+  Kind kind = 1;
+  uint64 pending_id = 2;
+  string device_id = 3;
+  string app_id = 4;
+}
+
+message SetDeviceConfigRequest {
+  string device_id = 1;
+  string app_id = 2;
+  DeviceConfig config = 3;
+}
+
+// Ask the device for a body it kept (BODY_LAZY). Answers with the flow again.
+message FetchBodyRequest {
+  uint64 flow_id = 1;
+  bool response = 2;  // false = request body
 }
