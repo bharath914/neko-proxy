@@ -275,7 +275,9 @@ impl Inner {
     pub(crate) fn enter_gate(self: &Arc<Self>, ip: IpAddr) -> Option<GateGuard> {
         let mut g = self.gate.lock().unwrap();
         let l = &self.opts.limits;
-        if g.total >= l.max_handshaking || g.per_ip.get(&ip).copied().unwrap_or(0) >= l.max_handshaking_per_ip {
+        if g.total >= l.max_handshaking
+            || g.per_ip.get(&ip).copied().unwrap_or(0) >= l.max_handshaking_per_ip
+        {
             return None;
         }
         g.total += 1;
@@ -343,7 +345,11 @@ impl Inner {
                 remote_ip: live.map(|s| s.remote_ip.clone()).unwrap_or_default(),
                 dropped: live.map(|s| s.dropped.load(Ordering::Relaxed)).unwrap_or(0),
                 flows: counts.get(&key).copied().unwrap_or(0),
-                last_seen_ms: if live.is_some() { Self::now_ms() } else { r.last_seen_ms },
+                last_seen_ms: if live.is_some() {
+                    Self::now_ms()
+                } else {
+                    r.last_seen_ms
+                },
                 config: r.config,
                 facts: r.facts,
                 status,
@@ -375,7 +381,9 @@ impl Inner {
             }
             let table = me.table_for(&device, &app);
             let mut t = table.lock().unwrap();
-            let n = me.env.fail_open_calls(&mut t, "connection to the app was lost");
+            let n = me
+                .env
+                .fail_open_calls(&mut t, "connection to the app was lost");
             if n > 0 {
                 tracing::info!("{n} calls from {device}/{app} marked incomplete");
             }
@@ -439,13 +447,16 @@ impl Sdk {
     /// Start or stop accepting SDK connections. Stopping closes every session.
     pub async fn set_enabled(&self, on: bool) -> Result<(), SdkError> {
         let inner = &self.inner;
-        if on == inner.enabled.load(Ordering::Relaxed) && on == inner.running.lock().unwrap().is_some() {
+        if on == inner.enabled.load(Ordering::Relaxed)
+            && on == inner.running.lock().unwrap().is_some()
+        {
             return Ok(());
         }
         if on {
             let tls = inner.cert.lock().unwrap().server_config()?;
             let acceptor = tokio_rustls::TlsAcceptor::from(tls);
-            let listener = TcpListener::bind(SocketAddr::new(inner.opts.bind, inner.opts.port)).await?;
+            let listener =
+                TcpListener::bind(SocketAddr::new(inner.opts.bind, inner.opts.port)).await?;
             let local = listener.local_addr()?;
             let addrs = listening_addrs(local);
             let advertiser = if inner.opts.advertise {
@@ -581,7 +592,11 @@ impl Sdk {
 
     /// Delete the token and drop the session. The device has to pair again.
     pub fn revoke(&self, device_id: &str, app_id: &str) -> bool {
-        let ok = self.inner.devices.revoke(device_id, app_id).unwrap_or(false);
+        let ok = self
+            .inner
+            .devices
+            .revoke(device_id, app_id)
+            .unwrap_or(false);
         self.kill_sessions(device_id, Some(app_id));
         self.inner.notify();
         ok
@@ -613,9 +628,15 @@ impl Sdk {
     /// Store a device's settings and push them to its live session.
     pub fn set_config(&self, device_id: &str, app_id: &str, cfg: DeviceConfig) -> bool {
         let cfg = cfg.sanitized();
-        let ok = self.inner.devices.set_config(device_id, app_id, &cfg).unwrap_or(false);
+        let ok = self
+            .inner
+            .devices
+            .set_config(device_id, app_id, &cfg)
+            .unwrap_or(false);
         let wire = Envelope {
-            msg: Some(Msg::Config(self.inner.effective_config(device_id, app_id).to_wire())),
+            msg: Some(Msg::Config(
+                self.inner.effective_config(device_id, app_id).to_wire(),
+            )),
         };
         for s in self.inner.sessions.lock().unwrap().values() {
             if s.who.device_id == device_id && s.who.app_id == app_id {
@@ -646,7 +667,11 @@ impl Sdk {
 
     /// Ask the device for a body it kept (lazy bodies). On success the body is
     /// also stored with the flow.
-    pub async fn fetch_body(&self, flow_id: FlowId, part: BodyPart) -> Result<FetchOutcome, FetchError> {
+    pub async fn fetch_body(
+        &self,
+        flow_id: FlowId,
+        part: BodyPart,
+    ) -> Result<FetchOutcome, FetchError> {
         let i = &self.inner;
         let rec = i
             .env
@@ -748,7 +773,10 @@ fn lan_ips() -> Vec<IpAddr> {
 
 fn listening_addrs(local: SocketAddr) -> Vec<SocketAddr> {
     if local.ip().is_unspecified() {
-        let mut v: Vec<SocketAddr> = lan_ips().into_iter().map(|ip| SocketAddr::new(ip, local.port())).collect();
+        let mut v: Vec<SocketAddr> = lan_ips()
+            .into_iter()
+            .map(|ip| SocketAddr::new(ip, local.port()))
+            .collect();
         v.push(SocketAddr::new(IpAddr::from([127, 0, 0, 1]), local.port()));
         v
     } else {

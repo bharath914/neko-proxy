@@ -115,13 +115,17 @@ mod tests {
         init(&conn).unwrap();
         init(&conn).unwrap(); // idempotent
         let (source, merged): (String, i64) = conn
-            .query_row("SELECT source, merged_with FROM flow WHERE id = 7", [], |r| {
-                Ok((r.get(0)?, r.get(1)?))
-            })
+            .query_row(
+                "SELECT source, merged_with FROM flow WHERE id = 7",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
             .unwrap();
         assert_eq!(source, "proxy");
         assert_eq!(merged, 0);
-        let v: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        let v: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(v, 2);
     }
 }

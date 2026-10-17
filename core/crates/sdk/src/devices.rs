@@ -129,7 +129,9 @@ impl Devices {
     pub fn list(&self) -> Result<Vec<AppRow>> {
         let c = self.conn.lock().unwrap();
         let mut st = c.prepare(&format!("{SELECT} ORDER BY last_seen DESC"))?;
-        let rows = st.query_map([], row)?.collect::<std::result::Result<Vec<_>, _>>()?;
+        let rows = st
+            .query_map([], row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
@@ -309,16 +311,37 @@ mod tests {
     fn token_lifecycle() {
         let d = Devices::in_memory().unwrap();
         let tok = [5u8; 32];
-        assert_eq!(d.check_token("install-1", "com.shop", &tok).unwrap(), TokenCheck::Unpaired);
+        assert_eq!(
+            d.check_token("install-1", "com.shop", &tok).unwrap(),
+            TokenCheck::Unpaired
+        );
         d.pair(&facts(), &tok, 100).unwrap();
-        assert_eq!(d.check_token("install-1", "com.shop", &tok).unwrap(), TokenCheck::Valid);
-        assert_eq!(d.check_token("install-1", "com.shop", &[6u8; 32]).unwrap(), TokenCheck::Invalid);
-        assert_eq!(d.check_token("install-1", "com.shop", &[]).unwrap(), TokenCheck::Invalid);
+        assert_eq!(
+            d.check_token("install-1", "com.shop", &tok).unwrap(),
+            TokenCheck::Valid
+        );
+        assert_eq!(
+            d.check_token("install-1", "com.shop", &[6u8; 32]).unwrap(),
+            TokenCheck::Invalid
+        );
+        assert_eq!(
+            d.check_token("install-1", "com.shop", &[]).unwrap(),
+            TokenCheck::Invalid
+        );
         // A token is scoped to one device and app.
-        assert_eq!(d.check_token("install-2", "com.shop", &tok).unwrap(), TokenCheck::Unpaired);
-        assert_eq!(d.check_token("install-1", "com.other", &tok).unwrap(), TokenCheck::Unpaired);
+        assert_eq!(
+            d.check_token("install-2", "com.shop", &tok).unwrap(),
+            TokenCheck::Unpaired
+        );
+        assert_eq!(
+            d.check_token("install-1", "com.other", &tok).unwrap(),
+            TokenCheck::Unpaired
+        );
         assert!(d.revoke("install-1", "com.shop").unwrap());
-        assert_eq!(d.check_token("install-1", "com.shop", &tok).unwrap(), TokenCheck::Unpaired);
+        assert_eq!(
+            d.check_token("install-1", "com.shop", &tok).unwrap(),
+            TokenCheck::Unpaired
+        );
     }
 
     #[test]
@@ -338,9 +361,15 @@ mod tests {
     fn deny_forget_and_config() {
         let d = Devices::in_memory().unwrap();
         d.deny(&facts(), 5).unwrap();
-        assert_eq!(d.check_token("install-1", "com.shop", &[1]).unwrap(), TokenCheck::Denied);
+        assert_eq!(
+            d.check_token("install-1", "com.shop", &[1]).unwrap(),
+            TokenCheck::Denied
+        );
         assert_eq!(d.forget("install-1").unwrap(), 1);
-        assert_eq!(d.check_token("install-1", "com.shop", &[1]).unwrap(), TokenCheck::Unpaired);
+        assert_eq!(
+            d.check_token("install-1", "com.shop", &[1]).unwrap(),
+            TokenCheck::Unpaired
+        );
 
         d.pair(&facts(), &[1; 32], 5).unwrap();
         let cfg = DeviceConfig {

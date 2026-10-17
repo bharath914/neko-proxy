@@ -170,8 +170,12 @@ fn build_where(q: &Query) -> (String, Vec<Value>) {
                     continue;
                 }
                 "device" => {
-                    clauses.push("id IN (SELECT rowid FROM flow_sdk_fts WHERE flow_sdk_fts MATCH ?)".into());
-                    args.push(format!("device:{}", fts_term(val).unwrap_or_else(|| "\"\"".into())).into());
+                    clauses.push(
+                        "id IN (SELECT rowid FROM flow_sdk_fts WHERE flow_sdk_fts MATCH ?)".into(),
+                    );
+                    args.push(
+                        format!("device:{}", fts_term(val).unwrap_or_else(|| "\"\"".into())).into(),
+                    );
                     continue;
                 }
                 "is" => {

@@ -72,7 +72,9 @@ pub fn config_from_pb(c: &pb::DeviceConfig) -> DeviceConfig {
         host_deny: c.host_deny.clone(),
         body_cap_bytes: c.body_cap_bytes,
         eager_body_bytes: c.eager_body_bytes,
-        redaction: match pb::Redaction::try_from(c.redaction).unwrap_or(pb::Redaction::RedactDefault) {
+        redaction: match pb::Redaction::try_from(c.redaction)
+            .unwrap_or(pb::Redaction::RedactDefault)
+        {
             pb::Redaction::RedactDefault => Redaction::Default,
             pb::Redaction::RedactStrict => Redaction::Strict,
             pb::Redaction::RedactNone => Redaction::None,

@@ -79,10 +79,18 @@ pub fn score(sdk: &Candidate, proxy: &Candidate) -> Option<i64> {
 }
 
 /// The best partner for `new` among `pool`, consuming nothing.
-pub fn best_match<'a>(new: &Candidate, pool: &'a [Candidate], new_is_sdk: bool) -> Option<&'a Candidate> {
+pub fn best_match<'a>(
+    new: &Candidate,
+    pool: &'a [Candidate],
+    new_is_sdk: bool,
+) -> Option<&'a Candidate> {
     pool.iter()
         .filter_map(|c| {
-            let s = if new_is_sdk { score(new, c) } else { score(c, new) };
+            let s = if new_is_sdk {
+                score(new, c)
+            } else {
+                score(c, new)
+            };
             s.map(|d| (d, c))
         })
         .min_by_key(|(d, c)| (*d, c.id))
@@ -148,7 +156,9 @@ impl Merger {
         let is_sdk = match rec.source {
             Source::Sdk => true,
             Source::Proxy => {
-                if rec.flags & (flow::flags::TUNNEL | flow::flags::REPLAYED) != 0 || rec.method == "CONNECT" {
+                if rec.flags & (flow::flags::TUNNEL | flow::flags::REPLAYED) != 0
+                    || rec.method == "CONNECT"
+                {
                     return;
                 }
                 false
@@ -173,7 +183,11 @@ impl Merger {
             match best_match(&cand, &snapshot, is_sdk).map(|c| c.id) {
                 Some(partner) => {
                     other.retain(|c| c.id != partner);
-                    Some(if is_sdk { (cand.id, partner) } else { (partner, cand.id) })
+                    Some(if is_sdk {
+                        (cand.id, partner)
+                    } else {
+                        (partner, cand.id)
+                    })
                 }
                 None => {
                     mine.push_back(cand);
@@ -232,7 +246,10 @@ mod tests {
             normalize_url("HTTPS", "API.Test", 443, "/a", "b=2&a=1"),
             "https://api.test/a?a=1&b=2"
         );
-        assert_eq!(normalize_url("http", "x.test", 8080, "", ""), "http://x.test:8080/");
+        assert_eq!(
+            normalize_url("http", "x.test", 8080, "", ""),
+            "http://x.test:8080/"
+        );
         assert_ne!(
             normalize_url("https", "x.test", 443, "/a", "q=1"),
             normalize_url("https", "x.test", 443, "/a", "q=2")
@@ -249,9 +266,18 @@ mod tests {
     #[test]
     fn close_timing_matches_and_far_timing_does_not() {
         let s = cand(1, "GET", "https://a.test/x", 1000, Some("d1"));
-        assert_eq!(score(&s, &cand(2, "GET", "https://a.test/x", 1400, Some("d1"))), Some(400));
-        assert_eq!(score(&s, &cand(2, "GET", "https://a.test/x", 1501, Some("d1"))), None);
-        assert_eq!(score(&s, &cand(2, "GET", "https://a.test/x", 499, Some("d1"))), None);
+        assert_eq!(
+            score(&s, &cand(2, "GET", "https://a.test/x", 1400, Some("d1"))),
+            Some(400)
+        );
+        assert_eq!(
+            score(&s, &cand(2, "GET", "https://a.test/x", 1501, Some("d1"))),
+            None
+        );
+        assert_eq!(
+            score(&s, &cand(2, "GET", "https://a.test/x", 499, Some("d1"))),
+            None
+        );
     }
 
     #[test]
@@ -283,7 +309,11 @@ mod tests {
         let first = cand(2, "GET", "https://a.test/x", 1002, Some("d1"));
         let retry = cand(3, "GET", "https://a.test/x", 1250, Some("d1"));
         let pool = vec![retry.clone(), first.clone()];
-        assert_eq!(best_match(&sdk, &pool, true).unwrap().id, 2, "closest start wins");
+        assert_eq!(
+            best_match(&sdk, &pool, true).unwrap().id,
+            2,
+            "closest start wins"
+        );
         let rest = vec![retry];
         assert_eq!(best_match(&sdk, &rest, true).unwrap().id, 3);
     }
@@ -300,17 +330,38 @@ mod tests {
     #[test]
     fn unknown_or_different_device_never_merges() {
         let s = cand(1, "GET", "https://a.test/x", 1000, Some("d1"));
-        assert_eq!(score(&s, &cand(2, "GET", "https://a.test/x", 1000, None)), None);
-        assert_eq!(score(&s, &cand(2, "GET", "https://a.test/x", 1000, Some("d2"))), None);
+        assert_eq!(
+            score(&s, &cand(2, "GET", "https://a.test/x", 1000, None)),
+            None
+        );
+        assert_eq!(
+            score(&s, &cand(2, "GET", "https://a.test/x", 1000, Some("d2"))),
+            None
+        );
         let none = cand(1, "GET", "https://a.test/x", 1000, None);
-        assert_eq!(score(&none, &cand(2, "GET", "https://a.test/x", 1000, None)), None);
+        assert_eq!(
+            score(&none, &cand(2, "GET", "https://a.test/x", 1000, None)),
+            None
+        );
     }
 
     #[test]
     fn different_method_or_query_does_not_merge() {
         let s = cand(1, "GET", "https://a.test/x?q=1", 1000, Some("d1"));
-        assert_eq!(score(&s, &cand(2, "POST", "https://a.test/x?q=1", 1000, Some("d1"))), None);
-        assert_eq!(score(&s, &cand(2, "GET", "https://a.test/x?q=2", 1000, Some("d1"))), None);
+        assert_eq!(
+            score(
+                &s,
+                &cand(2, "POST", "https://a.test/x?q=1", 1000, Some("d1"))
+            ),
+            None
+        );
+        assert_eq!(
+            score(
+                &s,
+                &cand(2, "GET", "https://a.test/x?q=2", 1000, Some("d1"))
+            ),
+            None
+        );
     }
 
     struct Fixed(Option<String>);
@@ -326,7 +377,9 @@ mod tests {
         fn publish(&self, e: FlowEvent) {
             self.0.lock().unwrap().push(match e {
                 FlowEvent::Removed(id) => format!("removed {id}"),
-                FlowEvent::Updated(s) => format!("updated {} {:?} {}", s.id, s.source, s.merged_with),
+                FlowEvent::Updated(s) => {
+                    format!("updated {} {:?} {}", s.id, s.source, s.merged_with)
+                }
                 _ => "other".into(),
             });
         }
@@ -357,7 +410,11 @@ mod tests {
     fn merger_links_in_either_order_and_hides_the_wire_half() {
         let dir = tempfile::tempdir().unwrap();
         let sink = Arc::new(Collect::default());
-        let m = Merger::new(Arc::new(Fixed(Some("d1".into()))), sink.clone(), Store::open(dir.path()).unwrap());
+        let m = Merger::new(
+            Arc::new(Fixed(Some("d1".into()))),
+            sink.clone(),
+            Store::open(dir.path()).unwrap(),
+        );
         // SDK first, then proxy.
         m.observe(&rec(1, Source::Sdk, "d1", 1000));
         assert_eq!(m.pending(), (1, 0));
@@ -368,14 +425,21 @@ mod tests {
         m.observe(&rec(3, Source::Sdk, "d1", 5003));
         let log = sink.0.lock().unwrap().clone();
         assert!(log.contains(&"removed 2".to_string()), "{log:?}");
-        assert!(log.iter().any(|l| l.starts_with("updated 3 Merged 4")), "{log:?}");
+        assert!(
+            log.iter().any(|l| l.starts_with("updated 3 Merged 4")),
+            "{log:?}"
+        );
     }
 
     #[test]
     fn merger_ignores_proxy_flows_it_cannot_attribute() {
         let dir = tempfile::tempdir().unwrap();
         let sink = Arc::new(Collect::default());
-        let m = Merger::new(Arc::new(Fixed(None)), sink.clone(), Store::open(dir.path()).unwrap());
+        let m = Merger::new(
+            Arc::new(Fixed(None)),
+            sink.clone(),
+            Store::open(dir.path()).unwrap(),
+        );
         m.observe(&rec(1, Source::Sdk, "d1", 1000));
         m.observe(&rec(2, Source::Proxy, "", 1000));
         assert!(sink.0.lock().unwrap().is_empty());

@@ -241,7 +241,11 @@ impl RuleForm {
         if let Some(m) = &r.matcher {
             f.scheme = m.scheme.clone();
             f.host = m.host.clone();
-            f.port = if m.port == 0 { String::new() } else { m.port.to_string() };
+            f.port = if m.port == 0 {
+                String::new()
+            } else {
+                m.port.to_string()
+            };
             f.method = m.method.clone();
             f.path = m.path.clone();
             f.query = m.query.clone();
@@ -251,12 +255,20 @@ impl RuleForm {
                 f.status = a.status.to_string();
                 f.headers = headers_to_text(&a.headers);
                 f.body = a.body.clone();
-                f.delay_ms = if a.delay_ms == 0 { String::new() } else { a.delay_ms.to_string() };
+                f.delay_ms = if a.delay_ms == 0 {
+                    String::new()
+                } else {
+                    a.delay_ms.to_string()
+                };
             }
             Some(A::MapRemote(a)) => {
                 f.to_scheme = a.scheme.clone();
                 f.to_host = a.host.clone();
-                f.to_port = if a.port == 0 { String::new() } else { a.port.to_string() };
+                f.to_port = if a.port == 0 {
+                    String::new()
+                } else {
+                    a.port.to_string()
+                };
             }
             Some(A::Rewrite(a)) => {
                 f.request_edits = edits_to_text(&a.request_headers);
@@ -265,7 +277,11 @@ impl RuleForm {
             Some(A::Throttle(a)) => f.delay_ms = a.delay_ms.to_string(),
             Some(A::Breakpoint(a)) => {
                 f.phase = a.phase.clamp(0, 2) as usize;
-                f.timeout_s = if a.timeout_s == 0 { String::new() } else { a.timeout_s.to_string() };
+                f.timeout_s = if a.timeout_s == 0 {
+                    String::new()
+                } else {
+                    a.timeout_s.to_string()
+                };
             }
             None => {}
         }
@@ -279,7 +295,8 @@ impl RuleForm {
             if s.is_empty() {
                 return Ok(0);
             }
-            s.parse::<u32>().map_err(|_| format!("{what} must be a number"))
+            s.parse::<u32>()
+                .map_err(|_| format!("{what} must be a number"))
         };
         if self.host.trim().is_empty() {
             return Err("Enter a host (use * for any host)".into());
@@ -327,11 +344,13 @@ impl RuleForm {
 
 fn edits_to_text(e: &[pb::HeaderEdit]) -> String {
     e.iter()
-        .map(|e| match pb::header_edit::Op::try_from(e.op).unwrap_or(pb::header_edit::Op::Set) {
-            pb::header_edit::Op::Set => format!("set {}: {}", e.name, e.value),
-            pb::header_edit::Op::Add => format!("add {}: {}", e.name, e.value),
-            pb::header_edit::Op::Remove => format!("remove {}", e.name),
-        })
+        .map(
+            |e| match pb::header_edit::Op::try_from(e.op).unwrap_or(pb::header_edit::Op::Set) {
+                pb::header_edit::Op::Set => format!("set {}: {}", e.name, e.value),
+                pb::header_edit::Op::Add => format!("add {}: {}", e.name, e.value),
+                pb::header_edit::Op::Remove => format!("remove {}", e.name),
+            },
+        )
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -343,7 +362,12 @@ fn text_to_edits(t: &str) -> Result<Vec<pb::HeaderEdit>, String> {
         if line.is_empty() {
             continue;
         }
-        let bad = || format!("Line {}: use `set Name: value`, `add Name: value` or `remove Name`", i + 1);
+        let bad = || {
+            format!(
+                "Line {}: use `set Name: value`, `add Name: value` or `remove Name`",
+                i + 1
+            )
+        };
         let (verb, rest) = line.split_once(char::is_whitespace).ok_or_else(bad)?;
         let rest = rest.trim();
         let edit = match verb.to_ascii_lowercase().as_str() {
@@ -411,7 +435,11 @@ pub fn describe_action(r: &pb::Rule) -> String {
                 to.push_str(&a.scheme);
                 to.push_str("://");
             }
-            to.push_str(if a.host.is_empty() { "(same host)" } else { &a.host });
+            to.push_str(if a.host.is_empty() {
+                "(same host)"
+            } else {
+                &a.host
+            });
             if a.port != 0 {
                 to.push_str(&format!(":{}", a.port));
             }
@@ -513,7 +541,10 @@ mod tests {
         f.body = "down".into();
         let r = f.to_rule().unwrap();
         assert_eq!(describe_action(&r), "Answer 503, after 250 ms");
-        assert_eq!(describe_match(r.matcher.as_ref().unwrap()), "api.example.com/v1/*");
+        assert_eq!(
+            describe_match(r.matcher.as_ref().unwrap()),
+            "api.example.com/v1/*"
+        );
         let back = RuleForm::from_rule(&r);
         assert_eq!(back.kind, RuleKind::Mock);
         assert_eq!(back.status, "503");

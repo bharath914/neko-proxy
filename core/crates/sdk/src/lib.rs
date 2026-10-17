@@ -25,6 +25,6 @@ pub use config::{DeviceConfig, Redaction};
 pub use limits::Limits;
 pub use pairing::PendingPrompt;
 pub use service::{
-    ConnStatus, DeviceInfo, FetchError, PromptPolicy, Sdk, SdkError, SdkOptions, Snapshot, Status, Tap,
-    DEFAULT_PORT,
+    ConnStatus, DeviceInfo, FetchError, PromptPolicy, Sdk, SdkError, SdkOptions, Snapshot, Status,
+    Tap, DEFAULT_PORT,
 };

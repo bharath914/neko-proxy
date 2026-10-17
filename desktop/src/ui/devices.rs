@@ -56,7 +56,10 @@ fn chip(ui: &mut Ui, st: &Style, label: &str, ok: Option<bool>) {
 fn card<R>(ui: &mut Ui, st: &Style, accent: bool, add: impl FnOnce(&mut Ui) -> R) -> R {
     Frame::new()
         .fill(st.p.card)
-        .stroke(Stroke::new(1.0, if accent { st.p.accent } else { st.p.separator }))
+        .stroke(Stroke::new(
+            1.0,
+            if accent { st.p.accent } else { st.p.separator },
+        ))
         .corner_radius(cr(radius::CARD))
         .inner_margin(Margin::symmetric(16, 12))
         .show(ui, |ui| {
@@ -124,7 +127,12 @@ impl App {
                 let available = self.sdk.as_ref().is_some_and(|s| s.available);
                 if self.sdk.is_some() && !available {
                     card(ui, &st, false, |ui| {
-                        text(ui, "This core runs without the SDK listener", Role::Headline, st.p.text);
+                        text(
+                            ui,
+                            "This core runs without the SDK listener",
+                            Role::Headline,
+                            st.p.text,
+                        );
                         ui.add_space(2.0);
                         text(
                             ui,
@@ -163,7 +171,11 @@ impl App {
                     .device_drawer
                     .as_ref()
                     .is_some_and(|f| f.device_id == d.device_id && f.app_id == d.app_id);
-                self.device_drawer = if open { None } else { Some(DeviceForm::new(&d)) };
+                self.device_drawer = if open {
+                    None
+                } else {
+                    Some(DeviceForm::new(&d))
+                };
             }
             None => {}
         }
@@ -233,14 +245,24 @@ impl App {
         });
     }
 
-    fn pending_card(&mut self, ui: &mut Ui, st: &Style, p: &pb::PendingPrompt, act: &mut Option<Act>) {
+    fn pending_card(
+        &mut self,
+        ui: &mut Ui,
+        st: &Style,
+        p: &pb::PendingPrompt,
+        act: &mut Option<Act>,
+    ) {
         card(ui, st, true, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         widgets::badge(
                             ui,
-                            if p.repair { "Pair again" } else { "Pairing request" },
+                            if p.repair {
+                                "Pair again"
+                            } else {
+                                "Pairing request"
+                            },
                             st.p.accent,
                             st.p.accent_soft,
                         );
@@ -314,7 +336,9 @@ impl App {
                     .iter()
                     .zip(widths)
                 {
-                    cell(ui, cw, 16.0, |ui| text(ui, label, Role::Caption, st.p.text3));
+                    cell(ui, cw, 16.0, |ui| {
+                        text(ui, label, Role::Caption, st.p.text3)
+                    });
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.add_space(112.0 - 16.0);
@@ -327,13 +351,27 @@ impl App {
                     cell(ui, widths[0], 36.0, |ui| {
                         ui.set_max_width(widths[0] - 8.0);
                         cut(ui, &d.device_name, Role::BodyMedium, st.p.text);
-                        cut(ui, &format!("{} · {}", d.device_model, d.os_version), Role::Caption, st.p.text3);
+                        cut(
+                            ui,
+                            &format!("{} · {}", d.device_model, d.os_version),
+                            Role::Caption,
+                            st.p.text3,
+                        );
                     });
                     cell(ui, widths[1], 36.0, |ui| {
                         ui.set_max_width(widths[1] - 8.0);
-                        let name = if d.app_name.is_empty() { &d.app_id } else { &d.app_name };
+                        let name = if d.app_name.is_empty() {
+                            &d.app_id
+                        } else {
+                            &d.app_name
+                        };
                         cut(ui, name, Role::BodyMedium, st.p.text);
-                        cut(ui, &format!("{} · {}", d.app_id, d.app_version), Role::Caption, st.p.text3);
+                        cut(
+                            ui,
+                            &format!("{} · {}", d.app_id, d.app_version),
+                            Role::Caption,
+                            st.p.text3,
+                        );
                     });
                     cell(ui, widths[2], 36.0, |ui| {
                         text(ui, &d.sdk_name, Role::Body, st.p.text);
@@ -344,22 +382,28 @@ impl App {
                     });
                     cell(ui, widths[4], 36.0, |ui| {
                         ui.horizontal(|ui| {
-                        let (label, col) = match pb::DeviceStatus::try_from(d.status).unwrap_or_default() {
-                            pb::DeviceStatus::DeviceConnected => ("Connected", st.p.green),
-                            pb::DeviceStatus::DeviceIdle => ("Idle", st.p.text3),
-                            pb::DeviceStatus::DeviceDenied => ("Denied", st.p.red),
-                            pb::DeviceStatus::DeviceRevoked => ("Revoked", st.p.orange),
-                        };
-                        let (r, _) = ui.allocate_exact_size(vec2(8.0, 18.0), egui::Sense::hover());
-                        ui.painter().circle_filled(r.center(), 4.0, col);
-                        text(ui, label, Role::Body, st.p.text);
+                            let (label, col) =
+                                match pb::DeviceStatus::try_from(d.status).unwrap_or_default() {
+                                    pb::DeviceStatus::DeviceConnected => ("Connected", st.p.green),
+                                    pb::DeviceStatus::DeviceIdle => ("Idle", st.p.text3),
+                                    pb::DeviceStatus::DeviceDenied => ("Denied", st.p.red),
+                                    pb::DeviceStatus::DeviceRevoked => ("Revoked", st.p.orange),
+                                };
+                            let (r, _) =
+                                ui.allocate_exact_size(vec2(8.0, 18.0), egui::Sense::hover());
+                            ui.painter().circle_filled(r.center(), 4.0, col);
+                            text(ui, label, Role::Body, st.p.text);
                         });
                     });
                     cell(ui, widths[5], 36.0, |ui| {
                         let connected = d.status == pb::DeviceStatus::DeviceConnected as i32;
                         text(
                             ui,
-                            &if connected { "now".to_string() } else { fmt::ago(d.last_seen_ms, now) },
+                            &if connected {
+                                "now".to_string()
+                            } else {
+                                fmt::ago(d.last_seen_ms, now)
+                            },
                             Role::Body,
                             st.p.text2,
                         );
@@ -368,16 +412,34 @@ impl App {
                         let gone = d.status == pb::DeviceStatus::DeviceDenied as i32
                             || d.status == pb::DeviceStatus::DeviceRevoked as i32;
                         if gone {
-                            if widgets::icon_button(ui, st, Icon::Trash, "Forget this device", false, true).clicked() {
+                            if widgets::icon_button(
+                                ui,
+                                st,
+                                Icon::Trash,
+                                "Forget this device",
+                                false,
+                                true,
+                            )
+                            .clicked()
+                            {
                                 *act = Some(Act::Forget(d.device_id.clone()));
                             }
                         } else {
-                            if widgets::icon_button(ui, st, Icon::Sliders, "Settings for this device", false, true)
-                                .clicked()
+                            if widgets::icon_button(
+                                ui,
+                                st,
+                                Icon::Sliders,
+                                "Settings for this device",
+                                false,
+                                true,
+                            )
+                            .clicked()
                             {
                                 *act = Some(Act::Settings(d.clone()));
                             }
-                            if widgets::button(ui, st, "Revoke", Kind::Destructive, None, true).clicked() {
+                            if widgets::button(ui, st, "Revoke", Kind::Destructive, None, true)
+                                .clicked()
+                            {
                                 *act = Some(Act::Revoke(d.device_id.clone(), d.app_id.clone()));
                             }
                         }
@@ -528,19 +590,32 @@ impl App {
             self.snippet(ui, st, "iOS", "import ProxyInspector\n\n@main struct MyApp: App {\n    init() { Inspector.start() }\n}");
             ui.add_space(12.0);
             for (k, v) in [
-                ("Android emulator", "Works as is. It reaches this computer at 10.0.2.2."),
-                ("Android phone on USB", "Works as is when adb is installed: the port is forwarded for you."),
-                ("Phone on the same Wi-Fi", "Found automatically. If the network blocks device to device traffic, use USB."),
+                (
+                    "Android emulator",
+                    "Works as is. It reaches this computer at 10.0.2.2.",
+                ),
+                (
+                    "Android phone on USB",
+                    "Works as is when adb is installed: the port is forwarded for you.",
+                ),
+                (
+                    "Phone on the same Wi-Fi",
+                    "Found automatically. If the network blocks device to device traffic, use USB.",
+                ),
                 ("iOS Simulator", "Works as is."),
             ] {
                 ui.horizontal(|ui| {
-                    ui.allocate_ui(vec2(170.0, 18.0), |ui| text(ui, k, Role::BodyMedium, st.p.text));
+                    ui.allocate_ui(vec2(170.0, 18.0), |ui| {
+                        text(ui, k, Role::BodyMedium, st.p.text)
+                    });
                     text(ui, v, Role::Callout, st.p.text2);
                 });
             }
             if !self.sdk.as_ref().is_some_and(|s| s.enabled) {
                 ui.add_space(12.0);
-                if widgets::button(ui, st, "Accept SDK connections", Kind::Primary, None, true).clicked() {
+                if widgets::button(ui, st, "Accept SDK connections", Kind::Primary, None, true)
+                    .clicked()
+                {
                     self.set_sdk_enabled(true);
                 }
             }
@@ -558,8 +633,12 @@ impl App {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
                     ui.add(
-                        egui::Label::new(RichText::new(code).font(Role::MonoSmall.font()).color(st.p.text))
-                            .selectable(true),
+                        egui::Label::new(
+                            RichText::new(code)
+                                .font(Role::MonoSmall.font())
+                                .color(st.p.text),
+                        )
+                        .selectable(true),
                     );
                     ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                         if widgets::icon_button(ui, st, Icon::Copy, "Copy", false, true).clicked() {
@@ -573,7 +652,11 @@ impl App {
     fn hints(&mut self, ui: &mut Ui, st: &Style) {
         let open = self.hints_open;
         let r = ui.horizontal(|ui| {
-            let icon = if open { Icon::ChevronDown } else { Icon::ChevronRight };
+            let icon = if open {
+                Icon::ChevronDown
+            } else {
+                Icon::ChevronRight
+            };
             let b = widgets::icon_button(ui, st, icon, "Connection hints", false, true);
             text(ui, "Connection hints", Role::Headline, st.p.text);
             b
@@ -612,16 +695,34 @@ impl App {
             ui.horizontal(|ui| {
                 text(ui, "Certificate", Role::BodyMedium, st.p.text);
                 ui.add(
-                    egui::Label::new(RichText::new(&s.fingerprint).font(Role::MonoSmall.font()).color(st.p.text2))
-                        .selectable(true),
+                    egui::Label::new(
+                        RichText::new(&s.fingerprint)
+                            .font(Role::MonoSmall.font())
+                            .color(st.p.text2),
+                    )
+                    .selectable(true),
                 );
             });
             ui.add_space(6.0);
-            if widgets::button(ui, st, "Replace certificate…", Kind::Destructive, None, s.available).clicked() {
+            if widgets::button(
+                ui,
+                st,
+                "Replace certificate…",
+                Kind::Destructive,
+                None,
+                s.available,
+            )
+            .clicked()
+            {
                 self.open_sheet(Sheet::ConfirmRegenCert);
             }
             if let Some(stats) = &s.stats {
-                if stats.dropped_events + stats.dropped_chunks + stats.dropped_calls + stats.protocol_violations > 0 {
+                if stats.dropped_events
+                    + stats.dropped_chunks
+                    + stats.dropped_calls
+                    + stats.protocol_violations
+                    > 0
+                {
                     ui.add_space(6.0);
                     text(
                         ui,

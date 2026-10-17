@@ -166,7 +166,10 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     };
     if let (Some(s), true) = (&sdk, args.sdk) {
         if let Err(e) = s.set_enabled(true).await {
-            tracing::warn!("could not start the SDK listener on port {}: {e}", args.sdk_port);
+            tracing::warn!(
+                "could not start the SDK listener on port {}: {e}",
+                args.sdk_port
+            );
         }
     }
     let sink = Arc::new(ProxySink {

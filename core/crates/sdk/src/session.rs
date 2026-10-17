@@ -170,7 +170,10 @@ pub(crate) async fn run(
         Ok(()) => {}
         Err(End::Quiet(why)) => tracing::debug!("sdk session {who_str} ended: {why}"),
         Err(End::Violation(why)) => {
-            inner.stats().protocol_violations.fetch_add(1, Ordering::Relaxed);
+            inner
+                .stats()
+                .protocol_violations
+                .fetch_add(1, Ordering::Relaxed);
             tracing::warn!("sdk session {who_str} closed: protocol violation: {why}");
             let _ = conn.send(Msg::Error(wire::Error {
                 code: wire::error::Code::ProtocolViolation as i32,
@@ -179,7 +182,10 @@ pub(crate) async fn run(
             }));
         }
         Err(End::Frame(e)) => {
-            inner.stats().protocol_violations.fetch_add(1, Ordering::Relaxed);
+            inner
+                .stats()
+                .protocol_violations
+                .fetch_add(1, Ordering::Relaxed);
             tracing::warn!("sdk session {who_str} closed: bad frame: {e}");
             let code = match e {
                 FrameError::TooLarge(..) => wire::error::Code::FrameTooLarge,
@@ -236,7 +242,9 @@ async fn session(
         Msg::Hello(h) => h,
         _ => return violation("the first message must be Hello"),
     };
-    if hello.protocol_version < wire::MIN_PROTOCOL_VERSION || hello.protocol_version > wire::PROTOCOL_VERSION {
+    if hello.protocol_version < wire::MIN_PROTOCOL_VERSION
+        || hello.protocol_version > wire::PROTOCOL_VERSION
+    {
         conn.send(Msg::Error(wire::Error {
             code: wire::error::Code::UnsupportedVersion as i32,
             message: format!(
@@ -280,7 +288,12 @@ async fn session(
     };
     let now = Inner::now_ms();
     let initial_offset = now - hello.device_time_ms;
-    let session_id = format!("{:016x}", pairing::random_bytes::<8>().iter().fold(0u64, |a, b| a << 8 | *b as u64));
+    let session_id = format!(
+        "{:016x}",
+        pairing::random_bytes::<8>()
+            .iter()
+            .fold(0u64, |a, b| a << 8 | *b as u64)
+    );
     let ack = |state: State, retry: u32, message: &str| {
         Msg::HelloAck(wire::HelloAck {
             state: state as i32,
@@ -293,7 +306,11 @@ async fn session(
     };
 
     if !inner.is_enabled() {
-        conn.send(ack(State::IngestDisabled, 30, "SDK connections are turned off on the desktop"))?;
+        conn.send(ack(
+            State::IngestDisabled,
+            30,
+            "SDK connections are turned off on the desktop",
+        ))?;
         return Err(End::Quiet("ingest disabled"));
     }
 
@@ -305,7 +322,11 @@ async fn session(
     match check {
         TokenCheck::Valid => conn.send(ack(State::Authenticated, 0, ""))?,
         TokenCheck::Denied => {
-            conn.send(ack(State::Denied, 3600, "this app was denied on the desktop"))?;
+            conn.send(ack(
+                State::Denied,
+                3600,
+                "this app was denied on the desktop",
+            ))?;
             return Err(End::Quiet("denied"));
         }
         TokenCheck::Invalid | TokenCheck::Unpaired => {
@@ -327,7 +348,10 @@ async fn session(
         if others >= limits.max_sessions {
             return Err(End::Error(
                 wire::error::Code::TooManySessions,
-                format!("the desktop already has {} SDK sessions", limits.max_sessions),
+                format!(
+                    "the desktop already has {} SDK sessions",
+                    limits.max_sessions
+                ),
             ));
         }
         for k in superseded {
@@ -357,11 +381,20 @@ async fn session(
         let e = &s[&id];
         (e.table.clone(), e.dropped.clone(), e.offset_ms.clone())
     };
-    conn.send(Msg::Config(inner.effective_config(&who.device_id, &who.app_id).to_wire()))?;
+    conn.send(Msg::Config(
+        inner
+            .effective_config(&who.device_id, &who.app_id)
+            .to_wire(),
+    ))?;
     let mut last_ping: i64 = Inner::now_ms();
     conn.send(Msg::Ping(wire::Ping { time_ms: last_ping }))?;
     inner.notify();
-    tracing::info!("sdk session {}/{} connected from {}", who.device_id, who.app_id, peer.ip());
+    tracing::info!(
+        "sdk session {}/{} connected from {}",
+        who.device_id,
+        who.app_id,
+        peer.ip()
+    );
     if let Some(tap) = &inner.opts.tap {
         tap.event(
             "session_start",
@@ -505,7 +538,9 @@ async fn pair(
         Ok(x) => x,
         Err(e) => {
             let message = match e {
-                PromptError::Pending => "a pairing request from this app is already waiting on the desktop",
+                PromptError::Pending => {
+                    "a pairing request from this app is already waiting on the desktop"
+                }
                 PromptError::Cooldown => "this app was denied a moment ago; try again shortly",
                 PromptError::TooMany => "too many pairing requests are waiting on the desktop",
             };
@@ -536,7 +571,13 @@ async fn pair(
     match inner.opts.prompt_policy {
         PromptPolicy::Manual => {}
         PromptPolicy::AutoAllow => {
-            eprintln!("pairing code for {} ({}): {} {}", who.device_name, who.app_id, &code[..3], &code[3..]);
+            eprintln!(
+                "pairing code for {} ({}): {} {}",
+                who.device_name,
+                who.app_id,
+                &code[..3],
+                &code[3..]
+            );
             inner.prompts.decide(pid, Decision::Allow, &limits);
         }
         PromptPolicy::AutoDeny => {

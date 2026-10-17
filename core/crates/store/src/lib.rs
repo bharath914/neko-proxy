@@ -59,7 +59,10 @@ enum Msg {
         truncated: bool,
     },
     /// Link an SDK record and a proxy record, or unlink with `other = 0`.
-    Merge { id: FlowId, other: FlowId },
+    Merge {
+        id: FlowId,
+        other: FlowId,
+    },
     Clear(mpsc::Sender<u64>),
     Flush(mpsc::Sender<()>),
     Shutdown,
@@ -262,9 +265,9 @@ impl FlowSink for Store {
 }
 
 fn sdk_to_json(i: &SdkInfo) -> String {
-    let t = i.timings.map(|t| {
-        serde_json::json!([t.dns, t.connect, t.tls, t.request_sent, t.ttfb, t.download])
-    });
+    let t = i
+        .timings
+        .map(|t| serde_json::json!([t.dns, t.connect, t.tls, t.request_sent, t.ttfb, t.download]));
     serde_json::json!({
         "device_name": i.device_name, "device_model": i.device_model, "os_version": i.os_version,
         "app_name": i.app_name, "app_version": i.app_version, "build": i.build,
@@ -459,10 +462,9 @@ fn index_text(content_type: &str, encoding: &str, wire: &[u8]) -> String {
         },
     );
     match view.kind {
-        decode::Kind::Json
-        | decode::Kind::Text
-        | decode::Kind::Html
-        | decode::Kind::Form => view.text,
+        decode::Kind::Json | decode::Kind::Text | decode::Kind::Html | decode::Kind::Form => {
+            view.text
+        }
         _ => String::new(),
     }
 }
@@ -517,7 +519,8 @@ fn writer_loop(mut conn: Connection, shared: Arc<Shared>, rx: mpsc::Receiver<Msg
                     state,
                     truncated,
                 } => {
-                    if let Err(e) = apply_body(&mut conn, &shared, id, part, data, state, truncated) {
+                    if let Err(e) = apply_body(&mut conn, &shared, id, part, data, state, truncated)
+                    {
                         tracing::error!("late body write failed: {e}");
                     }
                 }
@@ -728,7 +731,11 @@ fn apply_merge(conn: &Connection, id: FlowId, other: FlowId) -> Result<()> {
     if other == 0 {
         // Unlink both halves of whatever `id` was part of.
         let prev: i64 = conn
-            .query_row("SELECT merged_with FROM flow WHERE id = ?1", [id as i64], |r| r.get(0))
+            .query_row(
+                "SELECT merged_with FROM flow WHERE id = ?1",
+                [id as i64],
+                |r| r.get(0),
+            )
             .unwrap_or(0);
         for x in [id as i64, prev] {
             if x == 0 {

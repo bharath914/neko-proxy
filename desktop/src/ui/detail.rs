@@ -156,8 +156,7 @@ impl App {
         // Connection problems are said once, at the top, with a way out.
         if let ConnState::Failed(msg) = self.conn.clone() {
             let r = Rect::from_min_size(body.min, vec2(body.width(), 46.0));
-            ui.painter()
-                .rect_filled(r, 0.0, st.p.tint(st.p.red, 0.14));
+            ui.painter().rect_filled(r, 0.0, st.p.tint(st.p.red, 0.14));
             paint::hairline(ui.painter(), &st, r.left_bottom(), r.right_bottom());
             super::icons::paint(
                 ui.painter(),
@@ -243,10 +242,14 @@ impl App {
             let flick = vel.abs() > 700.0;
             let target = if flick {
                 let landing = at + motion::project(vel).clamp(-600.0, 600.0);
-                [DETAIL_MIN, (body.width() * 0.34).clamp(DETAIL_MIN, max_w), max_w]
-                    .into_iter()
-                    .min_by(|a, b| (a - landing).abs().total_cmp(&(b - landing).abs()))
-                    .unwrap_or(at)
+                [
+                    DETAIL_MIN,
+                    (body.width() * 0.34).clamp(DETAIL_MIN, max_w),
+                    max_w,
+                ]
+                .into_iter()
+                .min_by(|a, b| (a - landing).abs().total_cmp(&(b - landing).abs()))
+                .unwrap_or(at)
             } else {
                 at
             };
@@ -405,7 +408,11 @@ impl App {
             }
         });
         if !s.name.is_empty() {
-            let who = if s.owner.is_empty() { s.name.clone() } else { format!("{}  ·  {}", s.name, s.owner) };
+            let who = if s.owner.is_empty() {
+                s.name.clone()
+            } else {
+                format!("{}  ·  {}", s.name, s.owner)
+            };
             head.add(egui::Label::new(job(&who, Role::Headline, st.p.text)).selectable(true));
         }
         let host_port = if s.port != 443 && s.port != 80 && s.port != 0 {
@@ -469,9 +476,16 @@ impl App {
             // Flows that are plain HTTP exchanges can be sent again or turned
             // into a rule that matches them.
             let exchange = s.protocol != "tunnel" && s.flags & 3 == 0;
-            if widgets::button(ui, &st, "Replay", Kind::Secondary, None, detail_ready && exchange)
-                .on_hover_text("Send this request again as a new flow")
-                .clicked()
+            if widgets::button(
+                ui,
+                &st,
+                "Replay",
+                Kind::Secondary,
+                None,
+                detail_ready && exchange,
+            )
+            .on_hover_text("Send this request again as a new flow")
+            .clicked()
             {
                 self.replay(id);
             }
@@ -501,7 +515,14 @@ impl App {
         if has_wire {
             let sel = self.wire_view as usize;
             let w = head.available_width();
-            if let Some(i) = widgets::segmented_w(&mut head, &st, self.id("app-wire"), &["App", "Wire"], sel, Some(w)) {
+            if let Some(i) = widgets::segmented_w(
+                &mut head,
+                &st,
+                self.id("app-wire"),
+                &["App", "Wire"],
+                sel,
+                Some(w),
+            ) {
                 self.wire_view = i == 1;
             }
             head.add_space(6.0);
@@ -511,7 +532,14 @@ impl App {
         let tab_idx = Tab::ALL.iter().position(|t| *t == self.tab).unwrap_or(0);
         let labels: Vec<&str> = Tab::ALL.iter().map(|t| t.label()).collect();
         let tab_w = head.available_width();
-        if let Some(i) = widgets::segmented_w(&mut head, &st, self.id("tabs"), &labels, tab_idx, Some(tab_w)) {
+        if let Some(i) = widgets::segmented_w(
+            &mut head,
+            &st,
+            self.id("tabs"),
+            &labels,
+            tab_idx,
+            Some(tab_w),
+        ) {
             self.tab = Tab::ALL[i];
         }
         head.add_space(8.0);
@@ -683,7 +711,11 @@ impl App {
             self.details.get(&id).and_then(|e| e.detail.sdk.clone())
         };
         let body_state = sdk.as_ref().map(|c| {
-            if response { c.response_body_state } else { c.request_body_state }
+            if response {
+                c.response_body_state
+            } else {
+                c.request_body_state
+            }
         });
         let body_size = self
             .table
@@ -1041,7 +1073,8 @@ impl App {
 
         // Viewer.
         let ctx = ui.ctx().clone();
-        let mode = (self.raw_view as u64) | ((self.html_source as u64) << 1) | ((which as u64) << 2);
+        let mode =
+            (self.raw_view as u64) | ((self.html_source as u64) << 1) | ((which as u64) << 2);
         let fade = viewer::materialize(&ctx, st, self.id("body-fade"), id.wrapping_mul(31) ^ mode);
         let inner_view = view.shrink2(vec2(0.0, 6.0));
         let salt = (id, which, mode);
@@ -1141,12 +1174,19 @@ impl App {
                     } else {
                         &v.note
                     };
-                    sub.add(egui::Label::new(job(msg, Role::Callout, st.p.text2)).selectable(false));
+                    sub.add(
+                        egui::Label::new(job(msg, Role::Callout, st.p.text2)).selectable(false),
+                    );
                 }
                 _ => match lines {
-                    Some(lines) => viewer::text_view(ui, st, ("text", salt), inner_view, &lines, fade),
+                    Some(lines) => {
+                        viewer::text_view(ui, st, ("text", salt), inner_view, &lines, fade)
+                    }
                     None => {
-                        sub.add(egui::Label::new(job("Empty", Role::Callout, st.p.text2)).selectable(false));
+                        sub.add(
+                            egui::Label::new(job("Empty", Role::Callout, st.p.text2))
+                                .selectable(false),
+                        );
                     }
                 },
             }
@@ -1173,27 +1213,45 @@ impl App {
         // For a merged flow, show both, labelled: the client stack's own
         // timings and the proxy's. Unknown client phases (-1) show as dashes.
         let main = self.details.get(&id).map(|e| e.detail.clone());
-        let (Some(main), Some(wire)) = (main.clone(), self.details.get(&id).and_then(|e| e.wire.as_ref())) else {
+        let (Some(main), Some(wire)) = (
+            main.clone(),
+            self.details.get(&id).and_then(|e| e.wire.as_ref()),
+        ) else {
             let Some(entry) = self.view_entry(id) else {
                 return;
             };
             let t = entry.detail.timings.clone().unwrap_or_default();
-            let sdk_t = if self.wire_view { None } else { entry.detail.sdk.as_ref().and_then(|c| c.timings.clone()) };
+            let sdk_t = if self.wire_view {
+                None
+            } else {
+                entry.detail.sdk.as_ref().and_then(|c| c.timings.clone())
+            };
             let t = sdk_t.unwrap_or(t);
             let pending = s.state == pb::FlowState::Pending as i32;
-            ScrollArea::vertical().id_salt("timing").auto_shrink([false, false]).show(ui, |ui| {
-                timing_block(ui, st, None, &t, pending);
-            });
+            ScrollArea::vertical()
+                .id_salt("timing")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    timing_block(ui, st, None, &t, pending);
+                });
             return;
         };
-        let app_t = main.sdk.as_ref().and_then(|c| c.timings.clone()).or(main.timings.clone()).unwrap_or_default();
+        let app_t = main
+            .sdk
+            .as_ref()
+            .and_then(|c| c.timings.clone())
+            .or(main.timings.clone())
+            .unwrap_or_default();
         let wire_t = wire.detail.timings.clone().unwrap_or_default();
         let pending = s.state == pb::FlowState::Pending as i32;
-        ScrollArea::vertical().id_salt("timing").auto_shrink([false, false]).show(ui, |ui| {
-            timing_block(ui, st, Some("As the app saw it"), &app_t, pending);
-            ui.add_space(8.0);
-            timing_block(ui, st, Some("On the wire (proxy)"), &wire_t, pending);
-        });
+        ScrollArea::vertical()
+            .id_salt("timing")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                timing_block(ui, st, Some("As the app saw it"), &app_t, pending);
+                ui.add_space(8.0);
+                timing_block(ui, st, Some("On the wire (proxy)"), &wire_t, pending);
+            });
     }
 }
 

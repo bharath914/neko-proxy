@@ -2,11 +2,11 @@
 //! A fake SDK client and a harness around a real ingest service.
 
 use flow::{FlowEvent, FlowRecord, FlowSink, IdGen};
+pub use sdk::fake_client::*;
+pub use sdk::wire;
 use sdk::{Limits, Sdk, SdkOptions};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-pub use sdk::fake_client::*;
-pub use sdk::wire;
 
 #[derive(Default)]
 pub struct Collect(pub Mutex<Vec<FlowEvent>>);
@@ -70,10 +70,22 @@ impl Harness {
         opts.desktop_name = "test-desktop".into();
         opts.limits = test_limits();
         f(&mut opts);
-        let sdk = Sdk::new(opts, sink.clone(), store.clone(), Arc::new(IdGen::starting_after(0))).unwrap();
+        let sdk = Sdk::new(
+            opts,
+            sink.clone(),
+            store.clone(),
+            Arc::new(IdGen::starting_after(0)),
+        )
+        .unwrap();
         sdk.set_enabled(true).await.unwrap();
         let port = sdk.local_port().unwrap();
-        Harness { sdk, sink, store, port, dir }
+        Harness {
+            sdk,
+            sink,
+            store,
+            port,
+            dir,
+        }
     }
 
     pub async fn client(&self) -> Client {
@@ -100,4 +112,3 @@ impl Harness {
         panic!("timed out waiting for {what}");
     }
 }
-

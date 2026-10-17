@@ -126,7 +126,13 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
         o.advertise = false;
         o.watch_adb = false;
         Arc::new(
-            sdk::Sdk::new(o, Arc::new(hub.clone()), store.clone(), Arc::new(flow::IdGen::starting_after(0))).unwrap(),
+            sdk::Sdk::new(
+                o,
+                Arc::new(hub.clone()),
+                store.clone(),
+                Arc::new(flow::IdGen::starting_after(0)),
+            )
+            .unwrap(),
         )
     });
     let ctx = Arc::new(ApiContext {
@@ -381,8 +387,15 @@ async fn hosts_list_and_exact_host_focus() {
     assert_eq!(h.hosts.len(), 3);
     // Newest activity first.
     assert_eq!(h.hosts[0].host, "pay.example.com");
-    assert!(h.hosts[0].pinned, "the fake control reports this host pinned");
-    let api = h.hosts.iter().find(|x| x.host == "api.example.com").unwrap();
+    assert!(
+        h.hosts[0].pinned,
+        "the fake control reports this host pinned"
+    );
+    let api = h
+        .hosts
+        .iter()
+        .find(|x| x.host == "api.example.com")
+        .unwrap();
     assert_eq!((api.flows, api.errors), (2, 1));
     assert!(api.decrypted);
 
@@ -402,7 +415,10 @@ async fn hosts_list_and_exact_host_focus() {
     assert_eq!(r.total, 1);
     assert_eq!(r.items[0].host, "example.com");
     let Res::Search(r) = c
-        .call(search(vec!["API.example.com".into(), "pay.example.com".into()]))
+        .call(search(vec![
+            "API.example.com".into(),
+            "pay.example.com".into(),
+        ]))
         .await
     else {
         panic!()
@@ -659,7 +675,13 @@ async fn watchers_see_breakpoints_and_can_resume_them() {
         };
         rules
             .pauses()
-            .hold(&flow, "r1".into(), flow::Phase::Request, Duration::from_secs(10), held)
+            .hold(
+                &flow,
+                "r1".into(),
+                flow::Phase::Request,
+                Duration::from_secs(10),
+                held,
+            )
             .await
     });
 
@@ -731,7 +753,12 @@ async fn approvals_are_pushed_and_decided() {
     let approvals = ctx.approvals.clone();
     let asker = tokio::spawn(async move {
         approvals
-            .ask("create_mock", "Mock 503".into(), "{}".into(), Duration::from_secs(10))
+            .ask(
+                "create_mock",
+                "Mock 503".into(),
+                "{}".into(),
+                Duration::from_secs(10),
+            )
             .await
     });
     let requested = loop {
@@ -816,7 +843,10 @@ async fn sdk_calls_are_unavailable_without_a_listener() {
         Res::SdkStatus(s) => assert!(!s.available),
         other => panic!("{other:?}"),
     }
-    match c.call(Req::DevicesSubscribe(pb::DevicesSubscribeRequest {})).await {
+    match c
+        .call(Req::DevicesSubscribe(pb::DevicesSubscribeRequest {}))
+        .await
+    {
         Res::Error(e) => assert_eq!(e.code, "unavailable"),
         other => panic!("{other:?}"),
     }
@@ -830,15 +860,28 @@ async fn devices_pairing_flow_over_the_api() {
         Res::SdkStatus(s) => assert!(s.available && !s.enabled),
         other => panic!("{other:?}"),
     }
-    let port = match c.call(Req::SdkSetEnabled(pb::SdkSetEnabledRequest { enabled: true })).await {
+    let port = match c
+        .call(Req::SdkSetEnabled(pb::SdkSetEnabledRequest {
+            enabled: true,
+        }))
+        .await
+    {
         Res::SdkStatus(s) => {
             assert!(s.enabled);
             assert_eq!(s.fingerprint.len(), 64);
-            s.listening[0].rsplit(':').next().unwrap().parse::<u16>().unwrap()
+            s.listening[0]
+                .rsplit(':')
+                .next()
+                .unwrap()
+                .parse::<u16>()
+                .unwrap()
         }
         other => panic!("{other:?}"),
     };
-    match c.call(Req::DevicesSubscribe(pb::DevicesSubscribeRequest {})).await {
+    match c
+        .call(Req::DevicesSubscribe(pb::DevicesSubscribeRequest {}))
+        .await
+    {
         Res::Devices(d) => assert!(d.enabled && d.devices.is_empty() && d.pending.is_empty()),
         other => panic!("{other:?}"),
     }
@@ -861,16 +904,22 @@ async fn devices_pairing_flow_over_the_api() {
     };
     assert_eq!(prompt.app_id, "com.demo");
     assert_eq!(prompt.code.len(), 6);
-    match c.call(Req::DeviceAction(pb::DeviceActionRequest {
-        kind: pb::device_action_request::Kind::Allow as i32,
-        pending_id: prompt.id,
-        ..Default::default()
-    })).await {
+    match c
+        .call(Req::DeviceAction(pb::DeviceActionRequest {
+            kind: pb::device_action_request::Kind::Allow as i32,
+            pending_id: prompt.id,
+            ..Default::default()
+        }))
+        .await
+    {
         Res::Ok(_) => {}
         other => panic!("{other:?}"),
     }
     let (code, res, _dev) = device.await.unwrap();
-    assert_eq!(code, prompt.code, "the device computed the code the desktop showed");
+    assert_eq!(
+        code, prompt.code,
+        "the device computed the code the desktop showed"
+    );
     assert!(res.allowed);
 
     // The device list now has it; push config and revoke.
@@ -881,30 +930,46 @@ async fn devices_pairing_flow_over_the_api() {
         eager_body_bytes: 1024,
         ..Default::default()
     };
-    match c.call(Req::SetDeviceConfig(pb::SetDeviceConfigRequest {
-        device_id: "inst-1".into(),
-        app_id: "com.demo".into(),
-        config: Some(cfg),
-    })).await {
+    match c
+        .call(Req::SetDeviceConfig(pb::SetDeviceConfigRequest {
+            device_id: "inst-1".into(),
+            app_id: "com.demo".into(),
+            config: Some(cfg),
+        }))
+        .await
+    {
         Res::Ok(_) => {}
         other => panic!("{other:?}"),
     }
     let sdk = ctx.sdk.as_ref().unwrap();
     let snap = sdk.snapshot();
-    let d = snap.devices.iter().find(|d| d.facts.device_id == "inst-1").unwrap();
+    let d = snap
+        .devices
+        .iter()
+        .find(|d| d.facts.device_id == "inst-1")
+        .unwrap();
     assert!(!d.config.capture_enabled);
     assert_eq!(d.config.body_cap_bytes, 2048);
-    match c.call(Req::DeviceAction(pb::DeviceActionRequest {
-        kind: pb::device_action_request::Kind::Revoke as i32,
-        device_id: "inst-1".into(),
-        app_id: "com.demo".into(),
-        ..Default::default()
-    })).await {
+    match c
+        .call(Req::DeviceAction(pb::DeviceActionRequest {
+            kind: pb::device_action_request::Kind::Revoke as i32,
+            device_id: "inst-1".into(),
+            app_id: "com.demo".into(),
+            ..Default::default()
+        }))
+        .await
+    {
         Res::Ok(_) => {}
         other => panic!("{other:?}"),
     }
     // Unknown prompt ids are an error, not a crash.
-    match c.call(Req::DeviceAction(pb::DeviceActionRequest { pending_id: 999, ..Default::default() })).await {
+    match c
+        .call(Req::DeviceAction(pb::DeviceActionRequest {
+            pending_id: 999,
+            ..Default::default()
+        }))
+        .await
+    {
         Res::Error(e) => assert_eq!(e.code, "not_found"),
         other => panic!("{other:?}"),
     }

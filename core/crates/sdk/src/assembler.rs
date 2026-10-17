@@ -86,7 +86,10 @@ pub trait Observer: Send + Sync + 'static {
 /// What a lazy body fetch produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FetchOutcome {
-    Body { data: Bytes, truncated: bool },
+    Body {
+        data: Bytes,
+        truncated: bool,
+    },
     /// The device no longer has it.
     Gone,
 }
@@ -216,7 +219,9 @@ fn clean_headers(h: &[wire::Header], limits: &Limits) -> (Vec<(String, String)>,
     let mut bytes = 0usize;
     let mut cut = false;
     for x in h {
-        if out.len() >= limits.max_headers || bytes + x.name.len() + x.value.len() > limits.max_header_bytes {
+        if out.len() >= limits.max_headers
+            || bytes + x.name.len() + x.value.len() > limits.max_header_bytes
+        {
             cut = true;
             break;
         }
@@ -237,12 +242,20 @@ struct ParsedUrl {
 fn parse_url(url: &str) -> Option<ParsedUrl> {
     let uri: http::Uri = url.parse().ok()?;
     let scheme = uri.scheme_str()?.to_ascii_lowercase();
-    let host = uri.host()?.trim_matches(|c| c == '[' || c == ']').to_string();
+    let host = uri
+        .host()?
+        .trim_matches(|c| c == '[' || c == ']')
+        .to_string();
     let port = uri.port_u16().unwrap_or(match scheme.as_str() {
         "https" | "wss" => 443,
         _ => 80,
     });
-    let path = if uri.path().is_empty() { "/" } else { uri.path() }.to_string();
+    let path = if uri.path().is_empty() {
+        "/"
+    } else {
+        uri.path()
+    }
+    .to_string();
     Some(ParsedUrl {
         scheme,
         host,
@@ -445,18 +458,19 @@ impl Env {
         }
         acc.next_seq += 1;
         let cap = self.limits.max_body_per_call;
-        let data: std::borrow::Cow<[u8]> = match Encoding::try_from(m.encoding).unwrap_or(Encoding::None) {
-            Encoding::None => std::borrow::Cow::Borrowed(&m.data),
-            Encoding::Deflate => match inflate(&m.data, self.limits.max_chunk_inflated) {
-                Some(v) => v.into(),
-                None => {
-                    self.drop_chunk();
-                    acc.broken = true;
-                    acc.truncated = true;
-                    return;
-                }
-            },
-        };
+        let data: std::borrow::Cow<[u8]> =
+            match Encoding::try_from(m.encoding).unwrap_or(Encoding::None) {
+                Encoding::None => std::borrow::Cow::Borrowed(&m.data),
+                Encoding::Deflate => match inflate(&m.data, self.limits.max_chunk_inflated) {
+                    Some(v) => v.into(),
+                    None => {
+                        self.drop_chunk();
+                        acc.broken = true;
+                        acc.truncated = true;
+                        return;
+                    }
+                },
+            };
         let room = cap.saturating_sub(acc.buf.len());
         if data.len() > room {
             acc.buf.extend_from_slice(&data[..room]);
@@ -637,7 +651,11 @@ impl Env {
     fn finalize(&self, table: &mut CallTable, mut call: Call) {
         call.rec.sdk = Some(Arc::new(call.info));
         let rec = Arc::new(call.rec);
-        let call_id = rec.sdk.as_ref().map(|i| i.call_id.clone()).unwrap_or_default();
+        let call_id = rec
+            .sdk
+            .as_ref()
+            .map(|i| i.call_id.clone())
+            .unwrap_or_default();
         self.remember_done(table, call_id, rec.id);
         self.publish(FlowEvent::Finished(rec.clone()));
         if let Some(o) = &self.observer {
@@ -839,7 +857,10 @@ mod tests {
         assert_eq!(done.len(), 1);
         let r = &done[0];
         assert_eq!(r.method, "POST");
-        assert_eq!((r.host.as_str(), r.port, r.path.as_str(), r.query.as_str()), ("api.test", 443, "/v1/cart/7", "x=1"));
+        assert_eq!(
+            (r.host.as_str(), r.port, r.path.as_str(), r.query.as_str()),
+            ("api.test", 443, "/v1/cart/7", "x=1")
+        );
         assert_eq!(r.source, Source::Sdk);
         assert_eq!(r.status, 200);
         assert_eq!(&r.req_body[..], b"{\"a\":1}");
@@ -868,7 +889,14 @@ mod tests {
         env.body_chunk(&mut t, chunk("c", Part::Response, 0, b"AAA", false)); // duplicate
         env.body_chunk(&mut t, chunk("c", Part::Response, 2, b"CCC", false)); // gap
         env.body_chunk(&mut t, chunk("c", Part::Response, 1, b"BBB", true)); // after the gap
-        env.call_complete(&mut t, 0, wire::CallComplete { call_id: "c".into(), ..Default::default() });
+        env.call_complete(
+            &mut t,
+            0,
+            wire::CallComplete {
+                call_id: "c".into(),
+                ..Default::default()
+            },
+        );
         let r = &finished(&sink)[0];
         assert_eq!(&r.res_body[..], b"AAA");
         assert!(r.flags & flags::RES_TRUNCATED != 0);
@@ -886,7 +914,14 @@ mod tests {
         e.call_start(&mut t, &who(), 0, start("c"));
         e.body_chunk(&mut t, chunk("c", Part::Response, 0, &[1; 8], false));
         e.body_chunk(&mut t, chunk("c", Part::Response, 1, &[2; 8], true));
-        e.call_complete(&mut t, 0, wire::CallComplete { call_id: "c".into(), ..Default::default() });
+        e.call_complete(
+            &mut t,
+            0,
+            wire::CallComplete {
+                call_id: "c".into(),
+                ..Default::default()
+            },
+        );
         let r = &finished(&sink)[0];
         assert_eq!(r.res_body.len(), 10);
         assert!(r.flags & flags::RES_TRUNCATED != 0);
@@ -912,7 +947,14 @@ mod tests {
         let mut bomb = chunk("c", Part::Response, 1, &enc.finish().unwrap(), true);
         bomb.encoding = Encoding::Deflate as i32;
         e.body_chunk(&mut t, bomb);
-        e.call_complete(&mut t, 0, wire::CallComplete { call_id: "c".into(), ..Default::default() });
+        e.call_complete(
+            &mut t,
+            0,
+            wire::CallComplete {
+                call_id: "c".into(),
+                ..Default::default()
+            },
+        );
         let r = &finished(&sink)[0];
         assert_eq!(&r.res_body[..], b"hello hello hello hello");
         assert!(r.flags & flags::DROPPED != 0);
@@ -934,8 +976,21 @@ mod tests {
         assert_eq!(t.in_flight(), 2);
         assert_eq!(e.stats.snapshot().dropped_calls, 3);
         // Events for calls that were never accepted are counted, not fatal.
-        e.call_complete(&mut t, 0, wire::CallComplete { call_id: "zzz".into(), ..Default::default() });
-        e.response_start(&mut t, wire::ResponseStart { call_id: "zzz".into(), ..Default::default() });
+        e.call_complete(
+            &mut t,
+            0,
+            wire::CallComplete {
+                call_id: "zzz".into(),
+                ..Default::default()
+            },
+        );
+        e.response_start(
+            &mut t,
+            wire::ResponseStart {
+                call_id: "zzz".into(),
+                ..Default::default()
+            },
+        );
         assert_eq!(e.stats.snapshot().dropped_events, 2);
     }
 
@@ -957,12 +1012,21 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert_eq!(e.fail_open_calls(&mut t, "connection to the app was lost"), 1);
+        assert_eq!(
+            e.fail_open_calls(&mut t, "connection to the app was lost"),
+            1
+        );
         let done = finished(&sink);
-        let a = done.iter().find(|r| r.error.starts_with("timeout")).unwrap();
+        let a = done
+            .iter()
+            .find(|r| r.error.starts_with("timeout"))
+            .unwrap();
         assert_eq!(a.state, FlowState::Failed);
         assert!(a.flags & flags::ERROR != 0);
-        let b = done.iter().find(|r| r.flags & flags::INCOMPLETE != 0).unwrap();
+        let b = done
+            .iter()
+            .find(|r| r.flags & flags::INCOMPLETE != 0)
+            .unwrap();
         assert_eq!(b.error, "connection to the app was lost");
     }
 
@@ -991,7 +1055,10 @@ mod tests {
         let (mut rx, send) = t.begin_fetch("c", Part::Response);
         assert!(send);
         let (_rx2, send2) = t.begin_fetch("c", Part::Response);
-        assert!(!send2, "a second request for the same body does not ask the device again");
+        assert!(
+            !send2,
+            "a second request for the same body does not ask the device again"
+        );
         e.body_chunk(&mut t, chunk("c", Part::Response, 0, b"big ", false));
         e.body_chunk(&mut t, chunk("c", Part::Response, 1, b"body", true));
         match rx.try_recv().unwrap() {
@@ -1008,7 +1075,14 @@ mod tests {
 
         // A body the device no longer has.
         let (mut rx, _) = t.begin_fetch("c", Part::Request);
-        e.body_fetch_result(&mut t, wire::BodyFetchResult { call_id: "c".into(), part: Part::Request as i32, available: false });
+        e.body_fetch_result(
+            &mut t,
+            wire::BodyFetchResult {
+                call_id: "c".into(),
+                part: Part::Request as i32,
+                available: false,
+            },
+        );
         assert_eq!(rx.try_recv().unwrap(), FetchOutcome::Gone);
         // Unsolicited chunks for finished calls are dropped.
         e.body_chunk(&mut t, chunk("c", Part::Response, 0, b"x", true));

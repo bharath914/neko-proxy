@@ -403,7 +403,11 @@ fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
     println!(
         "Discovery        {}{}",
         st.discovery_state,
-        if st.discovery_error.is_empty() { String::new() } else { format!(" ({})", st.discovery_error) }
+        if st.discovery_error.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", st.discovery_error)
+        }
     );
     println!("Sessions         {}", st.sessions);
     if let Some(s) = &st.stats {
@@ -417,8 +421,14 @@ fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
 async fn sdk_cmd(action: SdkAction) -> Result<()> {
     use api::pb::{client_message::Body as Req, server_message::Body as Res};
     let (s, req) = match action {
-        SdkAction::Enable(s) => (s, Req::SdkSetEnabled(api::pb::SdkSetEnabledRequest { enabled: true })),
-        SdkAction::Disable(s) => (s, Req::SdkSetEnabled(api::pb::SdkSetEnabledRequest { enabled: false })),
+        SdkAction::Enable(s) => (
+            s,
+            Req::SdkSetEnabled(api::pb::SdkSetEnabledRequest { enabled: true }),
+        ),
+        SdkAction::Disable(s) => (
+            s,
+            Req::SdkSetEnabled(api::pb::SdkSetEnabledRequest { enabled: false }),
+        ),
         SdkAction::Status(s) => (s, Req::SdkStatus(api::pb::SdkStatusRequest {})),
     };
     let mut c = connect(&s).await?;
@@ -432,7 +442,9 @@ async fn sdk_cmd(action: SdkAction) -> Result<()> {
 }
 
 async fn devices_cmd(action: DevicesAction) -> Result<()> {
-    use api::pb::{client_message::Body as Req, device_action_request::Kind, server_message::Body as Res};
+    use api::pb::{
+        client_message::Body as Req, device_action_request::Kind, server_message::Body as Res,
+    };
     let act = |kind: Kind, pending_id: u64, device_id: String, app_id: String| {
         Req::DeviceAction(api::pb::DeviceActionRequest {
             kind: kind as i32,
@@ -442,11 +454,16 @@ async fn devices_cmd(action: DevicesAction) -> Result<()> {
         })
     };
     let (s, req) = match action {
-        DevicesAction::List(s) => (s, Req::DevicesSubscribe(api::pb::DevicesSubscribeRequest {})),
+        DevicesAction::List(s) => (
+            s,
+            Req::DevicesSubscribe(api::pb::DevicesSubscribeRequest {}),
+        ),
         DevicesAction::Allow { id, s } => (s, act(Kind::Allow, id, String::new(), String::new())),
         DevicesAction::Deny { id, s } => (s, act(Kind::Deny, id, String::new(), String::new())),
         DevicesAction::Revoke { device_id, app, s } => (s, act(Kind::Revoke, 0, device_id, app)),
-        DevicesAction::Forget { device_id, s } => (s, act(Kind::Forget, 0, device_id, String::new())),
+        DevicesAction::Forget { device_id, s } => {
+            (s, act(Kind::Forget, 0, device_id, String::new()))
+        }
     };
     let mut c = connect(&s).await?;
     match c.call(req).await? {
@@ -473,7 +490,12 @@ async fn devices_cmd(action: DevicesAction) -> Result<()> {
             for p in &d.pending {
                 println!(
                     "PENDING #{}  {} ({}) wants to pair as {}  code {} {}",
-                    p.id, p.device_name, p.device_model, p.app_id, &p.code[..p.code.len().min(3)], p.code.get(3..).unwrap_or("")
+                    p.id,
+                    p.device_name,
+                    p.device_model,
+                    p.app_id,
+                    &p.code[..p.code.len().min(3)],
+                    p.code.get(3..).unwrap_or("")
                 );
                 println!("             Check the same code is in the app's log, then `proxyd devices allow {}`.", p.id);
             }

@@ -14,7 +14,7 @@ Output saved in `e2e-jvm-output.txt`. The desktop GUI was not driven by hand; th
 | Allow through the CLI, then calls stream | **Pass.** 4 flows. |
 | Retrofit `@Inspect` shows name, owner and route template | **Pass** in the JVM tests (`retrofitRouteTemplatesAndInspectMetadata`); the flow list above shows the call. |
 | A call seen by the SDK and by the proxy shows once | **Pass.** Flow 5 is `source merged`; the proxy half is hidden from the list but stored. |
-| 100 KB body stays on the device until opened | **Pass** (flow 3 has no body until fetched). |
+| 100 KB body stays on the device until opened | Pass in `bigBodiesStayOnTheDeviceUntilTheDesktopAsks` and the benchmark (scenario 4); not checked in this script's output. |
 
 ## The checklist
 
@@ -29,7 +29,7 @@ Output saved in `e2e-jvm-output.txt`. The desktop GUI was not driven by hand; th
 | 7 | iOS device on Wi-Fi with the Local Network prompt | **Not run.** |
 | 8 | A certificate-pinned app shows full flows | **Not run.** In principle yes, since the SDK sits above TLS; no pinned app was available. |
 | 9 | Device using both SDK and proxy shows one merged flow | Pass (above), on loopback with one device. |
-| 10 | Release builds contain no SDK code | Android: pass, on real APKs (`PluginTest`, AGP 9.4.1 and 8.13.1; `verifyNoInspectorInRelease`). The sample app's release APK also builds with R8. iOS: the Release stubs pass `Scripts/verify-release.sh` on Linux; the app binary on a Mac was not checked. |
+| 10 | Release builds contain no SDK code | Android: pass, on real APKs (`PluginTest`, AGP 9.4.1 and 8.13.1; `verifyNoInspectorInRelease`). iOS: the Release stubs pass `Scripts/verify-release.sh` on Linux; the app binary on a Mac was not checked. |
 
 ## What else was verified without a device
 

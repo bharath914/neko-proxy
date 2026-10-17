@@ -339,14 +339,26 @@ fn ten_thousand_mixed_flows_search_and_filter_fast() {
     let dir = tempfile::tempdir().unwrap();
     let store = Store::open(dir.path()).unwrap();
     for i in 1..=10_000u64 {
-        let mut r = (*rec(i, &format!("api{}.example.com", i % 40), "/v1/items", 200, 20, r#"{"ok":true}"#)).clone();
+        let mut r = (*rec(
+            i,
+            &format!("api{}.example.com", i % 40),
+            "/v1/items",
+            200,
+            20,
+            r#"{"ok":true}"#,
+        ))
+        .clone();
         if i % 3 == 0 {
             r.source = flow::Source::Sdk;
             r.sdk = Some(Arc::new(flow::SdkInfo {
                 device_id: format!("dev-{}", i % 4),
                 app_id: "com.demo".into(),
                 call_id: format!("c{i}"),
-                name: if i % 6 == 0 { "Apply coupon".into() } else { "List items".into() },
+                name: if i % 6 == 0 {
+                    "Apply coupon".into()
+                } else {
+                    "List items".into()
+                },
                 screen: "CartActivity".into(),
                 route_template: "/v1/items/{id}".into(),
                 ..Default::default()
@@ -363,18 +375,30 @@ fn ten_thousand_mixed_flows_search_and_filter_fast() {
         let p = store.search(&q, 0, 200).unwrap();
         (t.elapsed(), p.total)
     };
-    let q = |text: &str| Query { text: text.into(), ..Default::default() };
+    let q = |text: &str| Query {
+        text: text.into(),
+        ..Default::default()
+    };
     for (label, query) in [
         ("all", Query::default()),
         ("text", q("coupon")),
         ("source", q("source:sdk")),
         ("name", q("name:coupon")),
-        ("device chip", Query { devices: vec!["dev-1".into()], ..Default::default() }),
+        (
+            "device chip",
+            Query {
+                devices: vec!["dev-1".into()],
+                ..Default::default()
+            },
+        ),
         ("host + source", q("api7.example.com source:proxy")),
     ] {
         let (d, total) = time(query);
         eprintln!("{label}: {total} rows in {d:?}");
-        assert!(d < std::time::Duration::from_millis(100), "{label} took {d:?}");
+        assert!(
+            d < std::time::Duration::from_millis(100),
+            "{label} took {d:?}"
+        );
     }
     assert_eq!(time(q("source:sdk")).1, 3333);
 }

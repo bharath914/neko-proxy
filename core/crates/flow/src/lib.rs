@@ -14,6 +14,6 @@ pub use intercept::{
     RequestInterceptor, ResponseInterceptor, Retarget, Ticket, Verdict,
 };
 pub use model::{
-    flags, short_content_type, BodyState, FlowId, FlowRecord, FlowState, FlowSummary, Header, IdGen,
-    SdkInfo, SdkTimings, Source, Timings, SLOW_MS,
+    flags, short_content_type, BodyState, FlowId, FlowRecord, FlowState, FlowSummary, Header,
+    IdGen, SdkInfo, SdkTimings, Source, Timings, SLOW_MS,
 };

@@ -29,14 +29,36 @@ impl ServerCertVerifier for AcceptAll {
         *self.0.lock().unwrap() = Some(Sha256::digest(end_entity.as_ref()).into());
         Ok(ServerCertVerified::assertion())
     }
-    fn verify_tls12_signature(&self, m: &[u8], c: &CertificateDer<'_>, d: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(m, c, d, &rustls::crypto::ring::default_provider().signature_verification_algorithms)
+    fn verify_tls12_signature(
+        &self,
+        m: &[u8],
+        c: &CertificateDer<'_>,
+        d: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            m,
+            c,
+            d,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
     }
-    fn verify_tls13_signature(&self, m: &[u8], c: &CertificateDer<'_>, d: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(m, c, d, &rustls::crypto::ring::default_provider().signature_verification_algorithms)
+    fn verify_tls13_signature(
+        &self,
+        m: &[u8],
+        c: &CertificateDer<'_>,
+        d: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            m,
+            c,
+            d,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
     }
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        rustls::crypto::ring::default_provider().signature_verification_algorithms.supported_schemes()
+        rustls::crypto::ring::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -67,7 +89,12 @@ impl Client {
             .await?;
         let fingerprint = seen.lock().unwrap().unwrap();
         let (r, w) = tokio::io::split(tls);
-        Ok(Client { r, w, fingerprint, seq: 0 })
+        Ok(Client {
+            r,
+            w,
+            fingerprint,
+            seq: 0,
+        })
     }
 
     pub async fn send(&mut self, msg: Msg) {
@@ -87,7 +114,9 @@ impl Client {
     }
 
     pub async fn recv_within(&mut self, d: Duration) -> Option<Msg> {
-        match crate::frame::read_envelope(&mut self.r, 4 << 20, Some(d), Duration::from_secs(5)).await {
+        match crate::frame::read_envelope(&mut self.r, 4 << 20, Some(d), Duration::from_secs(5))
+            .await
+        {
             Ok(e) => e.msg,
             Err(_) => None,
         }
@@ -108,7 +137,11 @@ impl Client {
         loop {
             match self.recv().await? {
                 Msg::Ping(p) => {
-                    self.send(Msg::Pong(wire::Pong { echo_ms: p.time_ms, time_ms: now_ms() })).await;
+                    self.send(Msg::Pong(wire::Pong {
+                        echo_ms: p.time_ms,
+                        time_ms: now_ms(),
+                    }))
+                    .await;
                 }
                 other => return Some(other),
             }
@@ -135,7 +168,8 @@ impl Client {
     }
 
     pub async fn hello(&mut self, install: &str, app: &str, token: &[u8]) -> wire::HelloAck {
-        self.send(Msg::Hello(Self::hello_msg(install, app, token))).await;
+        self.send(Msg::Hello(Self::hello_msg(install, app, token)))
+            .await;
         match self.next().await {
             Some(Msg::HelloAck(a)) => a,
             other => panic!("expected HelloAck, got {other:?}"),
@@ -155,7 +189,10 @@ impl Client {
             Some(Msg::PairChallenge(c)) => c,
             other => panic!("expected PairChallenge, got {other:?}"),
         };
-        self.send(Msg::PairReveal(wire::PairReveal { client_nonce: nonce.to_vec() })).await;
+        self.send(Msg::PairReveal(wire::PairReveal {
+            client_nonce: nonce.to_vec(),
+        }))
+        .await;
         let code = crate::pairing::pairing_code(&self.fingerprint, &nonce, &ch.server_nonce);
         let mut prompt = None;
         for _ in 0..200 {
@@ -166,7 +203,10 @@ impl Client {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
         let prompt = prompt.expect("a pairing prompt");
-        assert_eq!(prompt.code, code, "desktop and device must show the same code");
+        assert_eq!(
+            prompt.code, code,
+            "desktop and device must show the same code"
+        );
         if allow {
             assert!(sdk.allow(prompt.id));
         } else {
@@ -190,14 +230,24 @@ impl Client {
             Some(Msg::PairChallenge(c)) => c,
             other => panic!("expected PairChallenge, got {other:?}"),
         };
-        self.send(Msg::PairReveal(wire::PairReveal { client_nonce: nonce.to_vec() })).await;
+        self.send(Msg::PairReveal(wire::PairReveal {
+            client_nonce: nonce.to_vec(),
+        }))
+        .await;
         let code = crate::pairing::pairing_code(&self.fingerprint, &nonce, &ch.server_nonce);
         on_code(&code);
         loop {
-            match self.recv_within(Duration::from_secs(ch.timeout_s as u64 + 5)).await {
+            match self
+                .recv_within(Duration::from_secs(ch.timeout_s as u64 + 5))
+                .await
+            {
                 Some(Msg::PairResult(r)) => return (code, r),
                 Some(Msg::Ping(p)) => {
-                    self.send(Msg::Pong(wire::Pong { echo_ms: p.time_ms, time_ms: now_ms() })).await
+                    self.send(Msg::Pong(wire::Pong {
+                        echo_ms: p.time_ms,
+                        time_ms: now_ms(),
+                    }))
+                    .await
                 }
                 other => panic!("expected PairResult, got {other:?}"),
             }
@@ -208,7 +258,8 @@ impl Client {
         loop {
             match self.recv_within(Duration::from_secs(3)).await {
                 None => return,
-                Some(Msg::Ping(_)) | Some(Msg::Pong(_)) | Some(Msg::Error(_)) | Some(Msg::Config(_)) => continue,
+                Some(Msg::Ping(_)) | Some(Msg::Pong(_)) | Some(Msg::Error(_))
+                | Some(Msg::Config(_)) => continue,
                 Some(other) => panic!("expected the connection to close, got {other:?}"),
             }
         }

@@ -120,7 +120,9 @@ impl Prompts {
         {
             return Err(PromptError::Pending);
         }
-        if g.cooldown.contains_key(&install_key(&prompt.device_id, &prompt.app_id)) {
+        if g.cooldown
+            .contains_key(&install_key(&prompt.device_id, &prompt.app_id))
+        {
             return Err(PromptError::Cooldown);
         }
         if g.open.len() >= limits.max_pending_prompts {
@@ -147,7 +149,8 @@ impl Prompts {
         };
         if decision == Decision::Deny {
             let key = install_key(&o.prompt.device_id, &o.prompt.app_id);
-            g.cooldown.insert(key, Instant::now() + limits.prompt_cooldown);
+            g.cooldown
+                .insert(key, Instant::now() + limits.prompt_cooldown);
         }
         if let Some(tx) = o.tx.take() {
             let _ = tx.send(decision);
@@ -161,7 +164,8 @@ impl Prompts {
         if let Some(o) = g.open.remove(&id) {
             if timed_out {
                 let key = install_key(&o.prompt.device_id, &o.prompt.app_id);
-                g.cooldown.insert(key, Instant::now() + limits.prompt_cooldown);
+                g.cooldown
+                    .insert(key, Instant::now() + limits.prompt_cooldown);
             }
         }
     }
@@ -239,20 +243,29 @@ mod tests {
         let limits = Limits::default();
         let p = Prompts::default();
         let (id, rx) = p.open(prompt("a"), &limits).unwrap();
-        assert_eq!(p.open(prompt("a"), &limits).unwrap_err(), PromptError::Pending);
+        assert_eq!(
+            p.open(prompt("a"), &limits).unwrap_err(),
+            PromptError::Pending
+        );
         assert!(p.decide(id, Decision::Allow, &limits));
         assert_eq!(rx.blocking_recv().unwrap(), Decision::Allow);
         assert!(!p.decide(id, Decision::Allow, &limits));
 
         let (id, _rx) = p.open(prompt("a"), &limits).unwrap();
         p.decide(id, Decision::Deny, &limits);
-        assert_eq!(p.open(prompt("a"), &limits).unwrap_err(), PromptError::Cooldown);
+        assert_eq!(
+            p.open(prompt("a"), &limits).unwrap_err(),
+            PromptError::Cooldown
+        );
 
         let mut held = Vec::new();
         for i in 0..limits.max_pending_prompts {
             held.push(p.open(prompt(&format!("d{i}")), &limits).unwrap());
         }
-        assert_eq!(p.open(prompt("one-more"), &limits).unwrap_err(), PromptError::TooMany);
+        assert_eq!(
+            p.open(prompt("one-more"), &limits).unwrap_err(),
+            PromptError::TooMany
+        );
         assert_eq!(p.list().len(), limits.max_pending_prompts);
     }
 }

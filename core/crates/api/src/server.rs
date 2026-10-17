@@ -99,13 +99,7 @@ fn to_query(f: Option<&pb::Filter>, since_ms: i64, until_ms: i64) -> Query {
             f.devices.clone(),
             f.apps.clone(),
         ),
-        None => (
-            String::new(),
-            Kind::All,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ),
+        None => (String::new(), Kind::All, Vec::new(), Vec::new(), Vec::new()),
     };
     Query {
         text,
@@ -541,7 +535,11 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
                 path: m.path,
                 query: m.query,
                 file: m.file.into(),
-                status: if m.status == 0 { 200 } else { m.status.min(599) as u16 },
+                status: if m.status == 0 {
+                    200
+                } else {
+                    m.status.min(599) as u16
+                },
                 content_type: m.content_type,
             };
             match ctx.rules.put_map_local(rule) {
@@ -604,7 +602,10 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
                 error(
                     id,
                     "not_found",
-                    format!("flow {} is not held at a breakpoint (it may have timed out)", r.flow_id),
+                    format!(
+                        "flow {} is not held at a breakpoint (it may have timed out)",
+                        r.flow_id
+                    ),
                 )
             }
         }
@@ -633,11 +634,18 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             if ctx.approvals.decide(&r.id, r.allow) {
                 approvals_response(&ctx, id)
             } else {
-                error(id, "not_found", "that request was already answered or expired")
+                error(
+                    id,
+                    "not_found",
+                    "that request was already answered or expired",
+                )
             }
         }
         Req::SetMcpWrites(r) => {
-            match ctx.rules.set_mcp_writes(convert::mcp_writes_from_pb(r.writes)) {
+            match ctx
+                .rules
+                .set_mcp_writes(convert::mcp_writes_from_pb(r.writes))
+            {
                 Ok(_) => mcp_info(&ctx, id),
                 Err(e) => error(id, "invalid_rule", e.to_string()),
             }
@@ -688,14 +696,22 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
                     body: Some(Res::Ok(pb::OkResponse {})),
                 }
             } else {
-                error(id, "not_found", "nothing to do: it may have expired or been answered already")
+                error(
+                    id,
+                    "not_found",
+                    "nothing to do: it may have expired or been answered already",
+                )
             }
         }
         Req::SetDeviceConfig(r) => {
             let Some(sdk) = &ctx.sdk else {
                 return error(id, "unavailable", "this core runs without the SDK listener");
             };
-            let cfg = r.config.as_ref().map(crate::sdk_api::config_from_pb).unwrap_or_default();
+            let cfg = r
+                .config
+                .as_ref()
+                .map(crate::sdk_api::config_from_pb)
+                .unwrap_or_default();
             if sdk.set_config(&r.device_id, &r.app_id, cfg) {
                 pb::ServerMessage {
                     id,
@@ -709,13 +725,29 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             let Some(sdk) = &ctx.sdk else {
                 return error(id, "unavailable", "this core runs without the SDK listener");
             };
-            let part = if r.response { store::BodyPart::Response } else { store::BodyPart::Request };
+            let part = if r.response {
+                store::BodyPart::Response
+            } else {
+                store::BodyPart::Request
+            };
             match sdk.fetch_body(r.flow_id, part).await {
                 Ok(_) => {
                     let store = ctx.store.clone();
                     let _ = tokio::task::spawn_blocking(move || store.flush()).await;
-                    let parts = if r.response { PART_OVERVIEW | PART_RESPONSE_BODY } else { PART_OVERVIEW | PART_REQUEST_BODY };
-                    get_flow(ctx, id, pb::GetFlowRequest { id: r.flow_id, parts }).await
+                    let parts = if r.response {
+                        PART_OVERVIEW | PART_RESPONSE_BODY
+                    } else {
+                        PART_OVERVIEW | PART_REQUEST_BODY
+                    };
+                    get_flow(
+                        ctx,
+                        id,
+                        pb::GetFlowRequest {
+                            id: r.flow_id,
+                            parts,
+                        },
+                    )
+                    .await
                 }
                 Err(e) => error(id, "fetch_failed", e.to_string()),
             }

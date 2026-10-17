@@ -56,8 +56,8 @@ impl IngestCert {
 
     fn generate(dir: &Path) -> io::Result<IngestCert> {
         let key = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).map_err(io::Error::other)?;
-        let mut params =
-            CertificateParams::new(vec!["proxy-ingest.local".to_string()]).map_err(io::Error::other)?;
+        let mut params = CertificateParams::new(vec!["proxy-ingest.local".to_string()])
+            .map_err(io::Error::other)?;
         params
             .distinguished_name
             .push(DnType::CommonName, "Proxy SDK ingest");
@@ -115,7 +115,10 @@ fn pem_to_der(pem: &str, label: &str) -> Option<Vec<u8>> {
     let end = format!("-----END {label}-----");
     let start = pem.find(&begin)? + begin.len();
     let stop = pem.find(&end)?;
-    let b64: String = pem[start..stop].chars().filter(|c| !c.is_whitespace()).collect();
+    let b64: String = pem[start..stop]
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
     base64_decode(&b64)
 }
 

@@ -40,15 +40,15 @@ impl Advertiser {
         }
     }
 
-    fn try_start(port: u16, fp_short: &str, desktop_name: &str) -> Result<(ServiceDaemon, String), String> {
+    fn try_start(
+        port: u16,
+        fp_short: &str,
+        desktop_name: &str,
+    ) -> Result<(ServiceDaemon, String), String> {
         let daemon = ServiceDaemon::new().map_err(|e| e.to_string())?;
         let instance = sanitize(desktop_name);
         let host = format!("{instance}.local.");
-        let props = [
-            ("v", "1"),
-            ("fp", fp_short),
-            ("name", desktop_name),
-        ];
+        let props = [("v", "1"), ("fp", fp_short), ("name", desktop_name)];
         let info = ServiceInfo::new(SERVICE_TYPE, &instance, &host, "", port, &props[..])
             .map_err(|e| e.to_string())?
             .enable_addr_auto();
@@ -76,7 +76,13 @@ impl Drop for Advertiser {
 fn sanitize(name: &str) -> String {
     let s: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let s = s.trim_matches('-');
     if s.is_empty() {

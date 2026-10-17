@@ -88,7 +88,9 @@ impl FlowSink for Sink {
 #[tokio::main]
 async fn main() -> anyhow_free::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
+        )
         .with_writer(std::io::stderr)
         .init();
     let a = Args::parse();
@@ -99,7 +101,10 @@ async fn main() -> anyhow_free::Result<()> {
     let store = store::Store::open(&dir.join("store"))?;
     let rec = match &a.record {
         Some(p) => Some(Arc::new(Recorder(Mutex::new(
-            std::fs::OpenOptions::new().create(true).append(true).open(p)?,
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(p)?,
         )))),
         None => None,
     };
@@ -121,8 +126,16 @@ async fn main() -> anyhow_free::Result<()> {
         opts.config_override = Some(cfg);
     }
     opts.tap = rec.clone().map(|r| Arc::new(RecTap(r)) as Arc<dyn Tap>);
-    let sink = Arc::new(Sink { store: store.clone(), rec });
-    let sdk = Sdk::new(opts, sink, store.clone(), Arc::new(IdGen::starting_after(0)))?;
+    let sink = Arc::new(Sink {
+        store: store.clone(),
+        rec,
+    });
+    let sdk = Sdk::new(
+        opts,
+        sink,
+        store.clone(),
+        Arc::new(IdGen::starting_after(0)),
+    )?;
 
     if a.fetch_lazy {
         let s = sdk.clone();

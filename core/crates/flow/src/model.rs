@@ -276,12 +276,32 @@ impl FlowRecord {
             error: self.error.clone(),
             source: self.source,
             merged_with: self.merged_with,
-            device_id: self.sdk.as_ref().map(|i| i.device_id.clone()).unwrap_or_default(),
-            app_id: self.sdk.as_ref().map(|i| i.app_id.clone()).unwrap_or_default(),
-            name: self.sdk.as_ref().map(|i| i.name.clone()).unwrap_or_default(),
+            device_id: self
+                .sdk
+                .as_ref()
+                .map(|i| i.device_id.clone())
+                .unwrap_or_default(),
+            app_id: self
+                .sdk
+                .as_ref()
+                .map(|i| i.app_id.clone())
+                .unwrap_or_default(),
+            name: self
+                .sdk
+                .as_ref()
+                .map(|i| i.name.clone())
+                .unwrap_or_default(),
             tag: self.sdk.as_ref().map(|i| i.tag.clone()).unwrap_or_default(),
-            owner: self.sdk.as_ref().map(|i| i.owner.clone()).unwrap_or_default(),
-            screen: self.sdk.as_ref().map(|i| i.screen.clone()).unwrap_or_default(),
+            owner: self
+                .sdk
+                .as_ref()
+                .map(|i| i.owner.clone())
+                .unwrap_or_default(),
+            screen: self
+                .sdk
+                .as_ref()
+                .map(|i| i.screen.clone())
+                .unwrap_or_default(),
             route_template: self
                 .sdk
                 .as_ref()

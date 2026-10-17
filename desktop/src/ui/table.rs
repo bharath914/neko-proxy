@@ -33,9 +33,21 @@ fn cols(w: f32, sdk: bool, name: bool, screen: bool, route: bool) -> Cols {
     let size = if w >= 600.0 { 68.0 } else { 0.0 };
     let src = if sdk && w >= 560.0 { 58.0 } else { 0.0 };
     // Optional columns only appear when there is room for them.
-    let name = if sdk && name && w >= 740.0 { 128.0 } else { 0.0 };
-    let screen = if sdk && screen && w >= 880.0 { 132.0 } else { 0.0 };
-    let route = if sdk && route && w >= 1020.0 { 150.0 } else { 0.0 };
+    let name = if sdk && name && w >= 740.0 {
+        128.0
+    } else {
+        0.0
+    };
+    let screen = if sdk && screen && w >= 880.0 {
+        132.0
+    } else {
+        0.0
+    };
+    let route = if sdk && route && w >= 1020.0 {
+        150.0
+    } else {
+        0.0
+    };
     let (id, method, status, time) = (42.0, 66.0, 60.0, 66.0);
     let fixed = id + method + status + time + kind + size + src + name + screen + route;
     let flex = (w - fixed - 28.0).max(120.0);
@@ -68,8 +80,11 @@ fn filter_chip(ui: &mut Ui, st: &crate::theme::Style, label: &str, on: bool) -> 
     };
     ui.painter().rect_filled(rect, cr(255), bg);
     let g = paint::galley(ui, label, Role::Callout, fg);
-    ui.painter()
-        .galley(pos2(rect.left() + 10.0, rect.center().y - g.size().y / 2.0), g, fg);
+    ui.painter().galley(
+        pos2(rect.left() + 10.0, rect.center().y - g.size().y / 2.0),
+        g,
+        fg,
+    );
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -402,12 +417,21 @@ impl App {
                 pb::FlowSource::Merged => ("BOTH", st.p.teal),
                 pb::FlowSource::Proxy => ("PROXY", st.p.text3),
             };
-            let g = paint::galley(ui, label, Role::Overline, if selected { st.p.on_accent } else { col });
+            let g = paint::galley(
+                ui,
+                label,
+                Role::Overline,
+                if selected { st.p.on_accent } else { col },
+            );
             let r = Rect::from_min_size(pos2(x, mid - 8.0), vec2(g.size().x + 10.0, 16.0));
             p.rect_filled(
                 r,
                 cr(4),
-                if selected { paint::with_alpha(st.p.on_accent, 0.2) } else { paint::with_alpha(col, 0.14) },
+                if selected {
+                    paint::with_alpha(st.p.on_accent, 0.2)
+                } else {
+                    paint::with_alpha(col, 0.14)
+                },
             );
             p.galley(pos2(r.left() + 5.0, mid - g.size().y / 2.0), g, col);
             x += c.src;
@@ -456,9 +480,21 @@ impl App {
             dim(st.p.text2),
         );
         x += c.path;
-        for (w, text) in [(c.name, &s.name), (c.screen, &s.screen), (c.route, &s.route_template)] {
+        for (w, text) in [
+            (c.name, &s.name),
+            (c.screen, &s.screen),
+            (c.route, &s.route_template),
+        ] {
             if w > 0.0 {
-                paint::text_fit(p, ui, pos2(x, mid), w - 10.0, text, Role::Callout, dim(st.p.text2));
+                paint::text_fit(
+                    p,
+                    ui,
+                    pos2(x, mid),
+                    w - 10.0,
+                    text,
+                    Role::Callout,
+                    dim(st.p.text2),
+                );
                 x += w;
             }
         }

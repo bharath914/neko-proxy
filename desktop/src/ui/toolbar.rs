@@ -136,9 +136,7 @@ impl App {
     /// Whether any proxy rule is changing what the person sees.
     pub fn proxy_rules_active(&self) -> bool {
         let ssl = self.rules.ssl.clone().unwrap_or_default();
-        ssl.mode != 0
-            || !ssl.exclude.is_empty()
-            || self.rules.map_local.iter().any(|r| r.enabled)
+        ssl.mode != 0 || !ssl.exclude.is_empty() || self.rules.map_local.iter().any(|r| r.enabled)
     }
 
     /// Opens proxy settings. A dot says rules are in effect.
@@ -171,7 +169,8 @@ impl App {
             );
         }
         let tip = if roomy {
-            resp.clone().on_hover_text("Proxy settings: SSL proxying and Map Local")
+            resp.clone()
+                .on_hover_text("Proxy settings: SSL proxying and Map Local")
         } else {
             resp.clone()
         };

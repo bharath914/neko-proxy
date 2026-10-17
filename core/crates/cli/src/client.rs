@@ -32,7 +32,10 @@ impl Client {
     pub async fn call(&mut self, body: Req) -> Result<Res> {
         self.next += 1;
         let id = self.next;
-        let msg = pb::ClientMessage { id, body: Some(body) };
+        let msg = pb::ClientMessage {
+            id,
+            body: Some(body),
+        };
         self.ws.send(Message::binary(msg.encode_to_vec())).await?;
         loop {
             let frame = tokio::time::timeout(Duration::from_secs(15), self.ws.next())

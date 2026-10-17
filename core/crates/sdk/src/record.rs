@@ -13,7 +13,9 @@ fn headers(h: &[Header]) -> Value {
 
 fn timings(t: &Option<crate::wire::Timings>) -> Value {
     match t {
-        Some(t) => json!({"dns": t.dns, "connect": t.connect, "tls": t.tls, "request_sent": t.request_sent, "ttfb": t.ttfb, "download": t.download}),
+        Some(t) => {
+            json!({"dns": t.dns, "connect": t.connect, "tls": t.tls, "request_sent": t.request_sent, "ttfb": t.ttfb, "download": t.download})
+        }
         None => Value::Null,
     }
 }
@@ -36,11 +38,13 @@ fn bytes(b: &[u8]) -> Value {
 /// One protocol message as it arrived from an authenticated session.
 pub fn message(who: &Identity, msg: &Msg) -> Value {
     let mut v = match msg {
-        Msg::CallStart(m) => json!({"type": "call_start", "call_id": m.call_id, "started_at_ms": m.started_at_ms,
+        Msg::CallStart(m) => {
+            json!({"type": "call_start", "call_id": m.call_id, "started_at_ms": m.started_at_ms,
             "method": m.method, "url": m.url, "headers": headers(&m.headers), "http_version": m.http_version,
             "client_stack": m.client_stack, "route_template": m.route_template, "name": m.name,
             "owner": m.owner, "tag": m.tag, "screen": m.screen,
-            "request_body_truncated": m.request_body_truncated, "request_body_size": m.request_body_size}),
+            "request_body_truncated": m.request_body_truncated, "request_body_size": m.request_body_size})
+        }
         Msg::BodyChunk(m) => {
             let mut v = json!({"type": "body_chunk", "call_id": m.call_id, "part": part(m.part), "seq": m.seq,
                 "encoding": m.encoding, "last": m.last, "truncated": m.truncated});
@@ -54,14 +58,18 @@ pub fn message(who: &Identity, msg: &Msg) -> Value {
             }
             v
         }
-        Msg::ResponseStart(m) => json!({"type": "response_start", "call_id": m.call_id, "status": m.status,
-            "headers": headers(&m.headers), "http_version": m.http_version, "response_body_size": m.response_body_size}),
-        Msg::CallComplete(m) => json!({"type": "call_complete", "call_id": m.call_id, "ended_at_ms": m.ended_at_ms,
+        Msg::ResponseStart(m) => {
+            json!({"type": "response_start", "call_id": m.call_id, "status": m.status,
+            "headers": headers(&m.headers), "http_version": m.http_version, "response_body_size": m.response_body_size})
+        }
+        Msg::CallComplete(m) => {
+            json!({"type": "call_complete", "call_id": m.call_id, "ended_at_ms": m.ended_at_ms,
             "timings": timings(&m.timings), "from_cache": m.from_cache,
             "response_body_available": m.response_body_available, "request_body_available": m.request_body_available,
             "request_redacted": m.request_redacted, "response_redacted": m.response_redacted,
             "response_body_skipped": m.response_body_skipped, "request_body_skipped": m.request_body_skipped,
-            "response_body_size": m.response_body_size, "request_body_size": m.request_body_size}),
+            "response_body_size": m.response_body_size, "request_body_size": m.request_body_size})
+        }
         Msg::CallFailed(m) => json!({"type": "call_failed", "call_id": m.call_id, "kind": m.kind,
             "message": m.message, "timings": timings(&m.timings)}),
         Msg::BodyFetchResult(m) => json!({"type": "body_fetch_result", "call_id": m.call_id,
@@ -111,10 +119,24 @@ mod tests {
             app_id: "a".into(),
             ..Default::default()
         };
-        let v = message(&who, &Msg::CallStart(CallStart { call_id: "c".into(), url: "https://x/".into(), ..Default::default() }));
+        let v = message(
+            &who,
+            &Msg::CallStart(CallStart {
+                call_id: "c".into(),
+                url: "https://x/".into(),
+                ..Default::default()
+            }),
+        );
         assert_eq!(v["type"], "call_start");
         assert_eq!(v["device"], "d");
-        let v = message(&who, &Msg::BodyChunk(BodyChunk { call_id: "c".into(), data: b"hi".to_vec(), ..Default::default() }));
+        let v = message(
+            &who,
+            &Msg::BodyChunk(BodyChunk {
+                call_id: "c".into(),
+                data: b"hi".to_vec(),
+                ..Default::default()
+            }),
+        );
         assert_eq!(v["data_text"], "hi");
         assert_eq!(v["data_b64"], "aGk=");
     }

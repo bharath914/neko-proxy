@@ -45,7 +45,10 @@ impl Tab {
 }
 
 pub enum Pending {
-    Page { gen: u64, page: usize },
+    Page {
+        gen: u64,
+        page: usize,
+    },
     Detail(u64),
     Status,
     CaInfo,
@@ -400,14 +403,25 @@ impl App {
     }
 
     pub fn revoke_device(&mut self, device_id: &str, app_id: &str) {
-        self.device_op(pb::device_action_request::Kind::Revoke, 0, device_id, app_id);
+        self.device_op(
+            pb::device_action_request::Kind::Revoke,
+            0,
+            device_id,
+            app_id,
+        );
     }
 
     pub fn forget_device(&mut self, device_id: &str) {
         self.device_op(pb::device_action_request::Kind::Forget, 0, device_id, "");
     }
 
-    fn device_op(&mut self, kind: pb::device_action_request::Kind, id: u64, device: &str, app: &str) {
+    fn device_op(
+        &mut self,
+        kind: pb::device_action_request::Kind,
+        id: u64,
+        device: &str,
+        app: &str,
+    ) {
         self.send(
             Req::DeviceAction(pb::DeviceActionRequest {
                 kind: kind as i32,
@@ -489,10 +503,7 @@ impl App {
     }
 
     pub fn fetch_hosts(&mut self) {
-        self.send(
-            Req::Hosts(pb::HostsRequest { limit: 0 }),
-            Pending::Hosts,
-        );
+        self.send(Req::Hosts(pb::HostsRequest { limit: 0 }), Pending::Hosts);
     }
 
     pub fn fetch_rules(&mut self) {
@@ -775,7 +786,10 @@ impl App {
         self.send(Req::CaInfo(pb::CaInfoRequest {}), Pending::CaInfo);
         self.fetch_rules();
         self.send(Req::Watch(pb::WatchRequest {}), Pending::Watch);
-        self.send(Req::Approvals(pb::ListApprovalsRequest {}), Pending::Approvals);
+        self.send(
+            Req::Approvals(pb::ListApprovalsRequest {}),
+            Pending::Approvals,
+        );
         self.send(Req::McpInfo(pb::McpInfoRequest {}), Pending::Mcp);
         self.send(Req::SdkStatus(pb::SdkStatusRequest {}), Pending::SdkStatus);
         self.send(
@@ -908,7 +922,11 @@ impl App {
             }
         }
         self.devices = d;
-        if self.sdk.as_ref().is_some_and(|s| s.enabled != self.devices.enabled) {
+        if self
+            .sdk
+            .as_ref()
+            .is_some_and(|s| s.enabled != self.devices.enabled)
+        {
             self.send(Req::SdkStatus(pb::SdkStatusRequest {}), Pending::SdkStatus);
         }
     }

@@ -58,7 +58,11 @@ impl App {
             });
 
         // Below about 1040 px the host list becomes an icon rail.
-        let side_w = if root.available_width() < 1040.0 { 64.0 } else { 236.0 };
+        let side_w = if root.available_width() < 1040.0 {
+            64.0
+        } else {
+            236.0
+        };
         egui::Panel::left("sidebar")
             .exact_size(side_w)
             .resizable(false)

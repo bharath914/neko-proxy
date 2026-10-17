@@ -19,7 +19,9 @@ pub enum AdbStatus {
     /// No adb binary found; everything else keeps working.
     Unavailable,
     /// Watching. Serials that currently have the reverse in place.
-    Ready { devices: Vec<String> },
+    Ready {
+        devices: Vec<String>,
+    },
     Error(String),
 }
 
@@ -88,55 +90,57 @@ impl AdbWatcher {
             .iter()
             .filter_map(|k| std::env::var(k).ok())
             .collect();
-        let _ = std::thread::Builder::new().name("sdk-adb".into()).spawn(move || {
-            let adb = adb.or_else(|| find_adb(std::env::var("PATH").ok().as_deref(), &homes));
-            let Some(adb) = adb else {
-                *s.lock().unwrap() = AdbStatus::Unavailable;
-                return;
-            };
-            let mut done: HashSet<String> = HashSet::new();
-            while !st.load(Ordering::Relaxed) {
-                match Command::new(&adb)
-                    .arg("devices")
-                    .stdin(Stdio::null())
-                    .stderr(Stdio::null())
-                    .output()
-                {
-                    Ok(o) if o.status.success() => {
-                        let serials = parse_devices(&String::from_utf8_lossy(&o.stdout));
-                        done.retain(|d| serials.contains(d));
-                        for serial in &serials {
-                            if done.contains(serial) {
-                                continue;
+        let _ = std::thread::Builder::new()
+            .name("sdk-adb".into())
+            .spawn(move || {
+                let adb = adb.or_else(|| find_adb(std::env::var("PATH").ok().as_deref(), &homes));
+                let Some(adb) = adb else {
+                    *s.lock().unwrap() = AdbStatus::Unavailable;
+                    return;
+                };
+                let mut done: HashSet<String> = HashSet::new();
+                while !st.load(Ordering::Relaxed) {
+                    match Command::new(&adb)
+                        .arg("devices")
+                        .stdin(Stdio::null())
+                        .stderr(Stdio::null())
+                        .output()
+                    {
+                        Ok(o) if o.status.success() => {
+                            let serials = parse_devices(&String::from_utf8_lossy(&o.stdout));
+                            done.retain(|d| serials.contains(d));
+                            for serial in &serials {
+                                if done.contains(serial) {
+                                    continue;
+                                }
+                                let spec = format!("tcp:{port}");
+                                let ok = Command::new(&adb)
+                                    .args(["-s", serial, "reverse", &spec, &spec])
+                                    .stdin(Stdio::null())
+                                    .stdout(Stdio::null())
+                                    .stderr(Stdio::null())
+                                    .status()
+                                    .map(|s| s.success())
+                                    .unwrap_or(false);
+                                if ok {
+                                    done.insert(serial.clone());
+                                }
                             }
-                            let spec = format!("tcp:{port}");
-                            let ok = Command::new(&adb)
-                                .args(["-s", serial, "reverse", &spec, &spec])
-                                .stdin(Stdio::null())
-                                .stdout(Stdio::null())
-                                .stderr(Stdio::null())
-                                .status()
-                                .map(|s| s.success())
-                                .unwrap_or(false);
-                            if ok {
-                                done.insert(serial.clone());
-                            }
+                            let mut devices: Vec<String> = done.iter().cloned().collect();
+                            devices.sort();
+                            *s.lock().unwrap() = AdbStatus::Ready { devices };
                         }
-                        let mut devices: Vec<String> = done.iter().cloned().collect();
-                        devices.sort();
-                        *s.lock().unwrap() = AdbStatus::Ready { devices };
+                        Ok(_) => *s.lock().unwrap() = AdbStatus::Error("adb devices failed".into()),
+                        Err(e) => *s.lock().unwrap() = AdbStatus::Error(e.to_string()),
                     }
-                    Ok(_) => *s.lock().unwrap() = AdbStatus::Error("adb devices failed".into()),
-                    Err(e) => *s.lock().unwrap() = AdbStatus::Error(e.to_string()),
-                }
-                for _ in 0..30 {
-                    if st.load(Ordering::Relaxed) {
-                        break;
+                    for _ in 0..30 {
+                        if st.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
                     }
-                    std::thread::sleep(Duration::from_millis(100));
                 }
-            }
-        });
+            });
         AdbWatcher { status, stop }
     }
 
@@ -179,14 +183,32 @@ mod fake_adb {
             }
             std::thread::sleep(Duration::from_millis(50));
         }
-        assert_eq!(w.status(), AdbStatus::Ready { devices: vec!["R58M".into()] });
+        assert_eq!(
+            w.status(),
+            AdbStatus::Ready {
+                devices: vec!["R58M".into()]
+            }
+        );
         std::thread::sleep(Duration::from_millis(200));
         drop(w);
-        let calls: Vec<String> = std::fs::read_to_string(&log).unwrap().lines().map(String::from).collect();
+        let calls: Vec<String> = std::fs::read_to_string(&log)
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
         assert!(calls.contains(&"devices".to_string()));
-        assert_eq!(calls.iter().filter(|c| c.as_str() == "-s R58M reverse tcp:8897 tcp:8897").count(), 1);
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| c.as_str() == "-s R58M reverse tcp:8897 tcp:8897")
+                .count(),
+            1
+        );
         for c in &calls {
-            assert!(c == "devices" || c.contains(" reverse tcp:"), "unexpected adb call: {c}");
+            assert!(
+                c == "devices" || c.contains(" reverse tcp:"),
+                "unexpected adb call: {c}"
+            );
         }
     }
 
@@ -210,7 +232,10 @@ mod tests {
     #[test]
     fn parses_adb_devices() {
         let out = "List of devices attached\nemulator-5554\tdevice\nABC123\tunauthorized\nDEF456\toffline\n192.168.1.9:5555\tdevice\n\n";
-        assert_eq!(parse_devices(out), vec!["emulator-5554", "192.168.1.9:5555"]);
+        assert_eq!(
+            parse_devices(out),
+            vec!["emulator-5554", "192.168.1.9:5555"]
+        );
         assert!(parse_devices("List of devices attached\n\n").is_empty());
         // The daemon banner that adb prints on first use is skipped.
         let out = "* daemon not running; starting now at tcp:5037\n* daemon started successfully\nList of devices attached\nX\tdevice\n";
@@ -224,8 +249,14 @@ mod tests {
         std::fs::create_dir_all(&tools).unwrap();
         std::fs::write(tools.join("adb"), "").unwrap();
         let home = dir.path().display().to_string();
-        assert_eq!(find_adb(Some("/nonexistent"), std::slice::from_ref(&home)), Some(tools.join("adb")));
-        assert_eq!(find_adb(Some(&tools.display().to_string()), &[]), Some(tools.join("adb")));
+        assert_eq!(
+            find_adb(Some("/nonexistent"), std::slice::from_ref(&home)),
+            Some(tools.join("adb"))
+        );
+        assert_eq!(
+            find_adb(Some(&tools.display().to_string()), &[]),
+            Some(tools.join("adb"))
+        );
         assert_eq!(find_adb(Some("/nonexistent"), &[]), None);
     }
 }

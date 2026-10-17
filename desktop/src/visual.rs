@@ -159,7 +159,10 @@ fn breakpoints_rules_and_ai_screens() {
         app(&mut h).section = Section::Breakpoints;
         settle(&mut h);
         save(&mut h, &format!("breakpoints-{tag}"));
-        assert!(app(&mut h).bp_edit.is_some(), "the held message is open in the editor");
+        assert!(
+            app(&mut h).bp_edit.is_some(),
+            "the held message is open in the editor"
+        );
 
         app(&mut h).section = Section::Rules;
         settle(&mut h);
@@ -168,7 +171,6 @@ fn breakpoints_rules_and_ai_screens() {
         app(&mut h).rule_form = Some(crate::edit::RuleForm::new(crate::edit::RuleKind::Mock));
         settle(&mut h);
         save(&mut h, &format!("rules-editor-{tag}"));
-
     }
     // The AI group sits below the fold of a normal window; render it tall.
     let mut h = harness(false, (1100.0, 2100.0), 10);
@@ -278,8 +280,18 @@ fn lazy_bodies_load_on_demand() {
     app(&mut h).headers_open = false;
     settle(&mut h);
     // Opening the tab asked the device for the body; the fixture answers.
-    let c = app(&mut h).details.get(&2).unwrap().detail.sdk.clone().unwrap();
-    assert_eq!(c.response_body_state, proto::pb::BodyState::BodyPresent as i32);
+    let c = app(&mut h)
+        .details
+        .get(&2)
+        .unwrap()
+        .detail
+        .sdk
+        .clone()
+        .unwrap();
+    assert_eq!(
+        c.response_body_state,
+        proto::pb::BodyState::BodyPresent as i32
+    );
     assert!(app(&mut h).fetching.is_empty());
     save(&mut h, "sdk-lazy-loaded");
 }
@@ -317,7 +329,10 @@ fn ten_thousand_flows_scroll_and_filter_smoothly() {
     }
     let avg = t0.elapsed() / 120;
     eprintln!("10,000 rows: avg frame {avg:?}, worst {worst:?}");
-    assert!(avg < std::time::Duration::from_millis(16), "avg frame {avg:?}");
+    assert!(
+        avg < std::time::Duration::from_millis(16),
+        "avg frame {avg:?}"
+    );
 
     // Narrowing by device is one request to the core; the table is ready
     // within a few frames.

@@ -50,7 +50,11 @@ pub fn curl_command(rec: &FlowRecord) -> String {
         }
         // The SDK hides secrets on the device. Say so instead of pasting the
         // marker as if it were a real value.
-        let v = if v == "[redacted]" { REDACTED_PLACEHOLDER } else { v.as_str() };
+        let v = if v == "[redacted]" {
+            REDACTED_PLACEHOLDER
+        } else {
+            v.as_str()
+        };
         parts.push(format!("-H {}", quote(&format!("{k}: {v}"))));
         if v == REDACTED_PLACEHOLDER {
             redacted_any = true;
@@ -61,7 +65,9 @@ pub fn curl_command(rec: &FlowRecord) -> String {
     }
     let mut out = String::new();
     if redacted_any {
-        out.push_str("# Values hidden on the device are marked <REDACTED: put the real value here>\n");
+        out.push_str(
+            "# Values hidden on the device are marked <REDACTED: put the real value here>\n",
+        );
     }
     if has_body {
         match std::str::from_utf8(&body) {
@@ -96,7 +102,10 @@ mod tests {
             ..Default::default()
         };
         let c = curl_command(&rec);
-        assert!(c.contains("-H 'Authorization: <REDACTED: put the real value here>'"), "{c}");
+        assert!(
+            c.contains("-H 'Authorization: <REDACTED: put the real value here>'"),
+            "{c}"
+        );
         assert!(c.starts_with("# Values hidden on the device"));
         assert!(!c.contains("[redacted]"));
     }

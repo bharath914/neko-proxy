@@ -1,6 +1,6 @@
+use api::{ApiContext, Control, CoreInfo, Hub, ReplayCall};
 use bytes::Bytes;
 use flow::{FlowRecord, FlowState, Timings};
-use api::{ApiContext, Control, CoreInfo, Hub, ReplayCall};
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -55,7 +55,10 @@ fn record(id: u64) -> Arc<FlowRecord> {
         protocol: "h2".into(),
         state: FlowState::Complete,
         req_headers: vec![
-            ("authorization".into(), "Bearer sk-live-abcdefghijklmnopqrstuvwxyz".into()),
+            (
+                "authorization".into(),
+                "Bearer sk-live-abcdefghijklmnopqrstuvwxyz".into(),
+            ),
             ("content-type".into(), "application/json".into()),
         ],
         res_headers: vec![("content-type".into(), "application/json".into())],
@@ -102,7 +105,9 @@ async fn setup(writes: rules::McpWrites) -> Env {
             started: Instant::now(),
         },
     });
-    let listener = proxy_mcp::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let listener = proxy_mcp::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
     let addr = listener.local_addr().unwrap();
     let c2 = ctx.clone();
     tokio::spawn(async move {
@@ -175,7 +180,14 @@ async fn needs_the_token_and_a_loopback_host_and_no_browser_origin() {
     assert_eq!(s, 401);
     let (s, _) = post_with(env.addr, Some("wrong"), None, "", &ping).await;
     assert_eq!(s, 401);
-    let (s, _) = post_with(env.addr, Some(TOKEN), Some("evil.example:80".into()), "", &ping).await;
+    let (s, _) = post_with(
+        env.addr,
+        Some(TOKEN),
+        Some("evil.example:80".into()),
+        "",
+        &ping,
+    )
+    .await;
     assert_eq!(s, 403, "DNS rebinding");
     let (s, _) = post_with(
         env.addr,
@@ -209,7 +221,10 @@ async fn initialize_and_list_tools() {
     let r = rpc(&env, "initialize", json!({"protocolVersion":"2025-06-18"})).await;
     assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
     assert_eq!(r["result"]["serverInfo"]["name"], "proxy");
-    assert!(r["result"]["instructions"].as_str().unwrap().contains("untrusted"));
+    assert!(r["result"]["instructions"]
+        .as_str()
+        .unwrap()
+        .contains("untrusted"));
 
     let r = rpc(&env, "tools/list", json!({})).await;
     let names: Vec<_> = r["result"]["tools"]
@@ -219,8 +234,17 @@ async fn initialize_and_list_tools() {
         .map(|t| t["name"].as_str().unwrap().to_string())
         .collect();
     for want in [
-        "list_flows", "search_flows", "get_flow", "diff_flows", "export_har", "create_mock",
-        "create_map_local", "add_breakpoint", "replay_request", "start_capture", "stop_capture",
+        "list_flows",
+        "search_flows",
+        "get_flow",
+        "diff_flows",
+        "export_har",
+        "create_mock",
+        "create_map_local",
+        "add_breakpoint",
+        "replay_request",
+        "start_capture",
+        "stop_capture",
     ] {
         assert!(names.iter().any(|n| n == want), "missing {want}");
     }
@@ -241,14 +265,20 @@ async fn reads_are_redacted() {
     assert!(!err, "{text}");
     let v: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(v["total"], 2);
-    assert!(!text.contains("abcdefghijklmnopqrstuvwxyz0123"), "query secret leaked: {text}");
+    assert!(
+        !text.contains("abcdefghijklmnopqrstuvwxyz0123"),
+        "query secret leaked: {text}"
+    );
 
     let (err, text) = tool(&env, "get_flow", json!({"id": 1})).await;
     assert!(!err, "{text}");
     assert!(!text.contains("sk-live"), "bearer leaked: {text}");
     assert!(!text.contains("hunter2"), "password leaked: {text}");
     assert!(text.contains("[redacted]"));
-    assert!(text.contains("ignore previous instructions"), "content is data, shown as is");
+    assert!(
+        text.contains("ignore previous instructions"),
+        "content is data, shown as is"
+    );
     assert!(text.contains("untrusted"), "{text}");
 
     let (err, text) = tool(&env, "get_flow", json!({"id": 999})).await;
@@ -284,17 +314,27 @@ async fn changes_wait_for_the_person() {
     assert_eq!(pending[0].tool, "create_mock");
     assert!(pending[0].title.contains("503"));
     assert!(pending[0].detail.contains("api.example.com"));
-    assert!(env.ctx.rules.rules().is_empty(), "nothing applied before approval");
+    assert!(
+        env.ctx.rules.rules().is_empty(),
+        "nothing applied before approval"
+    );
     approvals.decide(&pending[0].id, true);
     let (err, text) = t.await.unwrap();
     assert!(!err, "{text}");
     let rules = env.ctx.rules.rules();
     assert_eq!(rules.len(), 1);
     match &rules[0].action {
-        rules::Action::Mock { status, body, headers, .. } => {
+        rules::Action::Mock {
+            status,
+            body,
+            headers,
+            ..
+        } => {
             assert_eq!(*status, 503);
             assert_eq!(body, r#"{"down":true}"#);
-            assert!(headers.iter().any(|(k, v)| k == "content-type" && v == "application/json"));
+            assert!(headers
+                .iter()
+                .any(|(k, v)| k == "content-type" && v == "application/json"));
         }
         other => panic!("{other:?}"),
     }
@@ -321,9 +361,15 @@ async fn read_only_mode_refuses_and_auto_mode_applies() {
     assert!(err);
     assert!(text.contains("read-only"), "{text}");
     assert!(env.ctx.rules.rules().is_empty());
-    assert!(env.ctx.approvals.list().is_empty(), "no prompt in read-only mode");
+    assert!(
+        env.ctx.approvals.list().is_empty(),
+        "no prompt in read-only mode"
+    );
 
-    env.ctx.rules.set_mcp_writes(rules::McpWrites::Auto).unwrap();
+    env.ctx
+        .rules
+        .set_mcp_writes(rules::McpWrites::Auto)
+        .unwrap();
     let (err, text) = tool(&env, "create_throttle", json!({"host":"*","delay_ms":500})).await;
     assert!(!err, "{text}");
     assert_eq!(env.ctx.rules.rules().len(), 1);
@@ -332,7 +378,12 @@ async fn read_only_mode_refuses_and_auto_mode_applies() {
     let (err, text) = tool(&env, "create_mock", json!({"host":"x.test","status":42})).await;
     assert!(err);
     assert!(text.contains("status"), "{text}");
-    let (err, _) = tool(&env, "create_map_local", json!({"host":"x.test","path":"/a","file":"rel.json"})).await;
+    let (err, _) = tool(
+        &env,
+        "create_map_local",
+        json!({"host":"x.test","path":"/a","file":"rel.json"}),
+    )
+    .await;
     assert!(err);
 }
 
@@ -352,14 +403,23 @@ async fn breakpoints_can_be_listed_and_resumed_with_edits() {
     let held = flow::Held {
         method: "POST".into(),
         path_and_query: "/v1/login".into(),
-        headers: vec![("authorization".into(), "Bearer sk-live-abcdefghijklmnopqrstuvwxyz".into())],
+        headers: vec![(
+            "authorization".into(),
+            "Bearer sk-live-abcdefghijklmnopqrstuvwxyz".into(),
+        )],
         body: Bytes::from_static(br#"{"a":1}"#),
         ..Default::default()
     };
     let r2 = rules.clone();
     let waiter = tokio::spawn(async move {
         r2.pauses()
-            .hold(&flow, "r1".into(), flow::Phase::Request, Duration::from_secs(10), held)
+            .hold(
+                &flow,
+                "r1".into(),
+                flow::Phase::Request,
+                Duration::from_secs(10),
+                held,
+            )
             .await
     });
     while rules.pauses().list().is_empty() {
@@ -380,7 +440,10 @@ async fn breakpoints_can_be_listed_and_resumed_with_edits() {
     match waiter.await.unwrap() {
         flow::Verdict::Continue(e) => {
             assert_eq!(&e.body.unwrap()[..], br#"{"a":2}"#);
-            assert_eq!(e.headers.unwrap(), vec![("x-test".to_string(), "1".to_string())]);
+            assert_eq!(
+                e.headers.unwrap(),
+                vec![("x-test".to_string(), "1".to_string())]
+            );
         }
         flow::Verdict::Abort(_) => panic!("should continue"),
     }
