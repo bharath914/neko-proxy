@@ -5,6 +5,9 @@ fn quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+/// Stands in for a header value the SDK hid on the device.
+pub const REDACTED_PLACEHOLDER: &str = "<REDACTED: put the real value here>";
+
 /// A `curl` command that repeats the request. Decodes the request body when it
 /// was content-encoded; notes when the captured body is incomplete.
 pub fn curl_command(rec: &FlowRecord) -> String {
@@ -32,6 +35,7 @@ pub fn curl_command(rec: &FlowRecord) -> String {
     parts.push(quote(&rec.url()));
 
     let mut compressed = false;
+    let mut redacted_any = false;
     for (k, v) in &rec.req_headers {
         let lk = k.to_ascii_lowercase();
         match lk.as_str() {
@@ -44,12 +48,21 @@ pub fn curl_command(rec: &FlowRecord) -> String {
             _ if lk.starts_with(':') => continue,
             _ => {}
         }
+        // The SDK hides secrets on the device. Say so instead of pasting the
+        // marker as if it were a real value.
+        let v = if v == "[redacted]" { REDACTED_PLACEHOLDER } else { v.as_str() };
         parts.push(format!("-H {}", quote(&format!("{k}: {v}"))));
+        if v == REDACTED_PLACEHOLDER {
+            redacted_any = true;
+        }
     }
     if compressed {
         parts.push("--compressed".into());
     }
     let mut out = String::new();
+    if redacted_any {
+        out.push_str("# Values hidden on the device are marked <REDACTED: put the real value here>\n");
+    }
     if has_body {
         match std::str::from_utf8(&body) {
             Ok(s) => {
@@ -70,6 +83,23 @@ pub fn curl_command(rec: &FlowRecord) -> String {
 mod tests {
     use super::*;
     use bytes::Bytes;
+
+    #[test]
+    fn redacted_headers_get_a_visible_placeholder() {
+        let rec = FlowRecord {
+            method: "GET".into(),
+            scheme: "https".into(),
+            host: "a.test".into(),
+            port: 443,
+            path: "/x".into(),
+            req_headers: vec![("Authorization".into(), "[redacted]".into())],
+            ..Default::default()
+        };
+        let c = curl_command(&rec);
+        assert!(c.contains("-H 'Authorization: <REDACTED: put the real value here>'"), "{c}");
+        assert!(c.starts_with("# Values hidden on the device"));
+        assert!(!c.contains("[redacted]"));
+    }
 
     #[test]
     fn post_with_json() {
