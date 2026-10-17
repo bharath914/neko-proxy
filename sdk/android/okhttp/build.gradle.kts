@@ -43,3 +43,11 @@ tasks.register<JavaExec>("bench") {
     val defaultCore = rootProject.layout.projectDirectory.file("../../target/debug/sdk-test-core").asFile.absolutePath
     systemProperty("sdk.testcore", providers.gradleProperty("sdkTestCore").orElse(defaultCore).get())
 }
+
+// `./gradlew :okhttp:e2e -Pargs="8897 http://127.0.0.1:18080/ 8899"`, used by sdk/scripts/e2e-jvm.sh.
+tasks.register<JavaExec>("e2e") {
+    group = "verification"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.proxy.inspector.E2eKt")
+    args = (providers.gradleProperty("args").orNull ?: "8897 http://127.0.0.1:18080/ 8899").split(" ")
+}

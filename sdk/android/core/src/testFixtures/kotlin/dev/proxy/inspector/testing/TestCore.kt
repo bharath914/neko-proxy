@@ -48,7 +48,7 @@ class TestCore private constructor(private val proc: Process, val port: Int, val
 }
 
 /** An in-memory [Platform] for JVM tests. */
-class TestPlatform(
+open class TestPlatform(
     override val storageDir: File = Files.createTempDirectory("inspector-state").toFile(),
     private val ports: () -> List<Int> = { emptyList() },
     override val appId: String = "com.demo.shop",
