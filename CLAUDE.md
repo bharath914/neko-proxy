@@ -110,10 +110,13 @@ Phase 1 = steps 1 and 2, Linux only, trimmed as described in `docs/phase-1.md`. 
 4. Phone pairing and SDK: QR flow, Android SDK first, then iOS SDK
 5. Reach: Linux and Windows packaging, HTTP/3, on-device Android capture, scripting
 
+## License
+
+Open source under `MIT OR Apache-2.0` (decided Oct 2026): `LICENSE-MIT`, `LICENSE-APACHE`. The repo is public at github.com/bharath914/proxy; the SDK Maven repository is at github.com/bharath914/proxy-sdk-maven (served by Pages).
+
 ## Open questions
 
 - Final project name (and crate/package names)
-- License: MIT vs Apache-2.0
 
 ## How to work in this repo
 

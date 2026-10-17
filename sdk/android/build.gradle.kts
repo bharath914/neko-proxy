@@ -34,13 +34,16 @@ subprojects {
                 pom {
                     name.set(artifactId)
                     description.set("In-app network inspector for debug builds: streams calls to the Proxy desktop app.")
-                    url.set("https://example.invalid/proxy")
+                    url.set("https://github.com/bharath914/proxy")
                     licenses {
                         license { name.set("MIT License"); url.set("https://opensource.org/license/mit") }
                         license { name.set("Apache License 2.0"); url.set("https://www.apache.org/licenses/LICENSE-2.0") }
                     }
-                    developers { developer { id.set("proxy"); name.set("Proxy contributors") } }
-                    scm { url.set("https://example.invalid/proxy.git") }
+                    developers { developer { id.set("bharath914"); name.set("Bharath Prakash"); url.set("https://github.com/bharath914") } }
+                    scm {
+                        url.set("https://github.com/bharath914/proxy")
+                        connection.set("scm:git:https://github.com/bharath914/proxy.git")
+                    }
                 }
             }
         }

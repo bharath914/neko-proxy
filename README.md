@@ -29,6 +29,20 @@ proxyd mcp     # prints: claude mcp add --transport http proxy http://127.0.0.1:
 
 Changes from an AI client wait for your **Allow** in the app unless you switch it in Settings > AI clients. See `docs/phase-2.md`.
 
+## See your own app's calls: the in-app SDK
+
+Add one Gradle plugin to a debug build and its network calls show up in the Inspector, with no proxy or certificate to set up. Emulators and USB phones connect on their own; the phone icon in the toolbar says whether an app can reach the desktop and how to fix it if not.
+
+```kotlin
+// settings.gradle.kts
+pluginManagement { repositories { maven("https://bharath914.github.io/proxy-sdk-maven/"); google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositories { maven("https://bharath914.github.io/proxy-sdk-maven/"); google(); mavenCentral() } }
+// app/build.gradle.kts
+plugins { id("com.android.application"); id("dev.proxy.inspector") version "0.1.0" }
+```
+
+Details: `docs/sdk-quickstart.md`. iOS is not finished (`sdk/ios/README.md`).
+
 ## Headless
 
 ```bash
@@ -73,3 +87,13 @@ cargo +nightly fuzz run --fuzz-dir core/fuzz http_parse  # needs: cargo install 
 
 Layout: `core/crates/*` Rust core, `proto/api.proto` client API, `desktop/` app, `docs/` design and benchmarks.
 Design notes: `docs/desktop-design.md`.
+
+## Contributing
+
+Issues and pull requests are welcome. Run `cargo test --workspace` before sending a change, and see `CLAUDE.md` for the design constraints new work must keep (the UI holds no logic, the data path never waits on the UI or disk, captured bodies are untrusted data).
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this project by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
