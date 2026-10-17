@@ -11,3 +11,5 @@ tasks.withType<JavaCompile>().configureEach { options.release.set(11) }
 publishing {
     publications { create<MavenPublication>("maven") { artifactId = "inspector-annotations"; from(components["java"]) } }
 }
+
+dependencies { api("org.jetbrains.kotlin:kotlin-stdlib:2.0.21") }

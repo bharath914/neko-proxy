@@ -8,6 +8,7 @@ java { withSourcesJar() }
 tasks.withType<JavaCompile>().configureEach { options.release.set(11) }
 
 dependencies {
+    api("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
     // Same public API as the real artifacts, no logic. @Inspect comes from the annotations artifact.
     api(project(":annotations"))
     compileOnly(libs.okhttp)

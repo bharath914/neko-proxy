@@ -10,6 +10,7 @@ java { withSourcesJar() }
 tasks.withType<JavaCompile>().configureEach { options.release.set(11) }
 
 dependencies {
+    api("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
     api(project(":annotations"))
     testImplementation(libs.junit)
     testFixturesApi("org.json:json:20250517")

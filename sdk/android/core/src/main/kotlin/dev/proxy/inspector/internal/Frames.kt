@@ -11,7 +11,8 @@ const val MAX_FRAME = 1 shl 20
 
 /** Length-prefixed frames: 4 bytes big-endian, then one [Envelope]. */
 object Frames {
-    fun write(out: OutputStream, env: Envelope) {
+    /** Returns the bytes written, length prefix included. */
+    fun write(out: OutputStream, env: Envelope): Int {
         val body = env.encode()
         require(body.size <= MAX_FRAME) { "frame of ${body.size} bytes" }
         val n = body.size
@@ -19,6 +20,7 @@ object Frames {
         buf[0] = (n ushr 24).toByte(); buf[1] = (n ushr 16).toByte(); buf[2] = (n ushr 8).toByte(); buf[3] = n.toByte()
         System.arraycopy(body, 0, buf, 4, n)
         out.write(buf)
+        return buf.size
     }
 
     /** Null at a clean end of stream between frames. */

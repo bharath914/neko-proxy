@@ -8,6 +8,7 @@ java { withSourcesJar() }
 tasks.withType<JavaCompile>().configureEach { options.release.set(11) }
 
 dependencies {
+    api("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
     api(project(":core"))
     // The app brings its own OkHttp and Retrofit; this module only needs them to compile.
     compileOnly(libs.okhttp)
@@ -30,4 +31,15 @@ tasks.test {
 
 publishing {
     publications { create<MavenPublication>("maven") { artifactId = "inspector-okhttp"; from(components["java"]) } }
+}
+
+// `./gradlew :okhttp:bench` runs the benchmark scenarios on the JVM.
+tasks.register<JavaExec>("bench") {
+    group = "verification"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.proxy.inspector.BenchKt")
+    systemProperty("repo.root", rootProject.layout.projectDirectory.dir("../..").asFile.absolutePath)
+    systemProperty("bench.out", rootProject.layout.buildDirectory.file("sdk-bench-android.md").get().asFile.absolutePath)
+    val defaultCore = rootProject.layout.projectDirectory.file("../../target/debug/sdk-test-core").asFile.absolutePath
+    systemProperty("sdk.testcore", providers.gradleProperty("sdkTestCore").orElse(defaultCore).get())
 }

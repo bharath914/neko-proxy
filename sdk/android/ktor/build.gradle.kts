@@ -8,6 +8,7 @@ java { withSourcesJar() }
 tasks.withType<JavaCompile>().configureEach { options.release.set(11) }
 
 dependencies {
+    api("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
     api(project(":core"))
     compileOnly(libs.ktor.client.core)
     compileOnly(libs.coroutines.core)

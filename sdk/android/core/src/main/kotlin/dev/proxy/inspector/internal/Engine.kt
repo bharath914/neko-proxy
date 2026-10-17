@@ -52,6 +52,9 @@ class Engine(
 
     fun dropped(): Long = queue.dropped()
 
+    /** Bytes written to the desktop since start, for the benchmarks. */
+    val bytesSent = java.util.concurrent.atomic.AtomicLong()
+
     @Synchronized
     fun start() {
         if (!stopped) return
@@ -286,7 +289,7 @@ class Engine(
         }, "inspector-read").apply { isDaemon = true; start() }
 
         log(LogLevel.INFO, "Connected to $desktop (${c.host}:${c.port}).")
-        val sink = Sink { Frames.write(out, it) }
+        val sink = Sink { bytesSent.addAndGet(Frames.write(out, it).toLong()) }
         var lastWrite = System.currentTimeMillis()
         try {
             while (!stopped && !readerDead.get()) {
@@ -350,16 +353,18 @@ object Bodies {
         }
     }
 
-    /** Raw deflate (no zlib header), kept only when it actually shrinks the chunk. */
+    /** One deflater per sender thread: creating one per chunk cost more than the compression saved on small bodies. */
+    private val deflater = ThreadLocal.withInitial { java.util.zip.Deflater(java.util.zip.Deflater.BEST_SPEED, true) }
+
+    /** Raw deflate (no zlib header), kept only when it actually shrinks the chunk. Chunks under 512 bytes go as they are. */
     fun deflateIfSmaller(raw: ByteArray): Pair<ByteArray, Int> {
-        if (raw.size < 256) return raw to Encoding.NONE
-        val d = java.util.zip.Deflater(java.util.zip.Deflater.BEST_SPEED, true)
-        try {
-            d.setInput(raw); d.finish()
-            val buf = ByteArray(raw.size)
-            val n = d.deflate(buf)
-            if (!d.finished() || n >= raw.size) return raw to Encoding.NONE
-            return buf.copyOf(n) to Encoding.DEFLATE
-        } finally { d.end() }
+        if (raw.size < 512) return raw to Encoding.NONE
+        val d = deflater.get()
+        d.reset()
+        d.setInput(raw); d.finish()
+        val buf = ByteArray(raw.size)
+        val n = d.deflate(buf)
+        if (!d.finished() || n >= raw.size) return raw to Encoding.NONE
+        return buf.copyOf(n) to Encoding.DEFLATE
     }
 }
