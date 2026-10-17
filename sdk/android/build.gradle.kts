@@ -6,7 +6,8 @@ plugins {
 // Every artifact shares one group and version. Change both in one place.
 allprojects {
     group = "dev.proxy.inspector"
-    version = "0.1.0"
+    // CI passes -PsdkVersion=X.Y.Z from the sdk-vX.Y.Z tag.
+    version = providers.gradleProperty("sdkVersion").getOrElse("0.1.0")
 }
 
 // The SDK is read by the apps' own Kotlin compilers, which may be older than the one building it

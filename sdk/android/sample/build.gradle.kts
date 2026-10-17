@@ -7,5 +7,5 @@ buildscript {
 plugins {
     id("com.android.application") version "9.4.1" apply false
     id("com.android.library") version "9.4.1" apply false
-    id("dev.proxy.inspector") version "0.1.0" apply false
+    id("dev.proxy.inspector") apply false
 }

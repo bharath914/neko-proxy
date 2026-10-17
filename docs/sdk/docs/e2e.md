@@ -3,7 +3,25 @@
 Run on 2026-10-17 on the Linux development machine. The checklist is from `09-testing-benchmarks.md`.
 **Items that need an Android emulator or device, an iOS Simulator or device, or a certificate-pinned app were not run.** They are listed as not run, with the reason.
 
-## What was actually run
+## Real device run (2026-10-17, Samsung Galaxy S24 Ultra, SM-S928B, USB)
+
+The sample app (`sdk/android/sample`), built with only `id("dev.proxy.inspector")` applied, on a physical phone over USB against a real `proxyd run --sdk` on this machine, with `sdk/test-server/server.py` reached through `adb reverse`.
+
+| Check | Result |
+|---|---|
+| App starts the SDK with no code (App Startup), connects over `adb reverse` (done by `proxyd` itself, `adb ready, 1 device(s)`) | **Pass** |
+| Pairing: code in Logcat (`Pairing code 457 580`) equals the one `proxyd devices list` showed | **Pass** |
+| Calls made before pairing are not captured, calls after pairing are | **Pass** (first launch captured nothing, second launch captured all) |
+| Retrofit `@Inspect` name, owner and route template, including `/status/{code}` | **Pass** |
+| A client created inside a library module is captured (plugin bytecode hook) | **Pass** (`/gzip`) |
+| Ktor on the OkHttp engine and on CIO with `install(InspectorPlugin)`, with `inspect(name = ...)`, streaming response whole | **Pass.** Each Ktor call appears once, with its name, though the OkHttp engine is instrumented too. |
+| Screen name from the resumed activity | **Pass** (`MainActivity`) |
+| Passwords hidden on the device | **Pass** for the request body (`"password":"[redacted]"` is what `proxyd export --no-redact` returns). The test server echoes the request inside a `body` field of its response; that copy is not hidden, since redaction is by key name. |
+| Counters | 14 calls, 0 dropped |
+
+Not done on the device: Wi-Fi/mDNS discovery (USB only), revoke and re-pair, cellular or pinned-app checks, release APK installed and exercised (its contents were verified, see below), a 60 s stream, benchmark runs.
+
+## What was run before that, without a device
 
 `sdk/scripts/e2e-jvm.sh`: a real `proxyd run --sdk` (the Linux core, its API and CLI), the real Android SDK engine (`sdk/android/core` and `okhttp`, on the JVM), OkHttp and Retrofit, and `sdk/test-server/server.py`.
 Output saved in `e2e-jvm-output.txt`. The desktop GUI was not driven by hand; the same API it uses (`devices.subscribe`, `device_action`, `search`) was exercised by the CLI and by `core/crates/api/tests`, and its screens are covered by headless renders (`PROXY_SHOT_DIR=... cargo test -p proxy-desktop`).
@@ -20,10 +38,10 @@ Output saved in `e2e-jvm-output.txt`. The desktop GUI was not driven by hand; th
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Android emulator, only the Gradle plugin, first request within 1 s | **Not run.** The Android emulator process crashes at startup on this host (SIGSEGV with `-gpu swiftshader_indirect`, `guest`, and `off`; with the API 37.1 image and an API 35 image). The plugin build and APK contents are verified instead (below). |
-| 2 | Retrofit call with `@Inspect` shows name, owner, route template | Pass on the JVM (see above). Not on a device. |
-| 3 | Ktor call including a streaming response | Pass on the JVM against CIO and OkHttp engines. Not on a device. |
-| 4 | USB phone with `adb reverse`, Wi-Fi off | **Not run** (no phone). The `adb reverse` logic is tested with a fake `adb` (`reverses_ready_devices_and_runs_nothing_else`); the Linux core reported `adb ready` with the real `adb`. |
+| 1 | Only the Gradle plugin applied; first request appears within 1 s | **Run on a real phone** (above); the 1 s timing was not measured. The emulator is **not run**: The Android emulator process crashes at startup on this host (SIGSEGV with `-gpu swiftshader_indirect`, `guest`, and `off`; with the API 37.1 image and an API 35 image). The plugin build and APK contents are verified instead (below). |
+| 2 | Retrofit call with `@Inspect` shows name, owner, route template | **Pass** on the phone and on the JVM. |
+| 3 | Ktor call including a streaming response | **Pass** on the phone (CIO and OkHttp engines) and on the JVM. |
+| 4 | USB phone with `adb reverse`, Wi-Fi off | **Pass** on the Galaxy S24 Ultra (Wi-Fi state was not changed or checked). The `adb reverse` logic is tested with a fake `adb` (`reverses_ready_devices_and_runs_nothing_else`); the Linux core reported `adb ready` with the real `adb`. |
 | 5 | Phone on Wi-Fi found through mDNS; codes match; revoke forces re-pair | Partly. mDNS advertisement is verified with a real browse in the same host (`the_service_is_advertised...`); codes match (above); revoke tested (`revoke_drops_the_session_and_forces_a_new_pairing`). No phone. |
 | 6 | iOS Simulator, URLSession and Alamofire | **Not run.** No Mac. See `sdk/ios/README.md`. |
 | 7 | iOS device on Wi-Fi with the Local Network prompt | **Not run.** |

@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.TextView
 import dev.proxy.inspector.Inspector
+import dev.proxy.inspector.InspectorPlugin
 import dev.proxy.inspector.inspect
 import dev.proxy.samplelib.LibraryClient
 import io.ktor.client.HttpClient
@@ -53,7 +54,7 @@ class MainActivity : Activity() {
 
         // Ktor on the OkHttp engine and on CIO. Calls are named with inspect(), a streaming response included.
         for ((name, engine) in listOf("okhttp" to OkHttp, "cio" to CIO)) {
-            val client = HttpClient(engine)
+            val client = HttpClient(engine) { install(InspectorPlugin) }
             client.get(base + "json") { inspect(name = "Ktor $name") }.bodyAsText()
             client.prepareGet(base + "sse?n=5&ms=100") { inspect(name = "Ktor $name events") }.execute { resp ->
                 val ch = resp.bodyAsChannel()
