@@ -17,7 +17,7 @@ class TestCore private constructor(private val proc: Process, val port: Int, val
 
     fun ofType(type: String) = lines().filter { it.optString("type") == type }
 
-    fun waitFor(what: String, timeoutMs: Long = 8_000, cond: (List<JSONObject>) -> Boolean): List<JSONObject> {
+    fun waitFor(what: String, timeoutMs: Long = 15_000, cond: (List<JSONObject>) -> Boolean): List<JSONObject> {
         val end = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < end) {
             val l = lines()

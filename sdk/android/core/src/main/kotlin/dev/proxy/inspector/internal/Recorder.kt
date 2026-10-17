@@ -111,6 +111,9 @@ class CallHandle(private val live: Live, info: CallInfo) {
 
     fun onRequestBody(b: ByteArray, off: Int, len: Int) { reqTee?.write(b, off, len) }
 
+    /** The body is about to be written again (a retry), so what was copied so far is stale. */
+    fun resetRequestBody() { if (reqTee != null) reqTee = Tee(cfg.bodyCapBytes) }
+
     fun responseStarted(status: Int, headers: List<Pair<String, String>>, httpVersion: String, size: Long) {
         resContentType = headers.firstOrNull { it.first.equals("content-type", true) }?.second.orEmpty()
         resSize = size
