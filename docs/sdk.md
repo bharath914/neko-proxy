@@ -1,4 +1,7 @@
-# Mobile SDK (planned, not started)
+# Mobile SDK (early design notes; superseded)
+
+> Built differently from this draft: see `docs/sdk/` (the plan), `docs/sdk-quickstart.md`, and `docs/sdk/docs/DEVIATIONS.md`. The SDK talks to its own TLS ingest port (8897) and pairs with a six-digit code instead of routing traffic through the proxy. This page is kept for the reasoning only.
+
 
 Replaces the Android and iOS companion apps. Instead of a separate app the person pairs and installs, the developer adds a small debug-only library to the app they are already building. Draft: the shape below is the plan to push back on before any code is written.
 

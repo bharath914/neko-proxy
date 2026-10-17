@@ -9,7 +9,7 @@ Design pages (open in a browser):
 
 ## Current scope: Phases 1 and 2, Linux only
 
-Built: the Rust capture core and Linux desktop app (`docs/phase-1.md`), then rules, breakpoints, replay and the MCP server (`docs/phase-2.md`). Still not started: phone pairing and the mobile SDK (`docs/sdk.md`), macOS, Windows, HTTP/3, scripting. Everything below describes the long-term design and constraints that new work must not contradict.
+Built: the Rust capture core and Linux desktop app (`docs/phase-1.md`), then rules, breakpoints, replay and the MCP server (`docs/phase-2.md`), then the in-app SDK: Rust ingest, Devices screen and Inspector changes, Android SDK with Gradle plugin, and an iOS package that is only partly verified (`docs/sdk/`, `docs/sdk/docs/e2e.md`, `docs/sdk/docs/DEVIATIONS.md`). Still not started: macOS, Windows, HTTP/3, scripting, route catalog and MCP tools for SDK data. Everything below describes the long-term design and constraints that new work must not contradict.
 
 ## Goals
 
@@ -118,8 +118,8 @@ Phase 1 = steps 1 and 2, Linux only, trimmed as described in `docs/phase-1.md`. 
 ## How to work in this repo
 
 - In-app SDK work: follow `docs/sdk/CLAUDE.md` and `docs/sdk/docs/10-tasks.md`. Deviations from that plan are in `docs/sdk/docs/DEVIATIONS.md`.
-- Phases 1 and 2 are built. Read `docs/phase-1.md` and `docs/phase-2.md` for scope and `docs/bench.md` for measured results. Phone pairing and the SDK (build order step 4) is next; do not start it until told.
+- Phases 1 and 2 and the in-app SDK are built. Read `docs/phase-1.md`, `docs/phase-2.md` and `docs/sdk-quickstart.md`; measured results are in `docs/bench.md` and `docs/sdk-bench.md`. SDK ingest port is 8897 (8898 is MCP). Not verified on a device or emulator: see `docs/sdk/docs/e2e.md`. The iOS Apple-only files have never been compiled.
 - Be terse. Scaffold and implement without asking for step-by-step approval; ask only when a decision is genuinely open.
 - Keep UI free of logic: all parsing, decoding, search and redaction live in the core.
-- Build and test: `cargo test --workspace`. Run the app: `cargo run --release -p proxy-desktop`. Package: `packaging/build.sh`.
+- Build and test: `cargo test --workspace`. SDK: `swift test` in `sdk/ios`; in `sdk/android`: `cargo build -p sdk --bins` first, then `./gradlew test :gradle-plugin:test`. Run the app: `cargo run --release -p proxy-desktop`. Package: `packaging/build.sh`.
 - Visual check without a window: `PROXY_SHOT_DIR=/some/dir cargo test -p proxy-desktop` writes PNGs of every screen.
