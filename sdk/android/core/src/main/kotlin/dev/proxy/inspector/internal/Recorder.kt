@@ -28,7 +28,30 @@ object Recorder {
         val live = Runtime.live ?: return null
         val host = hostOf(info.url)
         if (!live.hostAllowed(host)) return null
+        if (isDuplicate(info)) return null
         return CallHandle(live, info)
+    }
+
+    // Ktor on the OkHttp engine goes through an OkHttpClient. If that client is instrumented too,
+    // the same call would be recorded twice. The Ktor record has the metadata, so it wins: an OkHttp
+    // call for the same method and URL starting within 50 ms of a Ktor one is dropped.
+    private class Mark(val method: String, val url: String, val at: Long)
+    private val ktorMarks = java.util.ArrayDeque<Mark>()
+    private const val DEDUP_WINDOW_MS = 50L
+
+    private fun isDuplicate(info: CallInfo): Boolean {
+        val now = System.nanoTime() / 1_000_000L
+        synchronized(ktorMarks) {
+            while (ktorMarks.isNotEmpty() && now - ktorMarks.first.at > DEDUP_WINDOW_MS) ktorMarks.removeFirst()
+            if (info.clientStack == "ktor") { ktorMarks.addLast(Mark(info.method, info.url, now)); return false }
+            if (info.clientStack != "okhttp") return false
+            val it = ktorMarks.iterator()
+            while (it.hasNext()) {
+                val m = it.next()
+                if (m.method == info.method && m.url == info.url) { it.remove(); return true }
+            }
+        }
+        return false
     }
 
     private fun hostOf(url: String): String {
