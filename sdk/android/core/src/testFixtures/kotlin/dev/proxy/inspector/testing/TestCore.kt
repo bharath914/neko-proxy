@@ -13,7 +13,10 @@ import java.util.concurrent.CopyOnWriteArrayList
 /** A running `sdk-test-core`, the Rust ingest server every SDK test talks to. */
 class TestCore private constructor(private val proc: Process, val port: Int, val record: File, val dir: File) : AutoCloseable {
     fun lines(): List<JSONObject> =
-        if (!record.exists()) emptyList() else record.readLines().filter { it.isNotBlank() }.map { JSONObject(it) }
+        if (!record.exists()) emptyList() else record.readLines().filter { it.isNotBlank() }.mapNotNull {
+            // The last line may be half written while the server is still appending it.
+            try { JSONObject(it) } catch (e: org.json.JSONException) { null }
+        }
 
     fun ofType(type: String) = lines().filter { it.optString("type") == type }
 
