@@ -36,7 +36,8 @@ fn lines(p: &std::path::Path) -> Vec<serde_json::Value> {
     std::fs::read_to_string(p)
         .unwrap_or_default()
         .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
+        // The core may be mid-write: an unfinished last line is picked up on the next poll.
+        .filter_map(|l| serde_json::from_str(l).ok())
         .collect()
 }
 
