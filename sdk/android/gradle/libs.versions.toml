@@ -6,6 +6,9 @@ agp = "9.4.1"
 okhttp = "5.5.0"
 retrofit = "3.0.0"
 ktor = "3.6.0"
+# The Ktor module is compiled against the oldest supported Ktor so it also runs on newer ones (the reverse is not true:
+# compiled against 3.6, it crashed on an app using 3.1.2 with NoSuchMethodError in TypeInfo). Tests run on `ktor`.
+ktorOldest = "3.1.2"
 coroutines = "1.11.0"
 startup = "1.2.0"
 junit = "4.13.2"
@@ -15,6 +18,7 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version.ref = "okhttp" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-core-oldest = { module = "io.ktor:ktor-client-core", version.ref = "ktorOldest" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }

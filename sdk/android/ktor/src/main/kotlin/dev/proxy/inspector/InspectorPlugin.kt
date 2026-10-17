@@ -10,7 +10,7 @@ import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.plugins.api.ClientHook
 import io.ktor.client.plugins.isSaved
-import io.ktor.client.call.replaceResponse
+import io.ktor.client.plugins.observer.wrapWithContent
 import io.ktor.client.statement.HttpReceivePipeline
 import io.ktor.util.pipeline.PipelineContext
 import io.ktor.util.split
@@ -90,7 +90,7 @@ val InspectorPlugin = createClientPlugin("Inspector") {
             return@on
         }
         val (side, appSide) = response.rawContent.split(response)
-        val newResponse = response.call.replaceResponse { appSide }.response
+        val newResponse = response.call.wrapWithContent(appSide).response
         client.launch(start = CoroutineStart.UNDISPATCHED) {
             val buf = ByteArray(8192)
             try {

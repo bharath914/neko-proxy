@@ -12,7 +12,7 @@ dependencies {
     // Same public API as the real artifacts, no logic. @Inspect comes from the annotations artifact.
     api(project(":annotations"))
     compileOnly(libs.okhttp)
-    compileOnly(libs.ktor.client.core)
+    compileOnly(libs.ktor.client.core.oldest)
     testImplementation(libs.okhttp)
     testImplementation(libs.ktor.client.core)
     testImplementation(libs.coroutines.core)
