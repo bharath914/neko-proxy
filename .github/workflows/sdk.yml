@@ -1,0 +1,193 @@
+name: sdk
+
+# Builds and tests the in-app SDK (Rust ingest, Android SDK and Gradle plugin, iOS package) and packages it.
+#
+#   push / pull request touching the SDK   build, test, upload the archives as workflow artifacts
+#   tag sdk-vX.Y.Z                         the same, then a DRAFT GitHub release with the archives attached
+#   run by hand with publish_pages = true  also publishes the Maven repository to GitHub Pages
+#
+# Nothing becomes public by itself: the release is a draft, and Pages publishing needs the manual switch.
+# How to host the archives for other people: docs/sdk-hosting.md.
+on:
+  push:
+    branches: [main]
+    tags: ["sdk-v*"]
+    paths: ["sdk/**", "core/crates/sdk/**", "core/crates/store/**", "core/crates/flow/**", "proto/sdk*", ".github/workflows/sdk.yml"]
+  pull_request:
+    paths: ["sdk/**", "core/crates/sdk/**", "proto/sdk*", ".github/workflows/sdk.yml"]
+  workflow_dispatch:
+    inputs:
+      publish_pages:
+        description: "Publish the Maven repository to GitHub Pages (public)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/sdk-v* ]]; then v="${GITHUB_REF_NAME#sdk-v}"; else v="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"; echo "SDK version: $v"
+
+  rust:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests of everything the SDK touches
+        run: cargo test -p sdk -p proxy-store -p proxy-api -p proxy-decode -p flow
+      - name: The ingest server the SDK tests talk to
+        run: cargo build --release -p sdk --bins
+      - run: tar -C target/release -czf sdk-dev-tools-linux-x86_64.tar.gz sdk-test-core fake-device
+      # The binary the Android tests start, on its own so it lands at a known path.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-test-core
+          path: target/release/sdk-test-core
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-dev-tools
+          path: sdk-dev-tools-linux-x86_64.tar.gz
+
+  android:
+    needs: [version, rust]
+    runs-on: ubuntu-22.04
+    env:
+      SDK_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { build-root-directory: sdk/android }
+      - name: Android platform and build tools (OkHttp 5.5 needs compileSdk 37)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.1" "build-tools;36.0.0" >/dev/null
+      - uses: actions/download-artifact@v4
+        with: { name: sdk-test-core, path: devtools }
+      - run: chmod +x devtools/sdk-test-core
+      - name: JVM tests (core, OkHttp, Ktor, no-op API parity)
+        working-directory: sdk/android
+        run: ./gradlew test -PsdkVersion="$SDK_VERSION" -PsdkTestCore="$GITHUB_WORKSPACE/devtools/sdk-test-core" --console=plain
+      - name: Publish to a local Maven repository, then build real Android apps with the plugin (AGP 9 and 8)
+        working-directory: sdk/android
+        run: ./gradlew :gradle-plugin:test -PsdkVersion="$SDK_VERSION" --console=plain
+      - name: Sample app, debug and release (R8), and the release check
+        working-directory: sdk/android
+        run: ./gradlew publishAllToLocalRepo -PsdkVersion="$SDK_VERSION" && ./gradlew -p sample :app:assembleDebug :app:assembleRelease :app:verifyNoInspectorInRelease -PsdkVersion="$SDK_VERSION" --console=plain
+      - name: Archive
+        run: |
+          mkdir -p dist
+          # A Maven repository: unzip it and add `maven { url = uri("...") }` (docs/sdk-hosting.md).
+          (cd sdk/android/build/local-repo && zip -qr "$GITHUB_WORKSPACE/dist/proxy-inspector-android-maven-${SDK_VERSION}.zip" .)
+          cp sdk/android/sample/app/build/outputs/apk/debug/app-debug.apk "dist/inspector-sample-debug-${SDK_VERSION}.apk"
+          cd dist && sha256sum * > SHA256SUMS-android.txt && cat SHA256SUMS-android.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-sdk
+          if-no-files-found: error
+          path: dist/*
+      # The Maven repository as it will be served, for the Pages job.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-maven-repo
+          path: sdk/android/build/local-repo
+
+  ios:
+    needs: version
+    runs-on: macos-15
+    env:
+      SDK_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Portable core tests
+        working-directory: sdk/ios
+        run: swift test
+      - name: Release builds contain no capture code
+        working-directory: sdk/ios
+        continue-on-error: true
+        run: Scripts/verify-release.sh
+      # The Apple-only files (Network.framework, Keychain, URLSession, UIKit) were written without a Mac and have never
+      # been compiled. This step is where they get built for the first time. It does not fail the workflow yet.
+      - name: Compile for the iOS Simulator
+        working-directory: sdk/ios
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild -scheme ProxyInspector -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation build 2>&1 | tail -60
+      - name: Archive
+        run: |
+          mkdir -p dist
+          # Swift Package Manager needs Package.swift at the root of a repository; this archive is for local use and for mirroring.
+          (cd sdk/ios && zip -qr "$GITHUB_WORKSPACE/dist/proxy-inspector-ios-${SDK_VERSION}.zip" Package.swift Sources Scripts README.md)
+          cd dist && shasum -a 256 * > SHA256SUMS-ios.txt && cat SHA256SUMS-ios.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-sdk
+          path: dist/*
+
+  release:
+    needs: [version, rust, android, ios]
+    # The iOS job may be red while its Apple-only code is unverified; Android and Rust must be green.
+    if: startsWith(github.ref, 'refs/tags/sdk-v') && always() && needs.rust.result == 'success' && needs.android.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          pattern: "{android-sdk,ios-sdk,rust-dev-tools}"
+          merge-multiple: true
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd assets
+          cat SHA256SUMS-*.txt > SHA256SUMS || true
+          ls -la
+          gh release create "${GITHUB_REF_NAME}" --repo "$GITHUB_REPOSITORY" --draft --generate-notes \
+            --title "SDK ${{ needs.version.outputs.version }}" $(ls | grep -v '^SHA256SUMS-' )
+
+  pages:
+    needs: [android]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_pages
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: gh-pages, path: site }
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        with: { name: android-maven-repo, path: repo }
+      - name: Publish the Maven repository at /maven
+        run: |
+          set -e
+          if [ ! -d site/.git ]; then
+            rm -rf site; mkdir site; cd site; git init -q -b gh-pages
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"; cd ..
+          fi
+          mkdir -p site/maven && cp -r repo/. site/maven/
+          touch site/.nojekyll
+          cd site
+          git config user.name "github-actions"; git config user.email "actions@users.noreply.github.com"
+          git add -A && git commit -qm "Maven repository from ${GITHUB_SHA}" || echo "nothing new"
+          git push origin HEAD:gh-pages
+          echo "Published. Enable Pages for the gh-pages branch if you have not: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/maven/"
