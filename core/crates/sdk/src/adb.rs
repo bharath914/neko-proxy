@@ -18,9 +18,12 @@ pub enum AdbStatus {
     Off,
     /// No adb binary found; everything else keeps working.
     Unavailable,
-    /// Watching. Serials that currently have the reverse in place.
+    /// Watching. Serials that currently have the reverse in place, and devices adb lists but that cannot be used
+    /// yet, as `(serial, state)`: "unauthorized" (USB debugging not approved on the phone), "offline", "no
+    /// permissions" (udev), or "reverse failed".
     Ready {
         devices: Vec<String>,
+        blocked: Vec<(String, String)>,
     },
     Error(String),
 }
@@ -30,8 +33,8 @@ impl AdbStatus {
         match self {
             AdbStatus::Off => "adb off".into(),
             AdbStatus::Unavailable => "adb not found".into(),
-            AdbStatus::Ready { devices } if devices.is_empty() => "adb ready".into(),
-            AdbStatus::Ready { devices } => format!("adb ready, {} device(s)", devices.len()),
+            AdbStatus::Ready { devices, .. } if devices.is_empty() => "adb ready".into(),
+            AdbStatus::Ready { devices, .. } => format!("adb ready, {} device(s)", devices.len()),
             AdbStatus::Error(e) => format!("adb error: {e}"),
         }
     }
@@ -57,17 +60,31 @@ pub fn find_adb(path: Option<&str>, android_home: &[String]) -> Option<PathBuf> 
     None
 }
 
-/// Serials in state `device` from `adb devices` output. Offline and
-/// unauthorized devices are skipped.
-pub fn parse_devices(out: &str) -> Vec<String> {
+/// Every `(serial, state)` in `adb devices` output. The state is "device", "unauthorized", "offline",
+/// "no permissions" and so on; the explanation adb appends to "no permissions" is dropped.
+pub fn parse_states(out: &str) -> Vec<(String, String)> {
     out.lines()
         .skip_while(|l| !l.starts_with("List of devices"))
         .skip(1)
         .filter_map(|l| {
-            let mut it = l.split_whitespace();
-            let serial = it.next()?;
-            (it.next()? == "device").then(|| serial.to_string())
+            let (serial, rest) = l.trim().split_once(|c: char| c.is_whitespace())?;
+            let rest = rest.trim();
+            let state = if rest.starts_with("no permissions") {
+                "no permissions"
+            } else {
+                rest.split_whitespace().next()?
+            };
+            Some((serial.to_string(), state.to_string()))
         })
+        .collect()
+}
+
+/// Serials in state `device` from `adb devices` output. Offline and
+/// unauthorized devices are skipped.
+pub fn parse_devices(out: &str) -> Vec<String> {
+    parse_states(out)
+        .into_iter()
+        .filter_map(|(serial, state)| (state == "device").then_some(serial))
         .collect()
 }
 
@@ -107,7 +124,14 @@ impl AdbWatcher {
                         .output()
                     {
                         Ok(o) if o.status.success() => {
-                            let serials = parse_devices(&String::from_utf8_lossy(&o.stdout));
+                            let states = parse_states(&String::from_utf8_lossy(&o.stdout));
+                            let serials: Vec<String> = states
+                                .iter()
+                                .filter(|(_, st)| st == "device")
+                                .map(|(s, _)| s.clone())
+                                .collect();
+                            let mut blocked: Vec<(String, String)> =
+                                states.into_iter().filter(|(_, st)| st != "device").collect();
                             done.retain(|d| serials.contains(d));
                             for serial in &serials {
                                 if done.contains(serial) {
@@ -124,11 +148,14 @@ impl AdbWatcher {
                                     .unwrap_or(false);
                                 if ok {
                                     done.insert(serial.clone());
+                                } else {
+                                    blocked.push((serial.clone(), "reverse failed".into()));
                                 }
                             }
                             let mut devices: Vec<String> = done.iter().cloned().collect();
                             devices.sort();
-                            *s.lock().unwrap() = AdbStatus::Ready { devices };
+                            blocked.sort();
+                            *s.lock().unwrap() = AdbStatus::Ready { devices, blocked };
                         }
                         Ok(_) => *s.lock().unwrap() = AdbStatus::Error("adb devices failed".into()),
                         Err(e) => *s.lock().unwrap() = AdbStatus::Error(e.to_string()),
@@ -178,7 +205,7 @@ mod fake_adb {
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
         let w = AdbWatcher::start_with(8897, Some(script));
         for _ in 0..100 {
-            if matches!(w.status(), AdbStatus::Ready { ref devices } if !devices.is_empty()) {
+            if matches!(w.status(), AdbStatus::Ready { ref devices, .. } if !devices.is_empty()) {
                 break;
             }
             std::thread::sleep(Duration::from_millis(50));
@@ -186,7 +213,8 @@ mod fake_adb {
         assert_eq!(
             w.status(),
             AdbStatus::Ready {
-                devices: vec!["R58M".into()]
+                devices: vec!["R58M".into()],
+                blocked: vec![("BAD".into(), "unauthorized".into())],
             }
         );
         std::thread::sleep(Duration::from_millis(200));
@@ -237,6 +265,16 @@ mod tests {
             vec!["emulator-5554", "192.168.1.9:5555"]
         );
         assert!(parse_devices("List of devices attached\n\n").is_empty());
+        let out = "List of devices attached\nABC123\tunauthorized\nDEF456\toffline\n????????????\tno permissions (user in plugdev group; are your udev rules wrong?); see [http://developer.android.com/tools/device.html]\nOK1\tdevice\n";
+        assert_eq!(
+            parse_states(out),
+            vec![
+                ("ABC123".to_string(), "unauthorized".to_string()),
+                ("DEF456".to_string(), "offline".to_string()),
+                ("????????????".to_string(), "no permissions".to_string()),
+                ("OK1".to_string(), "device".to_string()),
+            ]
+        );
         // The daemon banner that adb prints on first use is skipped.
         let out = "* daemon not running; starting now at tcp:5037\n* daemon started successfully\nList of devices attached\nX\tdevice\n";
         assert_eq!(parse_devices(out), vec!["X"]);

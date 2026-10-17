@@ -2,10 +2,11 @@
 
 See your app's network calls in the desktop app. No proxy, no certificate, no Wi-Fi settings. Debug builds only.
 
-## Desktop (once)
+## Desktop
 
-1. `cargo run --release -p proxy-desktop`, or run `proxyd run --sdk` and use the CLI.
-2. Open **Devices**, turn on **Accept SDK connections**. (The listener is off every time the app starts, on purpose.)
+Start the app (`cargo run --release -p proxy-desktop`) or `proxyd run`. SDK connections are on from the start, and the choice is remembered.
+
+The phone icon in the top bar says whether an app can connect right now: green ready, amber needs you, red not working, grey off. Click it for the checks and the fix for each one that fails (port in use, USB debugging not approved on the phone, `adb` missing or without udev permission, firewall blocking Wi-Fi phones). `proxyd sdk status` prints the same.
 
 ## Android (one line)
 
@@ -18,8 +19,8 @@ plugins {
 ```
 
 Run the app on an emulator, a USB phone (needs `adb` on this computer) or a phone on the same Wi-Fi.
-The Devices screen shows a pairing request with a six-digit code. The same code is in Logcat (`Inspector`) and in a toast.
-If they match, press **Allow**. Calls appear in the Inspector with an `SDK` badge, the screen, and (for Retrofit) the route template.
+An emulator, simulator or USB phone connects on its own: a toast says so and the calls appear in the Inspector with an `SDK` badge, the screen, and (for Retrofit) the route template. This is the **Accept emulators, simulators and USB phones automatically** switch on Devices, on by default.
+A phone on Wi-Fi still asks. The Devices screen shows a pairing request with a six-digit code, the same code is in Logcat (`Inspector`) and in a toast, and you press **Allow** if they match. The **Phones on Wi-Fi** switch turns the network side off (this computer only).
 
 Name calls if you like: `@Inspect(name = "Apply coupon", owner = "payments")` on a Retrofit method, or `inspect(name = ...)` on a Ktor request.
 
@@ -32,7 +33,10 @@ Not built yet. The plan is `Inspector.start()`, see `docs/sdk/docs/07-ios-sdk.md
 ## Headless
 
 ```
-proxyd run --sdk
+proxyd run                      # SDK connections are on by default; --sdk forces them on for one run
+proxyd sdk set lan off          # this computer only (no Wi-Fi phones)
+proxyd sdk set auto-accept-local off   # every device asks
+proxyd sdk status               # health and the fix for anything wrong
 proxyd devices list
 proxyd devices allow <id>      # after checking the code matches the app's log
 proxyd flows --source sdk

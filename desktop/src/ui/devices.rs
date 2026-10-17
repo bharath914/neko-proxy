@@ -199,6 +199,27 @@ impl App {
             text(ui, "Connecting to the core…", Role::Callout, st.p.text2);
             return;
         };
+        if s.enabled {
+            // The two choices that decide who gets in without a prompt and who can reach this computer at all.
+            ui.horizontal(|ui| {
+                let (mut local, mut lan) = (s.auto_accept_local, s.lan);
+                let mut changed = false;
+                changed |= widgets::toggle(ui, st, &mut local).changed();
+                text(
+                    ui,
+                    "Accept emulators, simulators and USB phones automatically",
+                    Role::Callout,
+                    st.p.text,
+                );
+                ui.add_space(14.0);
+                changed |= widgets::toggle(ui, st, &mut lan).changed();
+                text(ui, "Phones on Wi-Fi", Role::Callout, st.p.text);
+                if changed {
+                    self.set_sdk_settings(lan, local);
+                }
+            });
+            ui.add_space(4.0);
+        }
         ui.horizontal_wrapped(|ui| {
             if s.enabled {
                 let addr = s

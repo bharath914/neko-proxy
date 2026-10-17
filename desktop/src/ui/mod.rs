@@ -4,6 +4,7 @@ mod breakpoints;
 mod detail;
 mod devices;
 pub mod icons;
+mod link;
 mod overlay;
 mod rules;
 mod settings;
@@ -43,6 +44,7 @@ impl App {
         self.follow_system(ctx);
         self.step_theme(ctx);
         self.refresh_hosts(ctx);
+        self.poll_sdk(ctx);
         self.shortcuts(ctx);
 
         let p: Palette = self.st.p.clone();

@@ -62,6 +62,15 @@ enum SdkAction {
     Disable(SocketArg),
     /// Port, certificate fingerprint, adb and discovery state, drop counters.
     Status(SocketArg),
+    /// Change a remembered setting: `proxyd sdk set lan off`, `proxyd sdk set auto-accept-local on`.
+    Set {
+        #[arg(value_parser = ["lan", "auto-accept-local"])]
+        key: String,
+        #[arg(value_parser = ["on", "off"])]
+        value: String,
+        #[command(flatten)]
+        s: SocketArg,
+    },
 }
 
 #[derive(Subcommand)]
@@ -380,7 +389,8 @@ fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
     if json {
         let v = serde_json::json!({
             "available": st.available, "enabled": st.enabled, "port": st.port,
-            "fingerprint": st.fingerprint, "desktop_name": st.desktop_name,
+            "fingerprint": st.fingerprint, "desktop_name": st.desktop_name, "health": st.health,
+            "checks": st.checks.iter().map(|c| serde_json::json!({"id": c.id, "level": c.level, "title": c.title, "detail": c.detail, "fix": c.fix})).collect::<Vec<_>>(),
             "listening": st.listening, "adb": st.adb_state, "adb_devices": st.adb_devices,
             "discovery": st.discovery_state, "sessions": st.sessions,
             "dropped_events": st.stats.as_ref().map(|s| s.dropped_events),
@@ -393,8 +403,10 @@ fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
         println!("This core runs without the SDK listener.");
         return;
     }
-    println!("SDK connections  {}", if st.enabled { "on" } else { "off" });
+    println!("SDK connections  {}  ({})", if st.enabled { "on" } else { "off" }, st.health);
     println!("Port             {}", st.port);
+    println!("Wi-Fi phones     {}", if st.lan { "allowed (they need an Allow)" } else { "off (this computer only)" });
+    println!("Auto-accept      {}", if st.auto_accept_local { "connections from this computer" } else { "off, every device asks" });
     println!("Fingerprint      {}", st.fingerprint);
     for l in &st.listening {
         println!("Listening on     {l}");
@@ -410,6 +422,16 @@ fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
         }
     );
     println!("Sessions         {}", st.sessions);
+    // Only what needs a person; the rest is the happy path.
+    for c in st.checks.iter().filter(|c| matches!(c.level.as_str(), "warn" | "error")) {
+        println!("{:<16} {}", if c.level == "error" { "Problem" } else { "Attention" }, c.title);
+        if !c.detail.is_empty() {
+            println!("{:<16} {}", "", c.detail);
+        }
+        if !c.fix.is_empty() {
+            println!("{:<16} fix: {}", "", c.fix);
+        }
+    }
     if let Some(s) = &st.stats {
         println!(
             "Calls            {} (dropped: {} events, {} chunks, {} calls)",
@@ -430,6 +452,19 @@ async fn sdk_cmd(action: SdkAction) -> Result<()> {
             Req::SdkSetEnabled(api::pb::SdkSetEnabledRequest { enabled: false }),
         ),
         SdkAction::Status(s) => (s, Req::SdkStatus(api::pb::SdkStatusRequest {})),
+        SdkAction::Set { key, value, s } => {
+            // Read the current state first, so only the named setting changes.
+            let mut c = connect(&s).await?;
+            let Res::SdkStatus(cur) = c.call(Req::SdkStatus(api::pb::SdkStatusRequest {})).await? else {
+                bail!("unexpected answer from the core")
+            };
+            let on = value == "on";
+            let (lan, auto) = if key == "lan" { (on, cur.auto_accept_local) } else { (cur.lan, on) };
+            (
+                s,
+                Req::SdkSetSettings(api::pb::SdkSetSettingsRequest { enabled: cur.enabled, lan, auto_accept_local: auto }),
+            )
+        }
     };
     let mut c = connect(&s).await?;
     match c.call(req).await? {

@@ -120,6 +120,10 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
     let store = store::Store::open(&dir.path().join("data")).unwrap();
     let hub = Hub::new();
     let sdk = with_sdk.then(|| {
+        // These tests walk through the pairing prompt, so connections from this computer must not skip it.
+        sdk::SdkSettings { auto_accept_local: false, ..Default::default() }
+            .save(&dir.path().join("sdk"))
+            .unwrap();
         let mut o = sdk::SdkOptions::new(dir.path().join("sdk"));
         o.port = 0;
         o.bind = [127, 0, 0, 1].into();
@@ -869,6 +873,12 @@ async fn devices_pairing_flow_over_the_api() {
         Res::SdkStatus(s) => {
             assert!(s.enabled);
             assert_eq!(s.fingerprint.len(), 64);
+            assert!(
+                s.checks.iter().any(|c| c.id == "listener" && c.level == "ok"),
+                "{:?}",
+                s.checks
+            );
+            assert!(!s.health.is_empty() && s.health != "off" && s.health != "problem", "{}", s.health);
             s.listening[0]
                 .rsplit(':')
                 .next()
@@ -971,6 +981,35 @@ async fn devices_pairing_flow_over_the_api() {
         .await
     {
         Res::Error(e) => assert_eq!(e.code, "not_found"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn sdk_settings_round_trip_and_show_in_the_checks() {
+    let (mut c, _ctx, _dir) = setup_with(true).await;
+    let set = |lan, auto| {
+        Req::SdkSetSettings(pb::SdkSetSettingsRequest { enabled: true, lan, auto_accept_local: auto })
+    };
+    match c.call(set(false, true)).await {
+        Res::SdkStatus(s) => {
+            assert!(s.enabled && !s.lan && s.auto_accept_local);
+            assert!(s.listening.iter().all(|a| a.starts_with("127.0.0.1")), "{:?}", s.listening);
+            assert!(s.checks.iter().any(|c| c.id == "auto-accept" && c.level == "ok"));
+            assert!(s.checks.iter().any(|c| c.id == "wifi" && c.level == "info"));
+        }
+        other => panic!("{other:?}"),
+    }
+    match c.call(set(false, false)).await {
+        Res::SdkStatus(s) => assert!(s.checks.iter().any(|c| c.id == "auto-accept" && c.level == "info")),
+        other => panic!("{other:?}"),
+    }
+    // Turning it off is "off", not a problem.
+    match c
+        .call(Req::SdkSetSettings(pb::SdkSetSettingsRequest { enabled: false, lan: false, auto_accept_local: false }))
+        .await
+    {
+        Res::SdkStatus(s) => assert_eq!(s.health, "off"),
         other => panic!("{other:?}"),
     }
 }

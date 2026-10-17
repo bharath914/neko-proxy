@@ -653,7 +653,7 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
         Req::McpInfo(_) => mcp_info(&ctx, id),
         Req::SdkStatus(_) => pb::ServerMessage {
             id,
-            body: Some(Res::SdkStatus(crate::sdk_api::status(ctx.sdk.as_deref()))),
+            body: Some(Res::SdkStatus(crate::sdk_api::status(ctx.sdk.as_deref()).await)),
         },
         Req::SdkSetEnabled(r) => {
             let Some(sdk) = &ctx.sdk else {
@@ -662,9 +662,28 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             match sdk.set_enabled(r.enabled).await {
                 Ok(()) => pb::ServerMessage {
                     id,
-                    body: Some(Res::SdkStatus(crate::sdk_api::status(Some(sdk)))),
+                    body: Some(Res::SdkStatus(crate::sdk_api::status(Some(sdk)).await)),
                 },
                 Err(e) => error(id, "sdk", format!("could not change SDK connections: {e}")),
+            }
+        }
+        Req::SdkSetSettings(r) => {
+            let Some(sdk) = &ctx.sdk else {
+                return error(id, "unavailable", "this core runs without the SDK listener");
+            };
+            let res = sdk
+                .update_settings(|s| {
+                    s.enabled = r.enabled;
+                    s.lan = r.lan;
+                    s.auto_accept_local = r.auto_accept_local;
+                })
+                .await;
+            match res {
+                Ok(_) => pb::ServerMessage {
+                    id,
+                    body: Some(Res::SdkStatus(crate::sdk_api::status(Some(sdk)).await)),
+                },
+                Err(e) => error(id, "sdk", format!("could not change SDK settings: {e}")),
             }
         }
         Req::RegenerateSdkCert(_) => {
@@ -674,7 +693,7 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             match sdk.regenerate_certificate().await {
                 Ok(()) => pb::ServerMessage {
                     id,
-                    body: Some(Res::SdkStatus(crate::sdk_api::status(Some(sdk)))),
+                    body: Some(Res::SdkStatus(crate::sdk_api::status(Some(sdk)).await)),
                 },
                 Err(e) => error(id, "sdk", e.to_string()),
             }

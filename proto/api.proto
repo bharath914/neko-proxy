@@ -54,6 +54,7 @@ message ClientMessage {
     SetDeviceConfigRequest set_device_config = 40;
     FetchBodyRequest fetch_body = 41;
     RegenerateSdkCertRequest regenerate_sdk_cert = 42;
+    SdkSetSettingsRequest sdk_set_settings = 43;
   }
 }
 
@@ -734,6 +735,13 @@ message SdkSetEnabledRequest {
   bool enabled = 1;
 }
 message RegenerateSdkCertRequest {}
+
+// Remembered across restarts. The answer is the new SdkStatus.
+message SdkSetSettingsRequest {
+  bool enabled = 1;
+  bool lan = 2;
+  bool auto_accept_local = 3;
+}
 message OkResponse {}
 
 message SdkStats {
@@ -762,6 +770,19 @@ message SdkStatus {
   string discovery_error = 12;
   uint32 sessions = 13;
   SdkStats stats = 14;
+  bool lan = 15;                // also listening on the network, so phones on Wi-Fi find this computer
+  bool auto_accept_local = 16;  // connections from this computer (USB, emulator, simulator) skip the prompt
+  string health = 17;           // off | ok | attention | problem: can an app connect right now
+  repeated SdkCheck checks = 18;
+}
+
+// One thing that decides whether an app can connect, and how to fix it when it does not.
+message SdkCheck {
+  string id = 1;      // listener | settings | auto-accept | adb | wifi | firewall | discovery | pending
+  string level = 2;   // ok | info | warn | error
+  string title = 3;
+  string detail = 4;
+  string fix = 5;     // empty when nothing is needed
 }
 
 message DevicesSubscribeRequest {}

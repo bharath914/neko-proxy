@@ -59,7 +59,13 @@ impl Harness {
     }
 
     pub async fn with(f: impl FnOnce(&mut SdkOptions)) -> Harness {
+        // Most tests exercise the pairing prompt, so connections from this computer must not skip it.
+        Self::with_settings(f, sdk::SdkSettings { auto_accept_local: false, ..Default::default() }).await
+    }
+
+    pub async fn with_settings(f: impl FnOnce(&mut SdkOptions), settings: sdk::SdkSettings) -> Harness {
         let dir = tempfile::tempdir().unwrap();
+        settings.save(&dir.path().join("sdk")).unwrap();
         let sink = Arc::new(Collect::default());
         let store = store::Store::open(&dir.path().join("store")).unwrap();
         let mut opts = SdkOptions::new(dir.path().join("sdk"));

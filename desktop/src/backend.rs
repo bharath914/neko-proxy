@@ -280,6 +280,8 @@ struct DemoState {
     approvals: Vec<pb::Approval>,
     mcp_writes: i32,
     sdk_enabled: bool,
+    sdk_lan: bool,
+    sdk_auto_accept: bool,
     devices: pb::DevicesSnapshot,
 }
 
@@ -303,6 +305,8 @@ impl DemoBackend {
                 approvals: demo_approvals(),
                 mcp_writes: 0,
                 sdk_enabled: true,
+                sdk_lan: true,
+                sdk_auto_accept: true,
                 devices: demo_devices(),
             }),
             next: AtomicU64::new(1),
@@ -1157,7 +1161,69 @@ fn demo_sdk(s: &DemoState) -> Res {
         discovery_error: String::new(),
         sessions: 3,
         stats: Some(pb::SdkStats::default()),
+        lan: s.sdk_lan,
+        auto_accept_local: s.sdk_auto_accept,
+        health: if !s.sdk_enabled {
+            "off"
+        } else if s.devices.pending.is_empty() {
+            "ok"
+        } else {
+            "attention"
+        }
+        .into(),
+        checks: demo_checks(s),
     })
+}
+
+fn demo_checks(s: &DemoState) -> Vec<pb::SdkCheck> {
+    let c = |id: &str, level: &str, title: &str, detail: &str, fix: &str| pb::SdkCheck {
+        id: id.into(),
+        level: level.into(),
+        title: title.into(),
+        detail: detail.into(),
+        fix: fix.into(),
+    };
+    if !s.sdk_enabled {
+        return vec![c(
+            "listener",
+            "warn",
+            "SDK connections are off",
+            "Apps with the SDK cannot connect.",
+            "Turn on Accept SDK connections in Devices.",
+        )];
+    }
+    let mut v = vec![
+        c("listener", "ok", "Accepting SDK connections", "Listening on port 8897.", ""),
+        c(
+            "auto-accept",
+            if s.sdk_auto_accept { "ok" } else { "info" },
+            if s.sdk_auto_accept {
+                "Emulators and USB phones connect on their own"
+            } else {
+                "Every device asks first"
+            },
+            "",
+            "",
+        ),
+        c("adb", "ok", "adb is ready", "1 device(s) ready.", ""),
+        c(
+            "adb",
+            "warn",
+            "R58M999 is waiting for USB debugging approval",
+            "This device cannot send traffic yet.",
+            "Unlock the phone and tap Allow on the \"Allow USB debugging?\" prompt.",
+        ),
+    ];
+    if s.sdk_lan {
+        v.push(c(
+            "firewall",
+            "warn",
+            "The firewall blocks port 8897",
+            "Phones on Wi-Fi are stopped before they reach the proxy. USB and emulators are not affected.",
+            "sudo firewall-cmd --add-port=8897/tcp --permanent && sudo firewall-cmd --reload",
+        ));
+    }
+    v
 }
 
 fn demo_now_ms() -> i64 {
@@ -1555,6 +1621,12 @@ impl Backend for DemoBackend {
                 s.devices.enabled = r.enabled;
                 let snap = s.devices.clone();
                 s.queue.push(Event::Devices(snap));
+                demo_sdk(&s)
+            }
+            Req::SdkSetSettings(r) => {
+                s.sdk_enabled = r.enabled;
+                s.sdk_lan = r.lan;
+                s.sdk_auto_accept = r.auto_accept_local;
                 demo_sdk(&s)
             }
             Req::RegenerateSdkCert(_) => demo_sdk(&s),

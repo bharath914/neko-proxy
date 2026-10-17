@@ -92,6 +92,11 @@ impl App {
             self.proxy_tab = 0;
             self.open_sheet(crate::app::Sheet::Proxy);
         }
+        let link = self.link_button(&mut right);
+        if link.clicked() {
+            self.link_open = !self.link_open;
+        }
+        self.link_rect = Some(link.rect);
         if !inspector {
             return;
         }

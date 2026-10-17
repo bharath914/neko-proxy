@@ -12,10 +12,12 @@ pub mod devices;
 pub mod discovery;
 pub mod fake_client;
 pub mod frame;
+pub mod health;
 pub mod limits;
 pub mod merge;
 pub mod pairing;
 pub mod record;
+pub mod settings;
 mod service;
 mod session;
 pub mod wire;
@@ -24,6 +26,7 @@ pub use assembler::{FetchOutcome, Identity, Stats, StatsSnapshot};
 pub use config::{DeviceConfig, Redaction};
 pub use limits::Limits;
 pub use pairing::PendingPrompt;
+pub use settings::SdkSettings;
 pub use service::{
     ConnStatus, DeviceInfo, FetchError, PromptPolicy, Sdk, SdkError, SdkOptions, Snapshot, Status,
     Tap, DEFAULT_PORT,

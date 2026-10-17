@@ -345,3 +345,37 @@ fn ten_thousand_flows_scroll_and_filter_smoothly() {
     eprintln!("device filter applied in {:?}", t.elapsed());
     assert!(t.elapsed() < std::time::Duration::from_millis(100));
 }
+
+#[test]
+fn connection_status_icon_and_popover() {
+    for (dark, tag) in [(false, "light"), (true, "dark")] {
+        let mut h = harness(dark, (1320.0, 760.0), 20);
+        settle(&mut h);
+        let sdk = app(&mut h).sdk.clone().expect("the demo core answers SdkStatus");
+        assert_eq!(sdk.health, "attention", "a pairing request is waiting");
+        assert!(sdk.checks.iter().any(|c| c.id == "adb" && c.level == "warn"));
+        assert!(app(&mut h).link_rect.is_some(), "the toolbar drew the icon");
+        save(&mut h, &format!("link-icon-{tag}"));
+
+        app(&mut h).link_open = true;
+        settle(&mut h);
+        save(&mut h, &format!("link-popover-{tag}"));
+
+        // Escape closes it.
+        h.key_press(egui::Key::Escape);
+        settle(&mut h);
+        assert!(!app(&mut h).link_open);
+    }
+}
+
+#[test]
+fn turning_sdk_connections_off_greys_the_icon() {
+    let mut h = harness(false, (1100.0, 700.0), 5);
+    settle(&mut h);
+    app(&mut h).set_sdk_enabled(false);
+    settle(&mut h);
+    assert_eq!(app(&mut h).sdk.as_ref().unwrap().health, "off");
+    app(&mut h).link_open = true;
+    settle(&mut h);
+    save(&mut h, "link-popover-off");
+}

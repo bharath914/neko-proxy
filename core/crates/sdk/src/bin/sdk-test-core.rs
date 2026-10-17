@@ -42,6 +42,10 @@ struct Args {
     /// Where state lives (default: a fresh temporary directory).
     #[arg(long)]
     data_dir: Option<PathBuf>,
+    /// Accept connections from this computer without a prompt (the product default). Off here, so --deny and the
+    /// prompt paths can be tested.
+    #[arg(long)]
+    auto_accept_local: bool,
     /// Advertise over mDNS.
     #[arg(long)]
     advertise: bool,
@@ -130,6 +134,11 @@ async fn main() -> anyhow_free::Result<()> {
         store: store.clone(),
         rec,
     });
+    sdk::SdkSettings {
+        auto_accept_local: a.auto_accept_local,
+        ..Default::default()
+    }
+    .save(&dir.join("sdk"))?;
     let sdk = Sdk::new(
         opts,
         sink,

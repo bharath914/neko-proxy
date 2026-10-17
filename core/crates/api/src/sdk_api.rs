@@ -4,17 +4,19 @@ use crate::pb;
 use flow::{BodyState, FlowRecord};
 use sdk::adb::AdbStatus;
 use sdk::discovery::DiscoveryStatus;
+use sdk::health::{Health, Level};
 use sdk::{ConnStatus, DeviceConfig, Redaction, Sdk, Snapshot};
 
-pub fn status(sdk: Option<&Sdk>) -> pb::SdkStatus {
+pub async fn status(sdk: Option<&Sdk>) -> pb::SdkStatus {
     let Some(sdk) = sdk else {
         return pb::SdkStatus::default();
     };
     let s = sdk.status();
+    let report = sdk.health().await;
     let (adb_state, adb_devices) = match &s.adb {
         AdbStatus::Off => ("off", Vec::new()),
         AdbStatus::Unavailable => ("unavailable", Vec::new()),
-        AdbStatus::Ready { devices } => ("ready", devices.clone()),
+        AdbStatus::Ready { devices, .. } => ("ready", devices.clone()),
         AdbStatus::Error(_) => ("error", Vec::new()),
     };
     let (discovery_state, discovery_error) = match &s.discovery {
@@ -36,6 +38,32 @@ pub fn status(sdk: Option<&Sdk>) -> pb::SdkStatus {
         discovery_state: discovery_state.into(),
         discovery_error,
         sessions: s.sessions as u32,
+        health: match report.health {
+            Health::Off => "off",
+            Health::Ok => "ok",
+            Health::Attention => "attention",
+            Health::Problem => "problem",
+        }
+        .into(),
+        checks: report
+            .checks
+            .into_iter()
+            .map(|c| pb::SdkCheck {
+                id: c.id.into(),
+                level: match c.level {
+                    Level::Ok => "ok",
+                    Level::Info => "info",
+                    Level::Warn => "warn",
+                    Level::Error => "error",
+                }
+                .into(),
+                title: c.title,
+                detail: c.detail,
+                fix: c.fix,
+            })
+            .collect(),
+        lan: sdk.settings().lan,
+        auto_accept_local: sdk.settings().auto_accept_local,
         stats: Some(pb::SdkStats {
             calls: s.stats.calls,
             events: s.stats.events,

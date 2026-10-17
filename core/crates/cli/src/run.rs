@@ -39,8 +39,8 @@ pub struct RunArgs {
     /// Port the in-app SDK listener uses while it is turned on.
     #[arg(long, default_value_t = sdk::DEFAULT_PORT)]
     pub sdk_port: u16,
-    /// Accept SDK connections from the start (otherwise turn them on from the
-    /// app or with `proxyd sdk enable`).
+    /// Accept SDK connections for this run even if they were turned off in
+    /// settings. They are on by default.
     #[arg(long)]
     pub sdk: bool,
     /// Never start the SDK listener.
@@ -164,12 +164,11 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
             }
         }
     };
-    if let (Some(s), true) = (&sdk, args.sdk) {
-        if let Err(e) = s.set_enabled(true).await {
-            tracing::warn!(
-                "could not start the SDK listener on port {}: {e}",
-                args.sdk_port
-            );
+    // The listener follows the remembered setting (on by default). `--sdk` forces it on for this run.
+    if let Some(s) = &sdk {
+        let started = if args.sdk { s.set_enabled(true).await } else { s.start_saved().await };
+        if let Err(e) = started {
+            tracing::warn!("could not start the SDK listener on port {}: {e}", args.sdk_port);
         }
     }
     let sink = Arc::new(ProxySink {
@@ -297,10 +296,10 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
             .as_ref()
             .map(|m| m.url.as_str())
             .unwrap_or("off"),
-        match (&sdk, args.sdk) {
-            (None, _) => "unavailable".to_string(),
-            (Some(_), true) => format!("listening on port {}", args.sdk_port),
-            (Some(_), false) => format!("off (port {} once enabled)", args.sdk_port),
+        match &sdk {
+            None => "unavailable".to_string(),
+            Some(s) if s.is_enabled() => format!("listening on port {}", s.local_port().unwrap_or(args.sdk_port)),
+            Some(_) => format!("off (turned off in settings; port {})", args.sdk_port),
         },
         ca.cert_path().display(),
         ca.key_storage().as_str(),
@@ -312,7 +311,8 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     tracing::info!("shutting down");
     let _ = stop_tx.send(true);
     if let Some(s) = &sdk {
-        let _ = s.set_enabled(false).await;
+        // Stop listening, but keep the remembered setting: on again at the next start.
+        let _ = s.shutdown().await;
     }
     let _ = proxy_task.await;
     let _ = api_task.await;

@@ -516,6 +516,33 @@ async fn pair(
     let fp = inner.cert.lock().unwrap().fingerprint();
     let code = pairing::pairing_code(&fp, &client_nonce, &server_nonce);
 
+    // A connection that comes from this computer (adb reverse, an emulator, a simulator) is the person's own
+    // device or process: no prompt. The commit-reveal exchange above still ran, so the protocol is unchanged.
+    if peer.ip().is_loopback() && inner.settings.lock().unwrap().auto_accept_local {
+        let token = pairing::random_bytes::<32>();
+        if inner.devices.pair(facts, &token, Inner::now_ms()).is_err() {
+            return Err(End::Quiet("could not store the pairing"));
+        }
+        tracing::info!(
+            "sdk pairing from {} ({}) accepted automatically: it came from this computer",
+            who.device_name,
+            who.app_id
+        );
+        if let Some(tap) = &inner.opts.tap {
+            tap.event(
+                "auto_accepted",
+                serde_json::json!({"device": who.device_id, "app": who.app_id}),
+            );
+        }
+        conn.send(Msg::PairResult(wire::PairResult {
+            allowed: true,
+            token: token.to_vec(),
+            message: String::new(),
+        }))?;
+        inner.notify();
+        return Ok(());
+    }
+
     let now = Inner::now_ms();
     let prompt = PendingPrompt {
         device_id: who.device_id.clone(),

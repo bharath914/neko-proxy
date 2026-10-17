@@ -713,3 +713,95 @@ async fn the_service_is_advertised_while_enabled_and_withdrawn_after() {
         sdk::discovery::DiscoveryStatus::Off
     );
 }
+
+#[tokio::test]
+async fn connections_from_this_computer_are_accepted_without_a_prompt_when_the_setting_is_on() {
+    let h = Harness::with_settings(|_| {}, sdk::SdkSettings::default()).await;
+    let mut c = h.client().await;
+    assert_eq!(c.hello("local-1", "com.shop", &[]).await.state, wire::hello_ack::State::PairingRequired as i32);
+    // No person involved: the exchange still runs, and ends with a token.
+    let nonce = [4u8; 32];
+    c.send(Msg::PairRequest(wire::PairRequest { commit: sdk::pairing::commit_of(&nonce).to_vec() })).await;
+    assert!(matches!(c.next().await, Some(Msg::PairChallenge(_))));
+    c.send(Msg::PairReveal(wire::PairReveal { client_nonce: nonce.to_vec() })).await;
+    match c.next().await {
+        Some(Msg::PairResult(r)) => {
+            assert!(r.allowed);
+            assert_eq!(r.token.len(), 32);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(h.sdk.pending().is_empty(), "no prompt was ever shown");
+    assert!(matches!(c.next().await, Some(Msg::Config(_))));
+    // The device is a normal paired device afterwards: connected, and it can be revoked.
+    h.wait_for("connected", || h.sdk.snapshot().devices.iter().any(|d| d.status == ConnStatus::Connected)).await;
+}
+
+#[tokio::test]
+async fn an_explicit_deny_is_still_honoured_for_local_devices() {
+    let h = Harness::with_settings(|_| {}, sdk::SdkSettings::default()).await;
+    // Deny through the registry as the desktop would after a prompt.
+    h.sdk.update_settings(|s| s.auto_accept_local = false).await.unwrap();
+    let mut c = h.client().await;
+    c.hello("local-2", "com.shop", &[]).await;
+    let (_, r) = c.pair(&h.sdk, false).await;
+    assert!(!r.allowed);
+    h.sdk.update_settings(|s| s.auto_accept_local = true).await.unwrap();
+    let mut again = h.client().await;
+    assert_eq!(again.hello("local-2", "com.shop", &[]).await.state, wire::hello_ack::State::Denied as i32);
+}
+
+#[tokio::test]
+async fn settings_are_remembered_and_the_listener_follows_them() {
+    let h = Harness::start().await;
+    assert!(h.sdk.settings().enabled && h.sdk.settings().lan);
+    // Loopback only: the status shows no LAN address.
+    h.sdk.update_settings(|s| s.lan = false).await.unwrap();
+    assert!(h.sdk.is_enabled());
+    let st = h.sdk.status();
+    assert!(!st.listening.is_empty() && st.listening.iter().all(|a| a.starts_with("127.0.0.1")), "{:?}", st.listening);
+    // Turning it off is remembered, so a new service on the same directory starts off.
+    h.sdk.set_enabled(false).await.unwrap();
+    assert!(!h.sdk.is_enabled());
+    let dir = h.dir.path().join("sdk");
+    let saved = sdk::SdkSettings::load(&dir);
+    assert!(!saved.enabled && !saved.lan);
+    let sink = std::sync::Arc::new(Collect::default());
+    let store = store::Store::open(&h.dir.path().join("store2")).unwrap();
+    let mut o = sdk::SdkOptions::new(dir);
+    o.port = 0; o.advertise = false; o.watch_adb = false;
+    let again = sdk::Sdk::new(o, sink, store, std::sync::Arc::new(flow::IdGen::starting_after(0))).unwrap();
+    again.start_saved().await.unwrap();
+    assert!(!again.is_enabled(), "saved as off, so it stays off");
+    again.update_settings(|s| s.enabled = true).await.unwrap();
+    assert!(again.is_enabled());
+    again.set_enabled(false).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_busy_port_is_reported_with_a_fix_instead_of_failing_silently() {
+    use sdk::health::{Health, Level};
+    let squatter = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = squatter.local_addr().unwrap().port();
+    let dir = tempfile::tempdir().unwrap();
+    let sink = std::sync::Arc::new(Collect::default());
+    let store = store::Store::open(&dir.path().join("store")).unwrap();
+    let mut o = sdk::SdkOptions::new(dir.path().join("sdk"));
+    o.port = port;
+    o.bind = [127, 0, 0, 1].into();
+    o.advertise = false;
+    o.watch_adb = false;
+    let s = sdk::Sdk::new(o, sink, store, std::sync::Arc::new(flow::IdGen::starting_after(0))).unwrap();
+    assert!(s.start_saved().await.is_err());
+    let r = s.health().await;
+    assert_eq!(r.health, Health::Problem);
+    let c = r.checks.iter().find(|c| c.id == "listener").unwrap();
+    assert_eq!(c.level, Level::Error);
+    assert!(c.detail.contains(&port.to_string()), "{}", c.detail);
+    assert!(c.fix.contains("--sdk-port"), "{}", c.fix);
+    // Freeing the port and trying again clears the problem.
+    drop(squatter);
+    s.set_enabled(true).await.unwrap();
+    assert_ne!(s.health().await.health, Health::Problem);
+    s.set_enabled(false).await.unwrap();
+}

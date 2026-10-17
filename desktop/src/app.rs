@@ -171,6 +171,12 @@ pub struct App {
     /// Settings drawer of one device and app, when open.
     pub device_drawer: Option<crate::edit::DeviceForm>,
     pub hints_open: bool,
+    /// The connection status popover under the toolbar icon.
+    pub link_open: bool,
+    /// Where the toolbar icon was drawn last frame, so the popover can sit under it.
+    pub link_rect: Option<egui::Rect>,
+    /// When to ask the core for the SDK status again (egui time, seconds).
+    pub sdk_next_poll: f64,
     /// Devices and apps the Inspector is narrowed to (filter chips).
     pub device_filter: Vec<String>,
     pub app_filter: Vec<String>,
@@ -275,6 +281,9 @@ impl App {
             devices: pb::DevicesSnapshot::default(),
             device_drawer: None,
             hints_open: false,
+            link_open: false,
+            link_rect: None,
+            sdk_next_poll: 0.0,
             device_filter: Vec::new(),
             app_filter: Vec::new(),
             fetching: Default::default(),
@@ -390,6 +399,43 @@ impl App {
         if let Some(s) = &mut self.sdk {
             s.enabled = enabled;
         }
+    }
+
+    /// Change the remembered SDK settings. The answer is the new status.
+    pub fn set_sdk_settings(&mut self, lan: bool, auto_accept_local: bool) {
+        let enabled = self.sdk.as_ref().is_some_and(|s| s.enabled);
+        self.send(
+            Req::SdkSetSettings(pb::SdkSetSettingsRequest {
+                enabled,
+                lan,
+                auto_accept_local,
+            }),
+            Pending::SdkStatus,
+        );
+        if let Some(s) = &mut self.sdk {
+            s.lan = lan;
+            s.auto_accept_local = auto_accept_local;
+        }
+    }
+
+    /// Keep the connection checks current: adb, the firewall and discovery change without any push. Every few
+    /// seconds, faster while the status popover is open, and never with a request already in flight.
+    pub fn poll_sdk(&mut self, ctx: &Context) {
+        if self.conn != ConnState::Connected || self.sdk.as_ref().is_some_and(|s| !s.available) {
+            return;
+        }
+        let now = ctx.input(|i| i.time);
+        if now < self.sdk_next_poll {
+            ctx.request_repaint_after(std::time::Duration::from_millis(
+                ((self.sdk_next_poll - now) * 1000.0) as u64 + 10,
+            ));
+            return;
+        }
+        self.sdk_next_poll = now + if self.link_open { 1.5 } else { 5.0 };
+        if self.pending.values().any(|p| matches!(p, Pending::SdkStatus)) {
+            return;
+        }
+        self.send(Req::SdkStatus(pb::SdkStatusRequest {}), Pending::SdkStatus);
     }
 
     pub fn allow_prompt(&mut self, id: u64) {
@@ -919,6 +965,22 @@ impl App {
                     p.code.get(3..).unwrap_or("")
                 );
                 self.toast(ctx, msg, true);
+            }
+        }
+        // A device that was not connected a moment ago is: this is the "it just works" moment, so say so.
+        if !self.devices.devices.is_empty() || self.devices.rev != 0 {
+            for n in &d.devices {
+                let connected = |x: &pb::Device| {
+                    x.device_id == n.device_id
+                        && x.app_id == n.app_id
+                        && x.status == pb::DeviceStatus::DeviceConnected as i32
+                };
+                if n.status == pb::DeviceStatus::DeviceConnected as i32
+                    && !self.devices.devices.iter().any(connected)
+                {
+                    let name = if n.app_name.is_empty() { &n.app_id } else { &n.app_name };
+                    self.toast(ctx, format!("{} connected from {}", name, n.device_name), true);
+                }
             }
         }
         self.devices = d;

@@ -10,6 +10,8 @@ use crate::discovery::{Advertiser, DiscoveryStatus};
 use crate::limits::Limits;
 use crate::merge::{DeviceLookup, Merger};
 use crate::pairing::{Decision, PendingPrompt, Prompts};
+use crate::health::{self, Firewall};
+use crate::settings::SdkSettings;
 use crate::wire::{self, body_chunk::Part, envelope::Msg, Envelope};
 use flow::{FlowId, FlowRecord, FlowSink, IdGen, Source};
 use std::collections::HashMap;
@@ -206,6 +208,13 @@ pub(crate) struct Inner {
     gate: Mutex<Gate>,
     next_session: AtomicU64,
     enabled: AtomicBool,
+    pub settings: Mutex<SdkSettings>,
+    /// Why the listener could not start, until the next successful start.
+    bind_error: Mutex<Option<(String, String)>>,
+    /// Why the settings could not be written to disk.
+    settings_error: Mutex<Option<String>>,
+    /// The last firewall answer and when it was asked; the probe starts a process, so it is not asked every time.
+    firewall: Mutex<Option<(Instant, u16, Firewall)>>,
     running: Mutex<Option<Running>>,
     changed: watch::Sender<Arc<Snapshot>>,
     rev: AtomicU64,
@@ -408,6 +417,7 @@ impl Sdk {
             .into_iter()
             .map(|r| ((r.device_id, r.app_id), r.flows))
             .collect();
+        let settings = SdkSettings::load(&opts.data_dir);
         let (changed, _) = watch::channel(Arc::new(Snapshot::default()));
         let limits = opts.limits.clone();
         let inner = Arc::new_cyclic(|weak: &std::sync::Weak<Inner>| {
@@ -432,6 +442,10 @@ impl Sdk {
                 gate: Mutex::new(Gate::default()),
                 next_session: AtomicU64::new(0),
                 enabled: AtomicBool::new(false),
+                settings: Mutex::new(settings),
+                bind_error: Mutex::new(None),
+                settings_error: Mutex::new(None),
+                firewall: Mutex::new(None),
                 running: Mutex::new(None),
                 changed,
                 rev: AtomicU64::new(0),
@@ -444,9 +458,74 @@ impl Sdk {
         Ok(Sdk { inner })
     }
 
-    /// Start or stop accepting SDK connections. Stopping closes every session.
+    /// The remembered settings.
+    pub fn settings(&self) -> SdkSettings {
+        *self.inner.settings.lock().unwrap()
+    }
+
+    /// Change and remember settings. Turning the network side on or off restarts the listener.
+    pub async fn update_settings(&self, f: impl FnOnce(&mut SdkSettings)) -> Result<SdkSettings, SdkError> {
+        let (before, after) = {
+            let mut g = self.inner.settings.lock().unwrap();
+            let before = *g;
+            f(&mut g);
+            (before, *g)
+        };
+        *self.inner.settings_error.lock().unwrap() = match after.save(&self.inner.opts.data_dir) {
+            Ok(()) => None,
+            Err(e) => {
+                tracing::warn!("could not save SDK settings: {e}");
+                Some(e.to_string())
+            }
+        };
+        // Restart on a LAN change so the bind address and the advertisement follow it. Otherwise only act when the
+        // listener differs from the setting, which also retries a start that failed earlier (a busy port).
+        let lan_changed = after.lan != before.lan && self.is_enabled();
+        if lan_changed {
+            self.apply_enabled(false).await?;
+        }
+        if lan_changed || after.enabled != self.is_enabled() {
+            self.apply_enabled(after.enabled).await?;
+        }
+        self.inner.notify();
+        Ok(after)
+    }
+
+    /// Start the listener if the saved settings say it should be on (at startup).
+    pub async fn start_saved(&self) -> Result<(), SdkError> {
+        if self.settings().enabled {
+            self.apply_enabled(true).await?;
+        }
+        Ok(())
+    }
+
+    /// Start or stop accepting SDK connections, and remember the choice. Stopping closes every session.
     pub async fn set_enabled(&self, on: bool) -> Result<(), SdkError> {
+        self.update_settings(|s| s.enabled = on).await?;
+        // `update_settings` only acts on a change; make sure the listener matches even if the file already said so.
+        self.apply_enabled(on).await
+    }
+
+    /// Stop listening without changing the remembered settings (for process exit).
+    pub async fn shutdown(&self) -> Result<(), SdkError> {
+        self.apply_enabled(false).await
+    }
+
+    async fn apply_enabled(&self, on: bool) -> Result<(), SdkError> {
+        let result = self.apply_enabled_inner(on).await;
+        // Remember why a start failed, so the status can say so instead of just showing "off".
+        *self.inner.bind_error.lock().unwrap() = match (&result, on) {
+            (Err(SdkError::Io(e)), true) => Some(health::explain_bind_error(self.inner.opts.port, e)),
+            (Err(e), true) => Some((e.to_string(), "Turn Accept SDK connections off and on again.".into())),
+            _ => None,
+        };
+        self.inner.notify();
+        result
+    }
+
+    async fn apply_enabled_inner(&self, on: bool) -> Result<(), SdkError> {
         let inner = &self.inner;
+        let lan = inner.settings.lock().unwrap().lan;
         if on == inner.enabled.load(Ordering::Relaxed)
             && on == inner.running.lock().unwrap().is_some()
         {
@@ -455,11 +534,12 @@ impl Sdk {
         if on {
             let tls = inner.cert.lock().unwrap().server_config()?;
             let acceptor = tokio_rustls::TlsAcceptor::from(tls);
-            let listener =
-                TcpListener::bind(SocketAddr::new(inner.opts.bind, inner.opts.port)).await?;
+            // Loopback only unless the person allows phones on Wi-Fi.
+            let ip = if lan { inner.opts.bind } else { IpAddr::from([127, 0, 0, 1]) };
+            let listener = TcpListener::bind(SocketAddr::new(ip, inner.opts.port)).await?;
             let local = listener.local_addr()?;
             let addrs = listening_addrs(local);
-            let advertiser = if inner.opts.advertise {
+            let advertiser = if inner.opts.advertise && lan {
                 Some(Advertiser::start(
                     local.port(),
                     &inner.cert.lock().unwrap().fingerprint_short(),
@@ -553,6 +633,45 @@ impl Sdk {
             sessions: i.sessions.lock().unwrap().len(),
             stats: i.env.stats.snapshot(),
         }
+    }
+
+    /// Whether an app could connect right now, with a reason and a fix for each thing that stops one.
+    pub async fn health(&self) -> health::Report {
+        let status = self.status();
+        let settings = self.settings();
+        let firewall = if status.enabled && settings.lan {
+            self.firewall(status.port).await
+        } else {
+            Firewall::Unknown
+        };
+        let bind_error = self.inner.bind_error.lock().unwrap().clone();
+        let bind_error = bind_error.as_ref().map(|(m, f)| (m.as_str(), f.as_str()));
+        let settings_error = self.inner.settings_error.lock().unwrap().clone();
+        health::evaluate(&health::Input {
+            enabled: status.enabled,
+            port: status.port,
+            settings,
+            adb: &status.adb,
+            discovery: &status.discovery,
+            bind_error,
+            settings_error: settings_error.as_deref(),
+            lan_addresses: lan_ips().len(),
+            firewall,
+            pending: self.inner.prompts.list().len(),
+        })
+    }
+
+    async fn firewall(&self, port: u16) -> Firewall {
+        if let Some((at, p, f)) = *self.inner.firewall.lock().unwrap() {
+            if p == port && at.elapsed() < Duration::from_secs(15) {
+                return f;
+            }
+        }
+        let f = tokio::task::spawn_blocking(move || health::probe_firewall(port))
+            .await
+            .unwrap_or(Firewall::Unknown);
+        *self.inner.firewall.lock().unwrap() = Some((Instant::now(), port, f));
+        f
     }
 
     pub fn fingerprint_hex(&self) -> String {
@@ -652,14 +771,14 @@ impl Sdk {
     pub async fn regenerate_certificate(&self) -> Result<(), SdkError> {
         let was = self.is_enabled();
         if was {
-            self.set_enabled(false).await?;
+            self.apply_enabled(false).await?;
         }
         let dir = self.inner.cert.lock().unwrap().dir().to_path_buf();
         let new = IngestCert::regenerate(&dir)?;
         *self.inner.cert.lock().unwrap() = new;
         let _ = self.inner.devices.revoke_all();
         if was {
-            self.set_enabled(true).await?;
+            self.apply_enabled(true).await?;
         }
         self.inner.notify();
         Ok(())

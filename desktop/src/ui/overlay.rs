@@ -13,6 +13,7 @@ use egui::{
 impl App {
     pub fn overlays(&mut self, ctx: &Context) {
         self.sheet_overlay(ctx);
+        self.link_popover(ctx);
         self.approval_overlay(ctx);
         self.toast_overlay(ctx);
     }

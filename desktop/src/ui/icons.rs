@@ -30,6 +30,7 @@ pub enum Icon {
     Plus,
     Unlock,
     Sliders,
+    Phone,
 }
 
 fn arc(c: Pos2, r: f32, from: f32, to: f32, n: usize) -> Vec<Pos2> {
@@ -238,6 +239,10 @@ pub fn paint(p: &Painter, icon: Icon, center: Pos2, size: f32, color: Color32) {
             );
             pts.insert(0, m(-0.17, -0.04));
             line(pts);
+        }
+        Icon::Phone => {
+            rrect(-0.2, -0.38, 0.2, 0.38, 0.07);
+            seg(m(-0.07, 0.27), m(0.07, 0.27));
         }
         Icon::Sliders => {
             for (y, x) in [(-0.22f32, -0.12f32), (0.0, 0.14), (0.22, -0.04)] {
