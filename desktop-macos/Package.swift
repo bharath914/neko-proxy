@@ -2,25 +2,25 @@
 import PackageDescription
 
 let package = Package(
-    name: "ProxyMac",
+    name: "NekoMac",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "Proxy", targets: ["ProxyApp"]),
+        .executable(name: "Neko", targets: ["NekoApp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.28.2"),
     ],
     targets: [
-        // Wire client for proxyd: generated protobuf, WebSocket over the Unix socket.
+        // Wire client for nekod: generated protobuf, WebSocket over the Unix socket.
         .target(
-            name: "ProxyAPI",
+            name: "NekoAPI",
             dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")]
         ),
         .executableTarget(
-            name: "ProxyApp",
-            dependencies: ["ProxyAPI"],
+            name: "NekoApp",
+            dependencies: ["NekoAPI"],
             resources: [.copy("Resources/Fonts")]
         ),
-        .testTarget(name: "ProxyAPITests", dependencies: ["ProxyAPI"]),
+        .testTarget(name: "NekoAPITests", dependencies: ["NekoAPI"]),
     ]
 )

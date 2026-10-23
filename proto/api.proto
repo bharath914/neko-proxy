@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-// Client API for proxyd. One WebSocket connection (binary frames) over a Unix
+// Client API for nekod. One WebSocket connection (binary frames) over a Unix
 // domain socket. Every frame is one ClientMessage (client -> core) or one
 // ServerMessage (core -> client). A response echoes the request id. Pushed
 // events (FlowBatch, Resync) carry id = 0.
@@ -12,9 +12,9 @@ syntax = "proto3";
 // export(har), clear, plus status and ca_info for the app shell.
 // Also: hosts (the host list), and the person's SSL proxying and Map Local
 // rules (rules, set_ssl, ssl_host, put_map_local, remove_rule, unpin).
-package proxy.api.v1;
+package neko.api.v1;
 
-option java_package = "dev.proxy.api";
+option java_package = "dev.nekoproxy.api";
 
 // ---------------------------------------------------------------- envelope
 

@@ -1,13 +1,13 @@
 [package]
-name = "proxy-desktop"
+name = "neko-desktop"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Native Linux desktop app for the proxy"
-default-run = "proxy"
+description = "Native Linux desktop app for Neko Proxy"
+default-run = "neko"
 
 [[bin]]
-name = "proxy"
+name = "neko"
 path = "src/main.rs"
 
 [dependencies]

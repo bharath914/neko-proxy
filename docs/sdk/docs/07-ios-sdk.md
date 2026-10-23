@@ -11,9 +11,9 @@ Swift Package at `sdk/ios/`:
 ```
 Package.swift
 Sources/
-├─ ProxyInspector/                 core: transport, session, queue, redaction, discovery, pairing, URLSession capture
-├─ ProxyInspectorAlamofire/        EventMonitor and request modifiers (depends on Alamofire)
-└─ ProxyInspectorAutoStart/        tiny ObjC target that starts the SDK when linked
+├─ NekoInspector/                 core: transport, session, queue, redaction, discovery, pairing, URLSession capture
+├─ NekoInspectorAlamofire/        EventMonitor and request modifiers (depends on Alamofire)
+└─ NekoInspectorAutoStart/        tiny ObjC target that starts the SDK when linked
 Tests/
 Sample/                            SwiftUI app using URLSession and Alamofire
 ```
@@ -31,7 +31,7 @@ public enum Inspector {
     public static func setScreen(_ name: String)
 }
 
-// ProxyInspectorAlamofire
+// NekoInspectorAlamofire
 public final class InspectorMonitor: EventMonitor { public init() }
 extension Request {
     @discardableResult
@@ -39,7 +39,7 @@ extension Request {
 }
 ```
 
-## Transport (ProxyInspector)
+## Transport (NekoInspector)
 
 - Network.framework `NWConnection` with TLS options. Use the verify block to implement the same rules as Android: when paired, accept only the stored SHA-256 fingerprint; when pairing, accept for the handshake and compute the code from the fingerprint actually seen.
 - Length-prefixed protobuf frames per `03-protocol.md`. Use a small protobuf implementation. Evaluate SwiftProtobuf's size and decide; record the choice. Avoid forcing a heavy dependency on app developers.
@@ -50,12 +50,12 @@ extension Request {
 
 ## Discovery and permissions
 
-- Bonjour with `NWBrowser` for `_proxyinspect._tcp`, reading the TXT records.
+- Bonjour with `NWBrowser` for `_nekoinspect._tcp`, reading the TXT records.
 - Simulator: try `localhost:8898` first.
 - Physical device on Wi-Fi: Bonjour.
 - The debug app's Info.plist needs:
   - `NSLocalNetworkUsageDescription` with a short reason
-  - `NSBonjourServices` containing `_proxyinspect._tcp`
+  - `NSBonjourServices` containing `_nekoinspect._tcp`
 - iOS shows a Local Network permission prompt the first time. If denied, the SDK logs a clear message with the fix and stops browsing.
 - An SPM package cannot edit the app's Info.plist. Ship a `inspector-doctor` command (a Swift script or a build tool plugin command, verify what SwiftPM supports) that checks the plist and prints the exact keys to add. Document using a debug-only plist or xcconfig so release builds do not carry the keys.
 - iOS over USB is not supported in v1.
@@ -76,7 +76,7 @@ Timings from `URLSessionTaskMetrics.transactionMetrics`: domain lookup, connect,
 
 Not captured in v1: background sessions, download and upload tasks from files (record metadata only), `URLSessionWebSocketTask` frames, streams.
 
-## Alamofire (ProxyInspectorAlamofire)
+## Alamofire (NekoInspectorAlamofire)
 
 - `InspectorMonitor` is an `EventMonitor`. Use request lifecycle callbacks and `request(_:didGatherMetrics:)` for timings, and the response callbacks for status, headers and data.
 - Request body: read `request.request?.httpBody` when present. Stream and file uploads are metadata only.
@@ -91,17 +91,17 @@ Swizzle `UIViewController.viewDidAppear(_:)` in debug builds to track the top vi
 ## Debug only
 
 - All real code is compiled only under `#if DEBUG`. In release builds the same public symbols exist as empty stubs, so app code compiles unchanged.
-- Verify that SwiftPM defines `DEBUG` for the package target when the app builds in Debug and not in Release, in the way Xcode builds packages. If not reliable, provide two products (`ProxyInspector` and `ProxyInspectorNoop`) and document linking per configuration.
-- Verification task: build the sample in Release, inspect the binary for the SDK's symbols and strings (for example the service name `_proxyinspect._tcp`), and fail if found.
+- Verify that SwiftPM defines `DEBUG` for the package target when the app builds in Debug and not in Release, in the way Xcode builds packages. If not reliable, provide two products (`NekoInspector` and `NekoInspectorNoop`) and document linking per configuration.
+- Verification task: build the sample in Release, inspect the binary for the SDK's symbols and strings (for example the service name `_nekoinspect._tcp`), and fail if found.
 - The AutoStart target must also be a no-op in release.
 
-## Auto start (ProxyInspectorAutoStart)
+## Auto start (NekoInspectorAutoStart)
 
 A small Objective-C target whose `+load` calls `Inspector.start()` in debug builds. Linking the product is enough. Verify this still works with current SwiftPM and Xcode static linking (a library's `+load` can be stripped if nothing references it; the product may need a linker flag or a referenced symbol).
 
 ## Debug banner and logs
 
-On pairing, log the code with `os_log` (subsystem `dev.proxy.inspector`) and show a small non-blocking banner in a dedicated debug `UIWindow`. After pairing, log one line per connection event, not per request.
+On pairing, log the code with `os_log` (subsystem `dev.nekoproxy.inspector`) and show a small non-blocking banner in a dedicated debug `UIWindow`. After pairing, log one line per connection event, not per request.
 
 ## Performance notes specific to iOS
 

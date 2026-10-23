@@ -7,7 +7,7 @@ syntax = "proto3";
 // ignore unknown fields. Bump protocol_version only for incompatible changes.
 package sdk.v1;
 
-option java_package = "dev.proxy.inspector.wire";
+option java_package = "dev.nekoproxy.inspector.wire";
 
 message Envelope {
   oneof msg {

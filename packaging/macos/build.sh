@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build the macOS installer into dist/:
-#   Proxy.app                       the app, with proxyd inside (Contents/MacOS/proxyd)
-#   Proxy-<ver>-macos-<arch>.dmg    drag-to-Applications disk image
-#   Proxy-<ver>-macos-<arch>.dmg.sha256
+#   Neko.app                       the app, with nekod inside (Contents/MacOS/nekod)
+#   Neko-<ver>-macos-<arch>.dmg    drag-to-Applications disk image
+#   Neko-<ver>-macos-<arch>.dmg.sha256
 #
 # Needs the Command Line Tools (swift, hdiutil, iconutil, codesign) and Rust. Builds for this
 # Mac's architecture only.
@@ -12,7 +12,7 @@
 #   (unset)                                                    ad-hoc signature; first launch needs right-click > Open
 # Notarization (needs SIGN_IDENTITY): NOTARY_PROFILE=<name from `xcrun notarytool store-credentials`>
 #
-# Env: PROXY_SKIP_BUILD=1 reuses the existing release builds.
+# Env: NEKO_SKIP_BUILD=1 reuses the existing release builds.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -20,37 +20,37 @@ ROOT=$PWD
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 ARCH=$(uname -m)
 OUT=$ROOT/dist
-APP=$OUT/Proxy.app
-DMG=$OUT/Proxy-$VERSION-macos-$ARCH.dmg
+APP=$OUT/Neko.app
+DMG=$OUT/Neko-$VERSION-macos-$ARCH.dmg
 export PATH="$HOME/.cargo/bin:$PATH"
 
-if [ -z "${PROXY_SKIP_BUILD:-}" ]; then
-  echo "==> building proxyd"
-  cargo build --release -p proxy-cli
+if [ -z "${NEKO_SKIP_BUILD:-}" ]; then
+  echo "==> building nekod"
+  cargo build --release -p neko-cli
   echo "==> building the app"
-  (cd desktop-macos && swift build -c release --product Proxy)
+  (cd desktop-macos && swift build -c release --product Neko)
 fi
 SWIFT_BIN=$(cd desktop-macos && swift build -c release --show-bin-path)
 
 rm -rf "$APP" "$OUT"/*.dmg "$OUT"/*.sha256 "$OUT/dmg"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-install -m 0755 "$SWIFT_BIN/Proxy" "$APP/Contents/MacOS/Proxy"
-install -m 0755 target/release/proxyd "$APP/Contents/MacOS/proxyd"
-cp -R desktop-macos/Sources/ProxyApp/Resources/Fonts "$APP/Contents/Resources/Fonts"
+install -m 0755 "$SWIFT_BIN/Neko" "$APP/Contents/MacOS/Neko"
+install -m 0755 target/release/nekod "$APP/Contents/MacOS/nekod"
+cp -R desktop-macos/Sources/NekoApp/Resources/Fonts "$APP/Contents/Resources/Fonts"
 sed "s/@VERSION@/$VERSION/g" packaging/macos/Info.plist.in > "$APP/Contents/Info.plist"
 
 echo "==> icon"
-ICONSET=$OUT/Proxy.iconset
+ICONSET=$OUT/Neko.iconset
 swift packaging/macos/make-icon.swift "$ICONSET"
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Proxy.icns"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Neko.icns"
 rm -rf "$ICONSET"
 
 echo "==> signing"
 if [ -n "${SIGN_IDENTITY:-}" ]; then
-  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/proxyd"
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/nekod"
   codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
 else
-  codesign --force --sign - "$APP/Contents/MacOS/proxyd"
+  codesign --force --sign - "$APP/Contents/MacOS/nekod"
   codesign --force --sign - "$APP"
 fi
 codesign --verify --strict "$APP"
@@ -58,9 +58,9 @@ codesign --verify --strict "$APP"
 echo "==> disk image"
 STAGE=$OUT/dmg
 mkdir -p "$STAGE"
-cp -R "$APP" "$STAGE/Proxy.app"
+cp -R "$APP" "$STAGE/Neko.app"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -quiet -volname "Proxy" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+hdiutil create -quiet -volname "Neko" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 rm -rf "$STAGE"
 [ -n "${SIGN_IDENTITY:-}" ] && codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG"
 
@@ -74,5 +74,5 @@ fi
 (cd "$OUT" && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
 echo
 echo "built $DMG"
-[ -z "${SIGN_IDENTITY:-}" ] && echo "ad-hoc signed: on another Mac, right-click Proxy.app > Open the first time (or run: xattr -dr com.apple.quarantine /Applications/Proxy.app)"
+[ -z "${SIGN_IDENTITY:-}" ] && echo "ad-hoc signed: on another Mac, right-click Neko.app > Open the first time (or run: xattr -dr com.apple.quarantine /Applications/Neko.app)"
 exit 0

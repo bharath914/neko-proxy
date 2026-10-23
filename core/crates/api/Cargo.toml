@@ -1,5 +1,5 @@
 [package]
-name = "proxy-api"
+name = "neko-api"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

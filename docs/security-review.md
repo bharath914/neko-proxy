@@ -35,7 +35,7 @@ Everything arriving on the ingest port is hostile until authenticated, and mostl
 
 | Control | Where |
 |---|---|
-| Off by default, never persisted across restarts, listens on the LAN only while on | `Sdk::set_enabled`, `proxyd run --sdk`; DEVIATIONS 12 |
+| Off by default, never persisted across restarts, listens on the LAN only while on | `Sdk::set_enabled`, `nekod run --sdk`; DEVIATIONS 12 |
 | 1 MiB frame cap, checked before the body is read | `frame::read_envelope` |
 | Slowloris: 10 s handshake deadline, 15 s per frame, 60 s idle | `Limits`, test `hostile_input_closes_the_connection...` |
 | Pre-auth connection caps: 16 total, 4 per address | `Gate`, test `pre_authentication_connections_are_capped_per_address` |
@@ -54,7 +54,7 @@ Not covered: connection-level DoS from many distinct addresses (the caps are per
 ## 4. Release builds contain no SDK
 
 - Gradle plugin: release (non-enabled) variants get `inspector-noop` only.
-- Verified on real APKs by `PluginTest` (AGP 9.4.1 and 8.13.1): the release dex contains no `Ldev/proxy/inspector/internal/`, no `_proxyinspect`, no `InspectorOkHttp` call, and no `assets/inspector.properties`.
+- Verified on real APKs by `PluginTest` (AGP 9.4.1 and 8.13.1): the release dex contains no `Ldev/nekoproxy/inspector/internal/`, no `_nekoinspect`, no `InspectorOkHttp` call, and no `assets/inspector.properties`.
 - `./gradlew verifyNoInspectorInRelease` runs the same scan on any project and fails the build.
 - The no-op has the same public API, enforced by `ApiParityTest` (checked to fail when a method is removed).
 - iOS: not built.
@@ -81,7 +81,7 @@ Gaps: (a) redaction is by key name, so a secret under an unusual key, in a free 
 | R3 | Pre-auth slot exhaustion from the LAN. | Toggle off by default; caps and timeouts. Accepted. |
 | R4 | Key-name redaction misses unusual secrets. | Per-device extra keys; STRICT; core re-redacts at export and in MCP. Accepted. |
 | R5 | Six-digit code strength. | Rate limits; **ask the reviewer**. |
-| R6 | `sdk-test-core` and `fake-device` accept any certificate and auto-approve. | Dev tools; never built into `proxyd`'s default path (the test client is in the library but unused by `proxyd`). |
+| R6 | `sdk-test-core` and `fake-device` accept any certificate and auto-approve. | Dev tools; never built into `nekod`'s default path (the test client is in the library but unused by `nekod`). |
 | R7 | Fuzzing ran without a sanitizer. | See DEVIATIONS 14. |
 
 ## 8. Fuzz and test status at the time of writing

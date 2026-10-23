@@ -22,7 +22,7 @@ parameter, which the verifier allows before `super()`.
 |---|---|---|
 | Clients created inside dependencies are covered | sample app: `:lib` module creates `OkHttpClient()`; scope `ALL` | The one patched constructor is in OkHttp's own classes, so every client in the app is covered. |
 | Exactly one injected call | `PluginTest.theOkHttpConstructorIsInstrumentedExactlyOnce` runs `dexdump -d` on the APK | One `invoke-static InspectorOkHttp.install` in the whole APK, first instruction of `OkHttpClient.<init>(Builder)`. |
-| Release is untouched | `PluginTest.debugGetsTheRealSdkAndReleaseOnly...` | Release dex has no `Ldev/proxy/inspector/internal/` and no `InspectorOkHttp`. |
+| Release is untouched | `PluginTest.debugGetsTheRealSdkAndReleaseOnly...` | Release dex has no `Ldev/nekoproxy/inspector/internal/` and no `InspectorOkHttp`. |
 | Configuration cache | `PluginTest.anAppWithoutOkHttpStill...` | Second run reuses the entry. |
 | Builds without OkHttp | same test, no OkHttp dependency | Builds. The factory only matches `okhttp3.OkHttpClient`. |
 

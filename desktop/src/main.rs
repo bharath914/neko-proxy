@@ -1,4 +1,4 @@
-//! The Linux desktop app. A native window that talks to `proxyd` over the
+//! The Linux desktop app. A native window that talks to `nekod` over the
 //! client API and nothing else.
 
 mod app;
@@ -23,7 +23,7 @@ struct Args {
     demo: bool,
     live: bool,
     socket: Option<PathBuf>,
-    proxyd: Option<PathBuf>,
+    nekod: Option<PathBuf>,
     listen: String,
     help: bool,
 }
@@ -33,7 +33,7 @@ fn parse_args() -> Args {
         demo: false,
         live: false,
         socket: None,
-        proxyd: None,
+        nekod: None,
         listen: "127.0.0.1:8899".into(),
         help: false,
     };
@@ -43,7 +43,7 @@ fn parse_args() -> Args {
             "--demo" => a.demo = true,
             "--live" => a.live = true,
             "--socket" => a.socket = it.next().map(PathBuf::from),
-            "--proxyd" => a.proxyd = it.next().map(PathBuf::from),
+            "--nekod" => a.nekod = it.next().map(PathBuf::from),
             "--listen" => {
                 if let Some(v) = it.next() {
                     a.listen = v;
@@ -61,8 +61,8 @@ fn main() -> eframe::Result {
     if args.help {
         println!(
             "proxy: desktop app for the proxy core\n\n\
-             Options:\n  --socket PATH   API socket (default: $XDG_RUNTIME_DIR/proxy/api.sock)\n  \
-             --proxyd PATH   core binary to start if none is running\n  \
+             Options:\n  --socket PATH   API socket (default: $XDG_RUNTIME_DIR/neko/api.sock)\n  \
+             --nekod PATH   core binary to start if none is running\n  \
              --listen ADDR   proxy address for a core we start (default 127.0.0.1:8899)\n  \
              --demo          run on sample data, without a core\n  \
              --live          with --demo, keep adding flows"
@@ -72,15 +72,15 @@ fn main() -> eframe::Result {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Proxy")
-            .with_app_id("dev.proxy.Proxy")
+            .with_title("Neko Proxy")
+            .with_app_id("dev.nekoproxy.Neko")
             .with_inner_size([1320.0, 820.0])
             .with_min_inner_size([960.0, 560.0]),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Proxy",
+        "Neko",
         options,
         Box::new(move |cc| {
             style::install_fonts(&cc.egui_ctx);
@@ -88,11 +88,11 @@ fn main() -> eframe::Result {
                 Box::new(DemoBackend::new(240, args.live))
             } else {
                 let socket = args.socket.clone().unwrap_or_else(platform::default_socket);
-                let proxyd = args.proxyd.clone().or_else(platform::find_proxyd);
+                let nekod = args.nekod.clone().or_else(platform::find_nekod);
                 Box::new(RealBackend::start(
                     CoreOptions {
                         socket,
-                        proxyd,
+                        nekod,
                         listen: args.listen.clone(),
                     },
                     cc.egui_ctx.clone(),

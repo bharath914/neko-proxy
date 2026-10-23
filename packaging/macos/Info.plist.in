@@ -2,11 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Proxy</string>
-  <key>CFBundleDisplayName</key><string>Proxy</string>
-  <key>CFBundleIdentifier</key><string>dev.proxy.Proxy</string>
-  <key>CFBundleExecutable</key><string>Proxy</string>
-  <key>CFBundleIconFile</key><string>Proxy</string>
+  <key>CFBundleName</key><string>Neko</string>
+  <key>CFBundleDisplayName</key><string>Neko Proxy</string>
+  <key>CFBundleIdentifier</key><string>dev.nekoproxy.Neko</string>
+  <key>CFBundleExecutable</key><string>Neko</string>
+  <key>CFBundleIconFile</key><string>Neko</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>@VERSION@</string>
   <key>CFBundleVersion</key><string>@VERSION@</string>

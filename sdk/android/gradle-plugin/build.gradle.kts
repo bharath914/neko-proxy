@@ -24,10 +24,10 @@ gradlePlugin {
     plugins {
         create("inspector") {
             // Placeholder id: the final name is an open decision (docs/sdk/docs/01-overview.md).
-            id = "dev.proxy.inspector"
-            implementationClass = "dev.proxy.inspector.gradle.InspectorGradlePlugin"
-            displayName = "Proxy Inspector"
-            description = "Streams a debug build's network calls to the Proxy desktop app. Release builds get a no-op."
+            id = "dev.nekoproxy.inspector"
+            implementationClass = "dev.nekoproxy.inspector.gradle.InspectorGradlePlugin"
+            displayName = "Neko Inspector"
+            description = "Streams a debug build's network calls to the Neko Proxy desktop app. Release builds get a no-op."
         }
     }
 }

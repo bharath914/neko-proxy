@@ -8,7 +8,7 @@ use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto;
-use proxy_net::{Proxy, ProxyConfig};
+use neko_net::{Proxy, ProxyConfig};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use std::convert::Infallible;
@@ -67,7 +67,7 @@ async fn start_proxy() -> Harness {
     start_proxy_with(None).await
 }
 
-/// A proxy with the person's rules wired in the way `proxyd` does it.
+/// A proxy with the person's rules wired in the way `nekod` does it.
 async fn start_proxy_with(rules: Option<Arc<rules::RuleSet>>) -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let ca = Arc::new(CaStore::load_or_create(dir.path(), KeyStorage::File).unwrap());
@@ -609,7 +609,7 @@ async fn unreachable_upstream_gives_502_and_failed_flow() {
 async fn proxy_serves_its_own_ca() {
     let h = start_proxy().await;
     let mut s = TcpStream::connect(h.addr).await.unwrap();
-    s.write_all(b"GET /ca.pem HTTP/1.1\r\nHost: proxy.local\r\nConnection: close\r\n\r\n")
+    s.write_all(b"GET /ca.pem HTTP/1.1\r\nHost: neko.local\r\nConnection: close\r\n\r\n")
         .await
         .unwrap();
     let mut out = String::new();
@@ -624,7 +624,7 @@ async fn cert_page_explains_and_serves_every_format() {
     let get = |path: &str| {
         send_raw(
             h.addr,
-            format!("GET {path} HTTP/1.1\r\nHost: proxy.local\r\nConnection: close\r\n\r\n"),
+            format!("GET {path} HTTP/1.1\r\nHost: neko.local\r\nConnection: close\r\n\r\n"),
         )
     };
 
@@ -636,10 +636,10 @@ async fn cert_page_explains_and_serves_every_format() {
 
     let pem = get("/ca.pem").await;
     assert!(pem.contains("BEGIN CERTIFICATE"));
-    assert!(pem.contains("filename=\"proxy-ca.pem\""));
+    assert!(pem.contains("filename=\"neko-ca.pem\""));
 
     let mut raw = TcpStream::connect(h.addr).await.unwrap();
-    raw.write_all(b"GET /ca.cer HTTP/1.1\r\nHost: proxy.local\r\nConnection: close\r\n\r\n")
+    raw.write_all(b"GET /ca.cer HTTP/1.1\r\nHost: neko.local\r\nConnection: close\r\n\r\n")
         .await
         .unwrap();
     let mut cer = Vec::new();
@@ -665,11 +665,11 @@ async fn cert_page_explains_and_serves_every_format() {
 #[tokio::test]
 async fn trust_probe_works_over_https_and_never_marks_the_proxy_pinned() {
     let h = start_proxy().await;
-    let name = ServerName::try_from("proxy.local").unwrap();
+    let name = ServerName::try_from("neko.local").unwrap();
 
     // A device that has not installed the CA fails the handshake. That must
-    // not make the proxy tunnel proxy.local from now on.
-    let tcp = connect_tunnel(h.addr, "proxy.local:443").await;
+    // not make the proxy tunnel neko.local from now on.
+    let tcp = connect_tunnel(h.addr, "neko.local:443").await;
     let res = TlsConnector::from(client_config(None, &[b"http/1.1"]))
         .connect(name.clone(), tcp)
         .await;
@@ -678,7 +678,7 @@ async fn trust_probe_works_over_https_and_never_marks_the_proxy_pinned() {
     assert!(h.proxy.pinned_hosts().is_empty());
 
     // Once the CA is trusted the same probe answers, and it is not a flow.
-    let tcp = connect_tunnel(h.addr, "proxy.local:443").await;
+    let tcp = connect_tunnel(h.addr, "neko.local:443").await;
     let tls = TlsConnector::from(client_config(Some(h.ca.cert_der()), &[b"http/1.1"]))
         .connect(name, tcp)
         .await
@@ -734,7 +734,7 @@ async fn parser_survives_hostile_input() {
         b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n",
         b"POST http://h/p HTTP/1.1\r\nHost: h\r\nContent-Length: 5\r\n\r\nhello",
         b"POST http://h/p HTTP/1.1\r\nHost: h\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n",
-        b"GET /ca.pem HTTP/1.1\r\nHost: proxy.local\r\n\r\n",
+        b"GET /ca.pem HTTP/1.1\r\nHost: neko.local\r\n\r\n",
         b"GET ws://h/s HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n",
         b"OPTIONS * HTTP/1.1\r\nHost: h\r\n\r\n",
         b"GET http://[::1]:99999/ HTTP/1.1\r\nHost: x\r\n\r\n",
@@ -1061,7 +1061,7 @@ async fn replay_sends_a_new_flow_straight_upstream() {
         .unwrap();
     let out = h
         .proxy
-        .replay(proxy_net::ReplayRequest {
+        .replay(neko_net::ReplayRequest {
             method: "post".into(),
             url: format!("http://{origin}/echo"),
             headers: vec![("content-type".into(), "text/plain".into())],
@@ -1075,11 +1075,11 @@ async fn replay_sends_a_new_flow_straight_upstream() {
     assert_eq!(&f.res_body[..], b"again");
     assert_eq!(&f.req_body[..], b"again");
     assert_ne!(f.flags & flags::REPLAYED, 0);
-    assert_eq!(f.app, "proxy");
+    assert_eq!(f.app, "neko");
 
     let err = h
         .proxy
-        .replay(proxy_net::ReplayRequest {
+        .replay(neko_net::ReplayRequest {
             method: "GET".into(),
             url: "/relative".into(),
             headers: vec![],

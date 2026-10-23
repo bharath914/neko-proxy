@@ -4,9 +4,9 @@ See your app's network calls in the desktop app. No proxy, no certificate, no Wi
 
 ## Desktop
 
-Start the app (`cargo run --release -p proxy-desktop`) or `proxyd run`. SDK connections are on from the start, and the choice is remembered.
+Start the app (`cargo run --release -p neko-desktop`) or `nekod run`. SDK connections are on from the start, and the choice is remembered.
 
-The phone icon in the top bar says whether an app can connect right now: green ready, amber needs you, red not working, grey off. Click it for the checks and the fix for each one that fails (port in use, USB debugging not approved on the phone, `adb` missing or without udev permission, firewall blocking Wi-Fi phones). `proxyd sdk status` prints the same.
+The phone icon in the top bar says whether an app can connect right now: green ready, amber needs you, red not working, grey off. Click it for the checks and the fix for each one that fails (port in use, USB debugging not approved on the phone, `adb` missing or without udev permission, firewall blocking Wi-Fi phones). `nekod sdk status` prints the same.
 
 ## Android (one line)
 
@@ -14,7 +14,7 @@ The phone icon in the top bar says whether an app can connect right now: green r
 // app/build.gradle.kts
 plugins {
     id("com.android.application")
-    id("dev.proxy.inspector")      // placeholder id
+    id("dev.nekoproxy.inspector")      // placeholder id
 }
 ```
 
@@ -33,13 +33,13 @@ Not built yet. The plan is `Inspector.start()`, see `docs/sdk/docs/07-ios-sdk.md
 ## Headless
 
 ```
-proxyd run                      # SDK connections are on by default; --sdk forces them on for one run
-proxyd sdk set lan off          # this computer only (no Wi-Fi phones)
-proxyd sdk set auto-accept-local off   # every device asks
-proxyd sdk status               # health and the fix for anything wrong
-proxyd devices list
-proxyd devices allow <id>      # after checking the code matches the app's log
-proxyd flows --source sdk
+nekod run                      # SDK connections are on by default; --sdk forces them on for one run
+nekod sdk set lan off          # this computer only (no Wi-Fi phones)
+nekod sdk set auto-accept-local off   # every device asks
+nekod sdk status               # health and the fix for anything wrong
+nekod devices list
+nekod devices allow <id>      # after checking the code matches the app's log
+nekod flows --source sdk
 ```
 
 ## Try it without an app

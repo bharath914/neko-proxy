@@ -31,7 +31,7 @@ impl App {
         static FIRST_FRAME: std::sync::Once = std::sync::Once::new();
         FIRST_FRAME.call_once(|| {
             // Benchmark hook: wall-clock time of the first frame, in ns.
-            if std::env::var_os("PROXY_BENCH").is_some() {
+            if std::env::var_os("NEKO_BENCH").is_some() {
                 let ns = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_nanos())

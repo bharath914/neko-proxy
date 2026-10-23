@@ -7,7 +7,7 @@ This feature is built on top of Phase 1 of the proxy project. Verify each assump
 - Cargo workspace under `core/crates/` with crates `net`, `tls`, `flow`, `store`, `decode`, `api`, `cli`
 - `proto/api.proto` defines the app-to-core API only
 - Gradle Kotlin Multiplatform project under `app/` with `shared` and `desktopApp` (JVM, Linux)
-- The core runs as a sidecar process `proxyd` and the app supervises it
+- The core runs as a sidecar process `nekod` and the app supervises it
 
 ## Data model
 
@@ -18,7 +18,7 @@ This feature is built on top of Phase 1 of the proxy project. Verify each assump
 
 ## API between app and core
 
-- WebSocket with protobuf over a Unix domain socket at `$XDG_RUNTIME_DIR/proxy/api.sock`
+- WebSocket with protobuf over a Unix domain socket at `$XDG_RUNTIME_DIR/neko/api.sock`
 - Calls: `subscribe(filter)`, `get_flow(id, parts)`, `search(query, range)`, `capture.start/stop/status`, `export(har, ids)`, `clear`
 - Deltas are batched about every 16 ms
 - The app only talks to the core through this API
@@ -29,7 +29,7 @@ This feature is built on top of Phase 1 of the proxy project. Verify each assump
 
 ## Paths on Linux
 
-- Data directory `$XDG_DATA_HOME/proxy` (default `~/.local/share/proxy`)
+- Data directory `$XDG_DATA_HOME/neko` (default `~/.local/share/neko`)
 - CA files `ca.pem`, `ca.key` there. The SDK ingest uses a separate certificate, see `03-protocol.md`
 
 ## What this plan adds
@@ -52,7 +52,7 @@ proxy/
    │  ├─ core/  okhttp/  ktor/  annotations/  noop/  gradle-plugin/  sample/
    └─ ios/
       ├─ Package.swift
-      ├─ Sources/ (ProxyInspector, ProxyInspectorAutoStart, ProxyInspectorAlamofire)
+      ├─ Sources/ (NekoInspector, NekoInspectorAutoStart, NekoInspectorAlamofire)
       ├─ Tests/
       └─ Sample/
 ```

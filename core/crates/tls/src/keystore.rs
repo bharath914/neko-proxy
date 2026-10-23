@@ -80,7 +80,7 @@ pub(crate) fn save(dir: &Path, storage: KeyStorage, pem: &str) -> std::io::Resul
 fn attrs(dir: &Path) -> [String; 4] {
     [
         "service".into(),
-        "proxy-ca".into(),
+        "neko-ca".into(),
         "dir".into(),
         dir.to_string_lossy().into_owned(),
     ]
@@ -131,7 +131,7 @@ fn keyring_store(dir: &Path, pem: &str) -> bool {
     }
     let child = Command::new("secret-tool")
         .arg("store")
-        .arg("--label=Proxy local CA key")
+        .arg("--label=Neko local CA key")
         .args(attrs(dir))
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -165,7 +165,7 @@ fn wait_with_timeout(child: &mut std::process::Child) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-const KEYCHAIN_SERVICE: &str = "proxy-ca";
+const KEYCHAIN_SERVICE: &str = "neko-ca";
 
 #[cfg(target_os = "macos")]
 fn keyring_lookup(dir: &Path) -> Option<String> {

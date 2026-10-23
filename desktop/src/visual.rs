@@ -1,4 +1,4 @@
-//! Headless renders of the real UI on fixture data. Set `PROXY_SHOT_DIR` to
+//! Headless renders of the real UI on fixture data. Set `NEKO_SHOT_DIR` to
 //! write PNGs; without it these tests only check that every screen draws.
 
 use crate::app::{App, Section, Tab};
@@ -38,7 +38,7 @@ fn harness(dark: bool, size: (f32, f32), flows: usize) -> Harness<'static, Optio
 }
 
 fn save(h: &mut Harness<'static, Option<App>>, name: &str) {
-    let Ok(dir) = std::env::var("PROXY_SHOT_DIR") else {
+    let Ok(dir) = std::env::var("NEKO_SHOT_DIR") else {
         return;
     };
     std::fs::create_dir_all(&dir).unwrap();

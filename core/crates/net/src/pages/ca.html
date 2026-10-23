@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Proxy certificate</title>
+<title>Neko Proxy certificate</title>
 <style>
 :root {
   --bg: #f6f6f4; --card: #ffffff; --ink: #1c1c1a; --muted: #6a6a64; --line: #e3e3de;
@@ -142,7 +142,7 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
       <ol>
         <li>Open <b>Settings</b> and search for <b>CA certificate</b>. On most phones it is under <b>Security → Encryption &amp; credentials → Install a certificate</b>.</li>
         <li>Choose <b>CA certificate</b> and confirm the warning.</li>
-        <li>Pick <code>proxy-ca.pem</code> from your Downloads.</li>
+        <li>Pick <code>neko-ca.pem</code> from your Downloads.</li>
       </ol>
       <p class="small muted">Android won't install a certificate straight from the browser. It has to go through Settings, as above. Set a screen lock first if you have none.</p>
       <div class="note"><b>Apps ignore it by default.</b> Since Android 7, apps only trust certificates you install if their developers allow it. Browsers like Chrome work. For your own app, add this to <code>res/xml/network_security_config.xml</code> in a debug build:
@@ -159,7 +159,7 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
     <div class="panel" data-os="mac" hidden>
       <a class="btn" href="/ca.pem">Download certificate</a>
       <p>Double-click the file, or install it from Terminal in one step:</p>
-      <div class="cmd"><pre data-cmd>sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/Downloads/proxy-ca.pem</pre><button type="button">Copy</button></div>
+      <div class="cmd"><pre data-cmd>sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/Downloads/neko-ca.pem</pre><button type="button">Copy</button></div>
       <p class="small muted">By hand: double-click the file, add it to <b>System</b> in Keychain Access, open it, expand <b>Trust</b> and set <b>Always Trust</b>.</p>
     </div>
 
@@ -171,18 +171,18 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
         <li>Finish, and restart your browser.</li>
       </ol>
       <p>Or, from an administrator Command Prompt:</p>
-      <div class="cmd"><pre data-cmd>certutil -addstore -f Root %USERPROFILE%\Downloads\proxy-ca.cer</pre><button type="button">Copy</button></div>
+      <div class="cmd"><pre data-cmd>certutil -addstore -f Root %USERPROFILE%\Downloads\neko-ca.cer</pre><button type="button">Copy</button></div>
     </div>
 
     <div class="panel" data-os="linux" hidden>
       <a class="btn" href="/ca.pem">Download certificate</a>
       <p>Pick the line for your distribution. It covers curl, wget, Python, Go and most command-line tools.</p>
       <h3>Fedora, RHEL</h3>
-      <div class="cmd"><pre data-cmd>sudo cp ~/Downloads/proxy-ca.pem /etc/pki/ca-trust/source/anchors/ &amp;&amp; sudo update-ca-trust</pre><button type="button">Copy</button></div>
+      <div class="cmd"><pre data-cmd>sudo cp ~/Downloads/neko-ca.pem /etc/pki/ca-trust/source/anchors/ &amp;&amp; sudo update-ca-trust</pre><button type="button">Copy</button></div>
       <h3>Debian, Ubuntu</h3>
-      <div class="cmd"><pre data-cmd>sudo cp ~/Downloads/proxy-ca.pem /usr/local/share/ca-certificates/proxy-ca.crt &amp;&amp; sudo update-ca-certificates</pre><button type="button">Copy</button></div>
+      <div class="cmd"><pre data-cmd>sudo cp ~/Downloads/neko-ca.pem /usr/local/share/ca-certificates/neko-ca.crt &amp;&amp; sudo update-ca-certificates</pre><button type="button">Copy</button></div>
       <h3>Arch</h3>
-      <div class="cmd"><pre data-cmd>sudo trust anchor --store ~/Downloads/proxy-ca.pem</pre><button type="button">Copy</button></div>
+      <div class="cmd"><pre data-cmd>sudo trust anchor --store ~/Downloads/neko-ca.pem</pre><button type="button">Copy</button></div>
       <p class="small muted">Chrome, Chromium and Firefox keep their own store. See the <b>Firefox</b> tab.</p>
     </div>
 
@@ -191,7 +191,7 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
       <a class="btn" href="/ca.pem">Download certificate</a>
       <ol>
         <li>Open <code>about:preferences#privacy</code>, scroll to <b>Certificates</b> and choose <b>View Certificates</b>.</li>
-        <li>On the <b>Authorities</b> tab choose <b>Import</b> and pick <code>proxy-ca.pem</code>.</li>
+        <li>On the <b>Authorities</b> tab choose <b>Import</b> and pick <code>neko-ca.pem</code>.</li>
         <li>Tick <b>Trust this CA to identify websites</b>.</li>
       </ol>
       <p class="small muted">On Linux, Chrome and Chromium read the NSS database. Import the same file under <b>Settings → Privacy and security → Manage certificates → Authorities</b>.</p>
@@ -255,10 +255,10 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
   <section class="card">
     <h2>All formats</h2>
     <div class="files">
-      <a href="/ca.pem">proxy-ca.pem</a><span class="muted">PEM text. Linux, macOS, Firefox, most tools.</span>
-      <a href="/ca.cer">proxy-ca.cer</a><span class="muted">DER binary. Windows, Java keystores.</span>
-      <a href="/ca.crt">proxy-ca.crt</a><span class="muted">Same as PEM. For Android's installer.</span>
-      <a href="/ca.mobileconfig">proxy-ca.mobileconfig</a><span class="muted">Profile. iPhone, iPad, macOS.</span>
+      <a href="/ca.pem">neko-ca.pem</a><span class="muted">PEM text. Linux, macOS, Firefox, most tools.</span>
+      <a href="/ca.cer">neko-ca.cer</a><span class="muted">DER binary. Windows, Java keystores.</span>
+      <a href="/ca.crt">neko-ca.crt</a><span class="muted">Same as PEM. For Android's installer.</span>
+      <a href="/ca.mobileconfig">neko-ca.mobileconfig</a><span class="muted">Profile. iPhone, iPad, macOS.</span>
     </div>
   </section>
 
@@ -281,7 +281,7 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
   Array.prototype.forEach.call(document.querySelectorAll(".subject"), function (e) { e.textContent = info.subject || "the proxy certificate"; });
 
   var port = (info.listen || "").split(":").pop();
-  var addr = location.hostname === "proxy.local" || !location.host
+  var addr = location.hostname === "neko.local" || !location.host
     ? (info.listenAny ? "this computer's IP address, port " + port : info.listen)
     : location.host;
   $("addr").textContent = addr;
@@ -344,7 +344,7 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
   function check() {
     if (running) return;
     running = true;
-    probe("http://proxy.local/status.json").then(function (viaProxy) {
+    probe("http://neko.local/status.json").then(function (viaProxy) {
       if (!viaProxy) {
         setRow("st-proxy", "bad", "isn't reaching this device");
         setRow("st-trust", "wait", "can't be checked yet");
@@ -352,7 +352,7 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
         return;
       }
       setRow("st-proxy", "ok", "is receiving this device's traffic");
-      return probe("https://proxy.local/trust-check").then(function (secure) {
+      return probe("https://neko.local/trust-check").then(function (secure) {
         if (secure && secure.sha256 === info.sha256) {
           trusted = true;
           setRow("st-trust", "ok", "is trusted. HTTPS traffic can be read.");

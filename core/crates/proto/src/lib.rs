@@ -3,7 +3,7 @@
 #![allow(clippy::all)]
 
 pub mod pb {
-    include!(concat!(env!("OUT_DIR"), "/proxy.api.v1.rs"));
+    include!(concat!(env!("OUT_DIR"), "/neko.api.v1.rs"));
 }
 
 pub use prost;

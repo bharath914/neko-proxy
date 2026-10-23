@@ -1,4 +1,4 @@
-rootProject.name = "proxy-inspector-android"
+rootProject.name = "neko-inspector-android"
 
 pluginManagement {
     repositories {

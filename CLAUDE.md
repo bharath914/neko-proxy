@@ -1,4 +1,4 @@
-# Open-source Charles alternative (working name: Proxy)
+# Open-source Charles alternative (Neko Proxy)
 
 Fast, simple, open-source HTTP/HTTPS debugging proxy. AI-ready: any local Claude session connects through a built-in MCP server.
 
@@ -13,7 +13,7 @@ Built: the Rust capture core and Linux desktop app (`docs/phase-1.md`), then rul
 
 ## macOS app (in progress)
 
-`desktop-macos/` is a SwiftPM AppKit app that talks to `proxyd` over the same socket API (swift-protobuf bindings from `proto/api.proto` via `desktop-macos/gen-proto.sh`). It mirrors the Linux egui look: tokens in `Theme.swift` are copied from `desktop/src/theme.rs`, so change both together. Built: Inspector (hosts sidebar, flow table, detail with JSON tree) and Settings. Not built: Breakpoints, Rules, Devices screens, approval popover. Installer: `packaging/macos/build.sh` writes `dist/Proxy.app` and a `.dmg` (host arch only, ad-hoc signed unless `SIGN_IDENTITY` and `NOTARY_PROFILE` are set; the notarized path is untested). Core on macOS: data in `~/Library/Application Support/proxy`, socket under `$TMPDIR`, CA key in the login Keychain. Run: `cargo build -p proxy-cli && cd desktop-macos && swift run Proxy`. Tests: `swift test`. Screens to PNG: `PROXY_SHOT_DIR=/dir .build/debug/Proxy`.
+`desktop-macos/` is a SwiftPM AppKit app that talks to `nekod` over the same socket API (swift-protobuf bindings from `proto/api.proto` via `desktop-macos/gen-proto.sh`). It mirrors the Linux egui look: tokens in `Theme.swift` are copied from `desktop/src/theme.rs`, so change both together. Built: Inspector (hosts sidebar, flow table, detail with JSON tree), Breakpoints, Rules (with editor), Devices, the AI approval card, and Settings (certificate, install, AI clients). Not built: per-device config drawer, SSL proxying list and Map Local editing, Rules import/export. Installer: `packaging/macos/build.sh` writes `dist/Neko.app` and a `.dmg` (host arch only, ad-hoc signed unless `SIGN_IDENTITY` and `NOTARY_PROFILE` are set; the notarized path is untested). Core on macOS: data in `~/Library/Application Support/neko`, socket under `$TMPDIR`, CA key in the login Keychain. Run: `cargo build -p neko-cli && cd desktop-macos && swift run Neko`. Tests: `swift test`. Screens to PNG: `NEKO_SHOT_DIR=/dir .build/debug/Neko`.
 
 ## Goals
 
@@ -25,7 +25,7 @@ Built: the Rust capture core and Linux desktop app (`docs/phase-1.md`), then rul
 
 ## Decided stack
 
-- **Core:** Rust, Cargo workspace, runs as a sidecar process (`proxyd`), also the headless CLI
+- **Core:** Rust, Cargo workspace, runs as a sidecar process (`nekod`), also the headless CLI
 - **Desktop app:** native Rust (egui/eframe), Linux only for now, in `desktop/`. No JVM, no Kotlin on desktop. It talks to the core only through the client API
 - **Mobile (later):** a debug-only SDK embedded in the developer's own app, Kotlin for Android first, then Swift for iOS (`docs/sdk.md`). No companion apps and no Compose Multiplatform
 - **Client API:** WebSocket + protobuf (tokio-tungstenite in the desktop app; the mobile SDK uses only pairing and the CA download), Unix domain socket on Linux (LAN with token for phones comes later)
@@ -41,7 +41,7 @@ Decision (Oct 2026): desktop is native Rust rather than CMP on the JVM, for star
 Apps: Desktop (Rust, egui)  |  Mobile SDK in the dev's app       AI clients (MCP)
 Desktop: view state, API client, design system
         │  WebSocket + protobuf
-Rust core (proxyd): Listener · TLS & CA · Pipeline · Rules · Store · API & MCP
+Rust core (nekod): Listener · TLS & CA · Pipeline · Rules · Store · API & MCP
         │
 Traffic: apps/browsers → proxy → upstream (HTTP/1.1, HTTP/2, WebSocket; HTTP/3 later)
 ```
@@ -82,7 +82,7 @@ Redact Authorization, Cookie, Set-Cookie, API keys and token-shaped values befor
 
 ## Phone pairing and the SDK
 
-QR payload: `{ host, port, token, ca_sha256 }`. The SDK (`docs/sdk.md`) pairs with it, routes its host app's traffic through the proxy and trusts the CA at runtime in debug builds, so no `network_security_config` edit or iOS profile is needed for that app. For everything else on a device, the cert page at `http://proxy.local` (served by the core, built) walks through install per platform, offers PEM, DER and an Apple `.mobileconfig`, and live-checks whether the device trusts the CA. On-device Android capture comes after LAN mode.
+QR payload: `{ host, port, token, ca_sha256 }`. The SDK (`docs/sdk.md`) pairs with it, routes its host app's traffic through the proxy and trusts the CA at runtime in debug builds, so no `network_security_config` edit or iOS profile is needed for that app. For everything else on a device, the cert page at `http://neko.local` (served by the core, built) walks through install per platform, offers PEM, DER and an Apple `.mobileconfig`, and live-checks whether the device trusts the CA. On-device Android capture comes after LAN mode.
 
 ## Performance targets (goals to benchmark from M1)
 
@@ -118,9 +118,9 @@ Phase 1 = steps 1 and 2, Linux only, trimmed as described in `docs/phase-1.md`. 
 
 Open source under `MIT OR Apache-2.0` (decided Oct 2026): `LICENSE-MIT`, `LICENSE-APACHE`. The repo is public at github.com/bharath914/proxy; the SDK Maven repository is at github.com/bharath914/proxy-sdk-maven (served by Pages).
 
-## Open questions
+## Naming
 
-- Final project name (and crate/package names)
+Decided Oct 2026: **Neko Proxy**. CLI `neko`, daemon `nekod`, crates `neko-*`, app and bundle `Neko`, ids under `dev.nekoproxy`. The public GitHub repos (`bharath914/proxy`, `proxy-sdk-maven`) and the Pages URLs still use the old names until renamed on GitHub; then update the URLs in `sdk/`, `docs/` and `packaging/`. The bare `proxy` label stays for the flow source (`source:proxy`).
 
 ## How to work in this repo
 
@@ -128,5 +128,5 @@ Open source under `MIT OR Apache-2.0` (decided Oct 2026): `LICENSE-MIT`, `LICENS
 - Phases 1 and 2 and the in-app SDK are built. Read `docs/phase-1.md`, `docs/phase-2.md` and `docs/sdk-quickstart.md`; measured results are in `docs/bench.md` and `docs/sdk-bench.md`. SDK ingest port is 8897 (8898 is MCP). Not verified on a device or emulator: see `docs/sdk/docs/e2e.md`. The iOS Apple-only files have never been compiled.
 - Be terse. Scaffold and implement without asking for step-by-step approval; ask only when a decision is genuinely open.
 - Keep UI free of logic: all parsing, decoding, search and redaction live in the core.
-- Build and test: `cargo test --workspace`. SDK: `swift test` in `sdk/ios`; in `sdk/android`: `cargo build -p sdk --bins` first, then `./gradlew test :gradle-plugin:test`. Run the app: `cargo run --release -p proxy-desktop`. Package: `packaging/build.sh`.
-- Visual check without a window: `PROXY_SHOT_DIR=/some/dir cargo test -p proxy-desktop` writes PNGs of every screen.
+- Build and test: `cargo test --workspace`. SDK: `swift test` in `sdk/ios`; in `sdk/android`: `cargo build -p sdk --bins` first, then `./gradlew test :gradle-plugin:test`. Run the app: `cargo run --release -p neko-desktop`. Package: `packaging/build.sh`.
+- Visual check without a window: `NEKO_SHOT_DIR=/some/dir cargo test -p neko-desktop` writes PNGs of every screen.

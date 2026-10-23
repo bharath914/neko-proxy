@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use flow::{flags, FlowRecord, FlowState, Timings};
-use proxy_store::{Kind, Query, Store};
+use neko_store::{Kind, Query, Store};
 use std::sync::Arc;
 
 fn rec(id: u64, host: &str, path: &str, status: u16, ms: u64, body: &str) -> Arc<FlowRecord> {
@@ -186,7 +186,7 @@ fn har_has_expected_shape_and_redacts() {
     };
     let recs = vec![Arc::new(r)];
 
-    let har = proxy_store::to_har(&recs, true, "0.1.0");
+    let har = neko_store::to_har(&recs, true, "0.1.0");
     let e = &har["log"]["entries"][0];
     assert_eq!(har["log"]["version"], "1.2");
     assert_eq!(e["request"]["method"], "GET");
@@ -205,7 +205,7 @@ fn har_has_expected_shape_and_redacts() {
     assert!(!e["request"]["url"].as_str().unwrap().contains("abc"));
     assert_eq!(e["response"]["cookies"][0]["value"], "[redacted]");
 
-    let raw = proxy_store::to_har(&recs, false, "0.1.0");
+    let raw = neko_store::to_har(&recs, false, "0.1.0");
     let auth = raw["log"]["entries"][0]["request"]["headers"]
         .as_array()
         .unwrap()
@@ -219,7 +219,7 @@ fn har_has_expected_shape_and_redacts() {
 fn tunnels_are_not_exported() {
     let mut r = (*rec(1, "pay.example.com", "", 0, 0, "")).clone();
     r.flags = flags::TUNNEL;
-    let har = proxy_store::to_har(&[Arc::new(r)], true, "0.1.0");
+    let har = neko_store::to_har(&[Arc::new(r)], true, "0.1.0");
     assert_eq!(har["log"]["entries"].as_array().unwrap().len(), 0);
 }
 
@@ -290,7 +290,7 @@ fn sdk_fields_roundtrip_search_and_lazy_body() {
     // A lazy body arriving later is stored and becomes searchable.
     store.update_body(
         1,
-        proxy_store::BodyPart::Response,
+        neko_store::BodyPart::Response,
         Bytes::from_static(br#"{"discount":"SPRING25"}"#),
         flow::BodyState::Present,
         false,

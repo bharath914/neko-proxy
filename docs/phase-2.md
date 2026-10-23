@@ -37,7 +37,7 @@ Map Local and SSL proxying from Phase 1 are unchanged. Order of effect on a requ
 Connect Claude Code:
 
 ```bash
-proxyd mcp        # prints the endpoint and the exact command
+nekod mcp        # prints the endpoint and the exact command
 claude mcp add --transport http proxy http://127.0.0.1:8898/mcp --header "Authorization: Bearer <token>"
 ```
 

@@ -619,7 +619,7 @@ impl App {
             Req::Resume(pb::ResumeRequest {
                 flow_id,
                 abort: true,
-                abort_reason: "stopped in the Proxy app".into(),
+                abort_reason: "stopped in the Neko Proxy app".into(),
                 ..Default::default()
             }),
             Pending::Resume,

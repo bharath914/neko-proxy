@@ -1,5 +1,5 @@
 #!/bin/sh
-# Regenerate Sources/ProxyAPI/api.pb.swift from proto/api.proto.
+# Regenerate Sources/NekoAPI/api.pb.swift from proto/api.proto.
 # Needs protoc (the vendored one from the cargo registry works) and the
 # protoc-gen-swift plugin from swift-protobuf.
 set -eu
@@ -8,4 +8,4 @@ PROTOC="${PROTOC:-$(ls ~/.cargo/registry/src/*/protoc-bin-vendored-macos-aarch_6
 swift build --product protoc-gen-swift -c release
 "$PROTOC" --plugin=protoc-gen-swift=.build/release/protoc-gen-swift \
   --swift_opt=Visibility=Public \
-  --swift_out=Sources/ProxyAPI -I ../proto ../proto/api.proto
+  --swift_out=Sources/NekoAPI -I ../proto ../proto/api.proto

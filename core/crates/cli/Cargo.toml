@@ -1,12 +1,12 @@
 [package]
-name = "proxy-cli"
+name = "neko-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "proxyd: the headless capture core"
+description = "nekod: the headless capture core"
 
 [[bin]]
-name = "proxyd"
+name = "nekod"
 path = "src/main.rs"
 
 [dependencies]

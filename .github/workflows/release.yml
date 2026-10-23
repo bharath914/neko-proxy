@@ -29,9 +29,9 @@ jobs:
           v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != Cargo.toml version v$v"; exit 1; }
       # The desktop render tests need a GPU adapter, which hosted runners lack;
-      # they run locally (`cargo test -p proxy-desktop`).
-      - run: cargo test --workspace --exclude proxy-desktop
-      - run: cargo test -p proxy-desktop -- --skip visual --skip e2e
+      # they run locally (`cargo test -p neko-desktop`).
+      - run: cargo test --workspace --exclude neko-desktop
+      - run: cargo test -p neko-desktop -- --skip visual --skip e2e
 
   package:
     needs: test
@@ -64,8 +64,8 @@ jobs:
 
       - name: Smoke test the tarball install
         run: |
-          sh packaging/install.sh --tarball dist/proxy-*-linux-${{ matrix.arch }}.tar.gz --prefix "$RUNNER_TEMP/prefix"
-          "$RUNNER_TEMP/prefix/bin/proxyd" --help
+          sh packaging/install.sh --tarball dist/neko-*-linux-${{ matrix.arch }}.tar.gz --prefix "$RUNNER_TEMP/prefix"
+          "$RUNNER_TEMP/prefix/bin/nekod" --help
 
       - uses: actions/upload-artifact@v4
         with:

@@ -6,9 +6,9 @@
 
 | Archive | What it is | Who uses it |
 |---|---|---|
-| `proxy-inspector-android-maven-X.Y.Z.zip` | A complete Maven repository: the Gradle plugin, its marker, and the artifacts `inspector-android`, `-core`, `-okhttp`, `-ktor`, `-noop`, `-annotations` | Android developers |
+| `neko-inspector-android-maven-X.Y.Z.zip` | A complete Maven repository: the Gradle plugin, its marker, and the artifacts `inspector-android`, `-core`, `-okhttp`, `-ktor`, `-noop`, `-annotations` | Android developers |
 | `inspector-sample-debug-X.Y.Z.apk` | The sample app | trying it on a phone |
-| `proxy-inspector-ios-X.Y.Z.zip` | The Swift package sources | iOS developers, once the Apple-only code is verified (`sdk/ios/README.md`) |
+| `neko-inspector-ios-X.Y.Z.zip` | The Swift package sources | iOS developers, once the Apple-only code is verified (`sdk/ios/README.md`) |
 | `sdk-dev-tools-linux-x86_64.tar.gz` | `sdk-test-core` and `fake-device` | people writing tests |
 | `SHA256SUMS` | checksums | everyone |
 
@@ -29,8 +29,8 @@ Consumers download the Maven zip, unzip it, and point Gradle at the folder. No a
 
 ```kotlin
 // settings.gradle.kts
-pluginManagement { repositories { maven(url = file("/path/to/proxy-inspector-maven")); google(); mavenCentral(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositories { maven(url = file("/path/to/proxy-inspector-maven")); google(); mavenCentral() } }
+pluginManagement { repositories { maven(url = file("/path/to/neko-inspector-maven")); google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositories { maven(url = file("/path/to/neko-inspector-maven")); google(); mavenCentral() } }
 ```
 
 A team can also commit the unzipped repository into its own repository (a `libs/` folder) and use a relative path.
@@ -44,7 +44,7 @@ pluginManagement { repositories { maven(url = "https://bharath914.github.io/prox
 dependencyResolutionManagement { repositories { maven(url = "https://bharath914.github.io/proxy/maven/"); google(); mavenCentral() } }
 ```
 ```kotlin
-plugins { id("com.android.application"); id("dev.proxy.inspector") version "0.1.0" }
+plugins { id("com.android.application"); id("dev.nekoproxy.inspector") version "0.1.0" }
 ```
 
 It is public and permanent: only run it when you mean it. Each run adds the version it built; old versions stay (the job copies on top).

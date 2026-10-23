@@ -1,8 +1,8 @@
 # Phase 1 benchmarks
 
 Machine: Fedora 44, 12 cores, 23 GB RAM, NVIDIA GTX 1650 (GL), Wayland. Release builds.
-Reproduce: `cargo run --release -p proxy-net --example bench`, `cargo run --release -p proxy-store --example bench_search`,
-`PROXY_BENCH=1 target/release/proxy --demo` (prints the first-frame time).
+Reproduce: `cargo run --release -p neko-net --example bench`, `cargo run --release -p neko-store --example bench_search`,
+`NEKO_BENCH=1 target/release/neko --demo` (prints the first-frame time).
 
 | Target | Goal | Measured | Notes |
 |---|---|---|---|
@@ -13,7 +13,7 @@ Reproduce: `cargo run --release -p proxy-net --example bench`, `cargo run --rele
 | Search over 100k flows | < 100 ms | 0.3 to 64 ms | slowest is a body-text search; chips and operators 12 to 16 ms |
 | App first paint | < 1 s | 189 to 227 ms | process launch to first frame submitted |
 | App idle memory | < 250 MB | 108 to 165 MB RSS | mostly the GPU driver's share; varies per run |
-| Binary sizes | | `proxyd` 9.9 MB, `proxy` 11.6 MB | |
+| Binary sizes | | `nekod` 9.9 MB, `proxy` 11.6 MB | |
 
 ## Search at 100,000 flows
 

@@ -1,5 +1,5 @@
 [package]
-name = "proxy-fuzz"
+name = "neko-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -11,9 +11,9 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 tokio = { version = "1", features = ["rt", "io-util", "time", "macros"] }
 flow = { path = "../crates/flow" }
-proxy-tls = { path = "../crates/tls" }
-proxy-net = { path = "../crates/net" }
-proxy-decode = { path = "../crates/decode" }
+neko-tls = { path = "../crates/tls" }
+neko-net = { path = "../crates/net" }
+neko-decode = { path = "../crates/decode" }
 tempfile = "3"
 
 [workspace]

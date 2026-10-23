@@ -56,11 +56,11 @@ impl IngestCert {
 
     fn generate(dir: &Path) -> io::Result<IngestCert> {
         let key = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).map_err(io::Error::other)?;
-        let mut params = CertificateParams::new(vec!["proxy-ingest.local".to_string()])
+        let mut params = CertificateParams::new(vec!["neko-ingest.local".to_string()])
             .map_err(io::Error::other)?;
         params
             .distinguished_name
-            .push(DnType::CommonName, "Proxy SDK ingest");
+            .push(DnType::CommonName, "Neko SDK ingest");
         // Valid for a long time: the pin, not expiry, is what is checked.
         params.not_before = rcgen::date_time_ymd(2024, 1, 1);
         params.not_after = rcgen::date_time_ymd(2124, 1, 1);

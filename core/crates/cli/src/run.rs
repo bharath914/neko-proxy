@@ -287,7 +287,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     }
 
     eprintln!(
-        "proxyd {} ready in {} ms\n  proxy   {}\n  api     {}\n  mcp     {}\n  sdk     {}\n  ca      {} ({})\n  data    {}\n  record  {}",
+        "nekod {} ready in {} ms\n  proxy   {}\n  api     {}\n  mcp     {}\n  sdk     {}\n  ca      {} ({})\n  data    {}\n  record  {}",
         env!("CARGO_PKG_VERSION"),
         started.elapsed().as_millis(),
         listen,

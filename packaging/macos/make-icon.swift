@@ -1,4 +1,4 @@
-// Draws the app icon (same artwork as packaging/dev.proxy.Proxy.svg) into an .iconset.
+// Draws the app icon (same artwork as packaging/dev.nekoproxy.Neko.svg) into an .iconset.
 // Usage: swift make-icon.swift <out.iconset>
 import AppKit
 

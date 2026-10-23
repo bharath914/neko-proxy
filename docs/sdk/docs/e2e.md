@@ -5,26 +5,26 @@ Run on 2026-10-17 on the Linux development machine. The checklist is from `09-te
 
 ## Real device run (2026-10-17, Samsung Galaxy S24 Ultra, SM-S928B, USB)
 
-The sample app (`sdk/android/sample`), built with only `id("dev.proxy.inspector")` applied, on a physical phone over USB against a real `proxyd run --sdk` on this machine, with `sdk/test-server/server.py` reached through `adb reverse`.
+The sample app (`sdk/android/sample`), built with only `id("dev.nekoproxy.inspector")` applied, on a physical phone over USB against a real `nekod run --sdk` on this machine, with `sdk/test-server/server.py` reached through `adb reverse`.
 
 | Check | Result |
 |---|---|
-| App starts the SDK with no code (App Startup), connects over `adb reverse` (done by `proxyd` itself, `adb ready, 1 device(s)`) | **Pass** |
-| Pairing: code in Logcat (`Pairing code 457 580`) equals the one `proxyd devices list` showed | **Pass** |
+| App starts the SDK with no code (App Startup), connects over `adb reverse` (done by `nekod` itself, `adb ready, 1 device(s)`) | **Pass** |
+| Pairing: code in Logcat (`Pairing code 457 580`) equals the one `nekod devices list` showed | **Pass** |
 | Calls made before pairing are not captured, calls after pairing are | **Pass** (first launch captured nothing, second launch captured all) |
 | Retrofit `@Inspect` name, owner and route template, including `/status/{code}` | **Pass** |
 | A client created inside a library module is captured (plugin bytecode hook) | **Pass** (`/gzip`) |
 | Ktor on the OkHttp engine and on CIO with `install(InspectorPlugin)`, with `inspect(name = ...)`, streaming response whole | **Pass.** Each Ktor call appears once, with its name, though the OkHttp engine is instrumented too. |
 | Screen name from the resumed activity | **Pass** (`MainActivity`) |
-| Passwords hidden on the device | **Pass** for the request body (`"password":"[redacted]"` is what `proxyd export --no-redact` returns). The test server echoes the request inside a `body` field of its response; that copy is not hidden, since redaction is by key name. |
+| Passwords hidden on the device | **Pass** for the request body (`"password":"[redacted]"` is what `nekod export --no-redact` returns). The test server echoes the request inside a `body` field of its response; that copy is not hidden, since redaction is by key name. |
 | Counters | 14 calls, 0 dropped |
 
 Not done on the device: Wi-Fi/mDNS discovery (USB only), revoke and re-pair, cellular or pinned-app checks, release APK installed and exercised (its contents were verified, see below), a 60 s stream, benchmark runs.
 
 ## What was run before that, without a device
 
-`sdk/scripts/e2e-jvm.sh`: a real `proxyd run --sdk` (the Linux core, its API and CLI), the real Android SDK engine (`sdk/android/core` and `okhttp`, on the JVM), OkHttp and Retrofit, and `sdk/test-server/server.py`.
-Output saved in `e2e-jvm-output.txt`. The desktop GUI was not driven by hand; the same API it uses (`devices.subscribe`, `device_action`, `search`) was exercised by the CLI and by `core/crates/api/tests`, and its screens are covered by headless renders (`PROXY_SHOT_DIR=... cargo test -p proxy-desktop`).
+`sdk/scripts/e2e-jvm.sh`: a real `nekod run --sdk` (the Linux core, its API and CLI), the real Android SDK engine (`sdk/android/core` and `okhttp`, on the JVM), OkHttp and Retrofit, and `sdk/test-server/server.py`.
+Output saved in `e2e-jvm-output.txt`. The desktop GUI was not driven by hand; the same API it uses (`devices.subscribe`, `device_action`, `search`) was exercised by the CLI and by `core/crates/api/tests`, and its screens are covered by headless renders (`NEKO_SHOT_DIR=... cargo test -p neko-desktop`).
 
 | What | Result |
 |---|---|
@@ -57,6 +57,6 @@ Output saved in `e2e-jvm-output.txt`. The desktop GUI was not driven by hand; th
 
 ## To finish on a machine with devices
 
-1. `cargo run --release -p proxy-desktop`, turn on **Accept SDK connections** on the Devices screen.
+1. `cargo run --release -p neko-desktop`, turn on **Accept SDK connections** on the Devices screen.
 2. Android: `./gradlew publishAllToLocalRepo`, then `./gradlew -p sample :app:installDebug` on an emulator or a USB phone, with `python3 sdk/test-server/server.py` running (the sample's default base URL is `http://10.0.2.2:18080/`; pass the intent extra `base` otherwise). Walk checklist items 1 to 5 and 8.
 3. iOS: follow "First things to do on a Mac" in `sdk/ios/README.md`.

@@ -136,7 +136,7 @@ impl App {
                         ui.add_space(2.0);
                         text(
                             ui,
-                            "Start proxyd without --no-sdk to accept connections from apps.",
+                            "Start nekod without --no-sdk to accept connections from apps.",
                             Role::Callout,
                             st.p.text2,
                         );
@@ -606,9 +606,9 @@ impl App {
                 st.p.text2,
             );
             ui.add_space(12.0);
-            self.snippet(ui, st, "Android", "plugins { id(\"dev.proxy.inspector\") }");
+            self.snippet(ui, st, "Android", "plugins { id(\"dev.nekoproxy.inspector\") }");
             ui.add_space(6.0);
-            self.snippet(ui, st, "iOS", "import ProxyInspector\n\n@main struct MyApp: App {\n    init() { Inspector.start() }\n}");
+            self.snippet(ui, st, "iOS", "import NekoInspector\n\n@main struct MyApp: App {\n    init() { Inspector.start() }\n}");
             ui.add_space(12.0);
             for (k, v) in [
                 (
@@ -698,7 +698,7 @@ impl App {
             for (k, v) in [
                 ("Emulator", format!("Reaches this computer at 10.0.2.2:{}. Nothing to set up.", s.port)),
                 ("USB", format!("With adb installed, port {} is forwarded to every attached phone. Status: {}.", s.port, s.adb_label)),
-                ("Wi-Fi", "Phones find this computer by name (_proxyinspect._tcp). It must be on the same network, and the network must allow device to device traffic.".to_string()),
+                ("Wi-Fi", "Phones find this computer by name (_nekoinspect._tcp). It must be on the same network, and the network must allow device to device traffic.".to_string()),
                 ("Manual", if manual.is_empty() { "Set host:port in the SDK configuration.".to_string() } else { format!("Set host:port to {} in the SDK configuration.", manual.join(" or ")) }),
                 ("Discovery fails", "Check that the phone and this computer are on the same Wi-Fi, that a guest or office network is not isolating devices, and that the firewall allows this app. USB always works for Android.".to_string()),
             ] {

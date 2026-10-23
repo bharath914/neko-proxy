@@ -33,7 +33,7 @@ impl AppSlot {
         Arc::new(AppSlot::default())
     }
 
-    /// A slot whose app name is already known (replays carry "proxy").
+    /// A slot whose app name is already known (replays carry "neko").
     pub fn named(name: &str) -> Arc<AppSlot> {
         let slot = AppSlot::default();
         let _ = slot.0.set(name.to_string());

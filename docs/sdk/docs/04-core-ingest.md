@@ -1,6 +1,6 @@
 # Core: SDK ingest (Rust)
 
-New crate `core/crates/sdk`. It runs inside `proxyd`, next to the proxy listener and the app API.
+New crate `core/crates/sdk`. It runs inside `nekod`, next to the proxy listener and the app API.
 
 ## Crates and dependencies
 
@@ -18,7 +18,7 @@ Suggested: `tokio`, `tokio-rustls`, `rcgen`, `prost`, `mdns-sd`, `sha2`, `rand`,
 | `devices` | Persistent device and app registry, token hashes, per-device config, revoke |
 | `assembler` | Turn call events into flow records and body blobs, handle order and loss |
 | `config` | Build and push `Config` to sessions |
-| `discovery` | Advertise `_proxyinspect._tcp` with TXT records while enabled |
+| `discovery` | Advertise `_nekoinspect._tcp` with TXT records while enabled |
 | `adb` | Watch for Android devices and run `adb reverse`, report status |
 | `merge` | Derive merged flows from SDK and proxy records |
 | `bin/sdk-test-core` | Dev binary used by every SDK's integration tests |
@@ -74,9 +74,9 @@ Implement the rules in `03-protocol.md`. Keep it a pure function over two candid
 
 ## CLI additions
 
-- `proxyd sdk enable|disable|status`
-- `proxyd devices list|revoke <id>`
-- `proxyd flows` gains a `--source sdk|proxy|merged` filter
+- `nekod sdk enable|disable|status`
+- `nekod devices list|revoke <id>`
+- `nekod flows` gains a `--source sdk|proxy|merged` filter
 
 ## `sdk-test-core`
 

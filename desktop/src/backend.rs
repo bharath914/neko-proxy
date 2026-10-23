@@ -1,5 +1,5 @@
 //! The only way the app talks to the core: the client API over a Unix
-//! socket. `RealBackend` owns the connection and supervises `proxyd`;
+//! socket. `RealBackend` owns the connection and supervises `nekod`;
 //! `DemoBackend` serves fixtures so the UI can run (and be screenshotted)
 //! without a core.
 
@@ -49,8 +49,8 @@ pub trait Backend: Send {
 #[derive(Clone, Debug)]
 pub struct CoreOptions {
     pub socket: PathBuf,
-    /// Path to `proxyd`. `None` means only connect to an existing core.
-    pub proxyd: Option<PathBuf>,
+    /// Path to `nekod`. `None` means only connect to an existing core.
+    pub nekod: Option<PathBuf>,
     pub listen: String,
 }
 
@@ -146,7 +146,7 @@ async fn manage(
                     None => true,
                 };
                 if exited {
-                    if let Some(path) = &opts.proxyd {
+                    if let Some(path) = &opts.nekod {
                         match spawn_core(path, &opts) {
                             Ok(c) => {
                                 child = Some(c);
@@ -164,7 +164,7 @@ async fn manage(
                         }
                     } else if attempt >= 3 {
                         emit(Event::Conn(ConnState::Failed(
-                            "proxyd was not found and nothing is listening on the API socket"
+                            "nekod was not found and nothing is listening on the API socket"
                                 .into(),
                         )));
                     }
@@ -1464,7 +1464,7 @@ impl Backend for DemoBackend {
             Req::Status(_) => Res::Status(pb::StatusResponse {
                 version: "0.1.0".into(),
                 listen: "127.0.0.1:8899".into(),
-                data_dir: "~/.local/share/proxy".into(),
+                data_dir: "~/.local/share/neko".into(),
                 uptime_ms: 42_000,
                 flows: s.flows.len() as u64,
                 recording: s.recording,
@@ -1473,9 +1473,9 @@ impl Backend for DemoBackend {
                 core_pid: 4242,
             }),
             Req::CaInfo(_) => Res::CaInfo(pb::CaInfo {
-                cert_path: "/home/you/.local/share/proxy/ca.pem".into(),
+                cert_path: "/home/you/.local/share/neko/ca.pem".into(),
                 sha256: "9f2c1b7e5a044d1e8a526e1f0c0a77d1c3b8e5f4a2d19076b8c3e4f5a6b7c8d9".into(),
-                subject: "Proxy Local CA (workstation)".into(),
+                subject: "Neko Local CA (workstation)".into(),
                 not_after: "2036-10-10T00:00:00Z".into(),
                 pem: String::new(),
                 key_storage: "keyring".into(),
@@ -1483,7 +1483,7 @@ impl Backend for DemoBackend {
             }),
             Req::Export(_) => Res::Export(pb::ExportResponse {
                 data: b"{\"log\":{\"version\":\"1.2\",\"entries\":[]}}".to_vec(),
-                filename: "proxy-demo.har".into(),
+                filename: "neko-demo.har".into(),
                 count: s.flows.len() as u32,
             }),
             Req::Subscribe(_) => Res::Subscribed(pb::SubscribeResponse {
@@ -1749,19 +1749,19 @@ mod e2e {
     /// The app's backend starts a real core, sees live traffic and reads it back.
     #[test]
     fn supervises_core_and_reads_traffic() {
-        let Some(proxyd) = crate::platform::find_proxyd() else {
-            eprintln!("proxyd not built; skipping");
+        let Some(nekod) = crate::platform::find_nekod() else {
+            eprintln!("nekod not built; skipping");
             return;
         };
-        let dir = std::env::temp_dir().join(format!("proxy-e2e-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("neko-e2e-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let socket = PathBuf::from(format!(
-            "/run/user/{}/proxy-e2e-{}/api.sock",
+            "/run/user/{}/neko-e2e-{}/api.sock",
             unsafe { libc::getuid() },
             std::process::id()
         ));
-        std::env::set_var("PROXY_DATA_DIR", &dir);
+        std::env::set_var("NEKO_DATA_DIR", &dir);
 
         // A tiny origin.
         let origin = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1784,7 +1784,7 @@ mod e2e {
         let be = RealBackend::start(
             CoreOptions {
                 socket: socket.clone(),
-                proxyd: Some(proxyd),
+                nekod: Some(nekod),
                 listen: "127.0.0.1:0".into(),
             },
             egui::Context::default(),
