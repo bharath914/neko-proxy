@@ -36,11 +36,11 @@ GLIBC=$(objdump -T target/release/neko target/release/nekod \
 echo "==> glibc floor: ${GLIBC:-none}"
 
 rm -rf "$OUT"
-mkdir -p "$STAGE/bin" "$STAGE/share/applications" "$STAGE/share/icons/hicolor/scalable/apps"
+mkdir -p "$STAGE/bin" "$STAGE/share/applications" "$STAGE/share/icons/hicolor/512x512/apps"
 install -m 0755 target/release/neko  "$STAGE/bin/neko"
 install -m 0755 target/release/nekod "$STAGE/bin/nekod"
 install -m 0644 packaging/dev.nekoproxy.Neko.desktop "$STAGE/share/applications/"
-install -m 0644 packaging/dev.nekoproxy.Neko.svg     "$STAGE/share/icons/hicolor/scalable/apps/"
+install -m 0644 packaging/icon/neko-512.png "$STAGE/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png"
 cat > "$STAGE/README.txt" <<TXT
 Neko Proxy $VERSION (needs glibc ${GLIBC:-any})
 
@@ -56,11 +56,11 @@ tar -C "$OUT" --owner=0 --group=0 -czf "$OUT/$NAME.tar.gz" "$NAME"
 echo "==> deb"
 DEB=$OUT/deb
 mkdir -p "$DEB/data/usr/bin" "$DEB/data/usr/share/applications" \
-         "$DEB/data/usr/share/icons/hicolor/scalable/apps" "$DEB/data/usr/share/doc/neko" "$DEB/control"
+         "$DEB/data/usr/share/icons/hicolor/512x512/apps" "$DEB/data/usr/share/doc/neko" "$DEB/control"
 install -m 0755 target/release/neko  "$DEB/data/usr/bin/neko"
 install -m 0755 target/release/nekod "$DEB/data/usr/bin/nekod"
 install -m 0644 packaging/dev.nekoproxy.Neko.desktop "$DEB/data/usr/share/applications/"
-install -m 0644 packaging/dev.nekoproxy.Neko.svg     "$DEB/data/usr/share/icons/hicolor/scalable/apps/"
+install -m 0644 packaging/icon/neko-512.png "$DEB/data/usr/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png"
 cat > "$DEB/data/usr/share/doc/neko/copyright" <<TXT
 Neko Proxy $VERSION
 License: MIT OR Apache-2.0 (declared in Cargo.toml; confirm before release)
@@ -114,13 +114,13 @@ the headless capture core (nekod).
 install -Dm755 $STAGE/bin/neko  %{buildroot}%{_bindir}/proxy
 install -Dm755 $STAGE/bin/nekod %{buildroot}%{_bindir}/nekod
 install -Dm644 $STAGE/share/applications/dev.nekoproxy.Neko.desktop %{buildroot}%{_datadir}/applications/dev.nekoproxy.Neko.desktop
-install -Dm644 $STAGE/share/icons/hicolor/scalable/apps/dev.nekoproxy.Neko.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/dev.nekoproxy.Neko.svg
+install -Dm644 $STAGE/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png
 
 %files
 %{_bindir}/proxy
 %{_bindir}/nekod
 %{_datadir}/applications/dev.nekoproxy.Neko.desktop
-%{_datadir}/icons/hicolor/scalable/apps/dev.nekoproxy.Neko.svg
+%{_datadir}/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png
 TXT
   rpmbuild -bb --quiet --define "_topdir $RPM" --define "_rpmdir $RPM/out" "$RPM/neko.spec"
   mv "$RPM"/out/*/*.rpm "$OUT/"
@@ -132,13 +132,13 @@ fi
 if [ -n "${APPIMAGETOOL:-}" ]; then
   echo "==> appimage"
   APPDIR=$OUT/Neko.AppDir
-  mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/scalable/apps"
+  mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/512x512/apps"
   install -m 0755 target/release/neko  "$APPDIR/usr/bin/neko"
   install -m 0755 target/release/nekod "$APPDIR/usr/bin/nekod"
   install -m 0644 packaging/dev.nekoproxy.Neko.desktop "$APPDIR/usr/share/applications/"
-  install -m 0644 packaging/dev.nekoproxy.Neko.svg     "$APPDIR/usr/share/icons/hicolor/scalable/apps/"
+  install -m 0644 packaging/icon/neko-512.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png"
   install -m 0644 packaging/dev.nekoproxy.Neko.desktop "$APPDIR/"
-  install -m 0644 packaging/dev.nekoproxy.Neko.svg     "$APPDIR/"
+  install -m 0644 packaging/icon/neko-512.png "$APPDIR/dev.nekoproxy.Neko.png"
   # proxy finds nekod next to its own executable, so only the PATH needs help.
   cat > "$APPDIR/AppRun" <<'SH'
 #!/bin/sh

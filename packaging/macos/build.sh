@@ -41,7 +41,11 @@ sed "s/@VERSION@/$VERSION/g" packaging/macos/Info.plist.in > "$APP/Contents/Info
 
 echo "==> icon"
 ICONSET=$OUT/Neko.iconset
-swift packaging/macos/make-icon.swift "$ICONSET"
+mkdir -p "$ICONSET"
+for s in 16 32 128 256 512; do
+  sips -z $s $s packaging/icon/neko-1024.png --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+  sips -z $((s * 2)) $((s * 2)) packaging/icon/neko-1024.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Neko.icns"
 rm -rf "$ICONSET"
 

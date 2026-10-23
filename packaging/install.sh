@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
 done
 
 APPS=$PREFIX/share/applications
-ICONS=$PREFIX/share/icons/hicolor/scalable/apps
+ICONS=$PREFIX/share/icons/hicolor/512x512/apps
 
 refresh() {
   command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" 2>/dev/null || true
@@ -35,7 +35,7 @@ refresh() {
 }
 
 if [ -n "$UNINSTALL" ]; then
-  rm -f "$PREFIX/bin/neko" "$PREFIX/bin/nekod" "$APPS/dev.nekoproxy.Neko.desktop" "$ICONS/dev.nekoproxy.Neko.svg"
+  rm -f "$PREFIX/bin/neko" "$PREFIX/bin/nekod" "$APPS/dev.nekoproxy.Neko.desktop" "$ICONS/dev.nekoproxy.Neko.png"
   refresh
   echo "Removed Neko Proxy from $PREFIX. Captures and the CA stay in ~/.local/share/neko."
   exit 0
@@ -82,7 +82,7 @@ for b in proxy nekod; do
   install -m 0755 "$SRC/bin/$b" "$PREFIX/bin/.$b.new"
   mv -f "$PREFIX/bin/.$b.new" "$PREFIX/bin/$b"
 done
-install -m 0644 "$SRC/share/icons/hicolor/scalable/apps/dev.nekoproxy.Neko.svg" "$ICONS/"
+install -m 0644 "$SRC/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png" "$ICONS/"
 # Absolute Exec so the launcher works even when ~/.local/bin is not on PATH.
 sed "s|^Exec=proxy\$|Exec=$PREFIX/bin/neko|" "$SRC/share/applications/dev.nekoproxy.Neko.desktop" \
   > "$APPS/dev.nekoproxy.Neko.desktop"
