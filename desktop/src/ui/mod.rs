@@ -8,6 +8,7 @@ mod link;
 mod overlay;
 mod rules;
 mod settings;
+mod sequence;
 mod sidebar;
 mod table;
 mod toolbar;

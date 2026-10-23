@@ -23,7 +23,8 @@ final class FlowModel {
     private(set) var pending: [Neko_Api_V1_PendingPrompt] = []
     private(set) var ca: Neko_Api_V1_CaInfo?
     private(set) var caTrusted: Bool?
-    private(set) var paused = 0
+    let admin = AdminModel()
+    var paused: Int { admin.paused.count }
     /// Where detail comes from. Screenshots swap this for fixtures.
     var detailProvider: ((UInt64) async throws -> FlowDetail)?
     private var lastHostsFetch = Date.distantPast
@@ -63,6 +64,7 @@ final class FlowModel {
                 guard case .flow(let d)? = r.body else { throw APIError.unexpected }
                 return d
             }
+            await admin.attach(c)
             try await resubscribe()
             await refreshHosts(force: true)
             await loadCA()
@@ -211,9 +213,8 @@ final class FlowModel {
             devices = d.devices
             pending = d.pending
             onSidebar?()
-        case .pauseNotice?:
-            paused += 1
-            onSidebar?()
+        case .pauseNotice?, .approvalNotice?:
+            admin.handlePush(m)
         default:
             break
         }
@@ -271,6 +272,9 @@ final class FlowModel {
 
     func row(forID id: UInt64) -> Int? { rowByID[id] }
 
+    /// Replaces the device list, for screenshots.
+    func setDevices(_ d: [Device], pending p: [PendingPrompt]) { devices = d; pending = p }
+
     /// Fills the model without a core, for screenshots.
     func loadFixture(flows: [Flow], hosts: [Neko_Api_V1_HostSummary], devices: [Neko_Api_V1_Device],
                      pending: Int, detail: @escaping (UInt64) async throws -> FlowDetail) {
@@ -290,7 +294,6 @@ final class FlowModel {
             $0.certPath = "/Users/you/Library/Application Support/neko/ca.pem"
             $0.keyStorage = "keyring"
         }
-        paused = 1
         detailProvider = detail
     }
 }

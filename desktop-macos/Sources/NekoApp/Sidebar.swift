@@ -49,7 +49,6 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate {
     private let scroll = NSScrollView()
     private let hostsLabel = label("HOSTS", .overline, Theme.text3)
     private let hostsCount = label("", .mono, Theme.text3)
-    let theme = Segmented(["Auto", "Light", "Dark"])
     private let recDot = Surface()
     private let recText = label("Recording", .callout, Theme.text)
     private let addrText = label("", .monoSmall, Theme.text2)
@@ -82,10 +81,6 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate {
         scroll.scrollerStyle = .overlay
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
-        theme.equalWidths = true
-        theme.role = .bodyMedium
-        theme.padding = 8
-
         recDot.radius = 4
         recDot.translatesAutoresizingMaskIntoConstraints = false
         let recRow = NSStackView.horizontal([recDot, recText], spacing: 9)
@@ -96,7 +91,7 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate {
         let status = NSStackView.vertical([recRow, addrRow, certRow], spacing: 9)
         let sep = Divider()
 
-        for v in [hostsLabel, hostsCount, scroll, theme, sep, status] { addSubview(v) }
+        for v in [hostsLabel, hostsCount, scroll, sep, status] { addSubview(v) }
         NSLayoutConstraint.activate([
             hostsLabel.topAnchor.constraint(equalTo: topAnchor, constant: 16),
             hostsLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
@@ -105,11 +100,7 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate {
             scroll.topAnchor.constraint(equalTo: hostsLabel.bottomAnchor, constant: 10),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: theme.topAnchor, constant: -12),
-            theme.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            theme.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            theme.heightAnchor.constraint(equalToConstant: 30),
-            theme.bottomAnchor.constraint(equalTo: sep.topAnchor, constant: -12),
+            scroll.bottomAnchor.constraint(equalTo: sep.topAnchor, constant: -12),
             sep.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             sep.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
             sep.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -12),

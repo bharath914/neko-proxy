@@ -92,6 +92,7 @@ final class TopBar: NSView {
     let nav = Segmented(["Inspector", "Breakpoints", "Rules", "Devices", "Settings"])
     let record = RecordPill()
     let clear = IconButton("trash", tip: "Clear all flows (⌘K)")
+    let view = Segmented(["Traffic", "Sequence"])
     let filter = Segmented(["All", "Errors", "Slow", "Pinned"])
     let search = SearchBox()
     let export = IconButton("square.and.arrow.down", tip: "Export as HAR")
@@ -106,11 +107,12 @@ final class TopBar: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant: 56).isActive = true
 
-        let left = NSStackView.horizontal([nav, record, clear, filter], spacing: 8)
+        let left = NSStackView.horizontal([nav, view, record, clear, filter], spacing: 8)
         left.setCustomSpacing(12, after: nav)
+        left.setCustomSpacing(12, after: view)
         let right = NSStackView.horizontal([export, phone, proxy], spacing: 8)
         for v in [left, search, right] { addSubview(v) }
-        inspectorOnly = [record, clear, filter, search, export]
+        inspectorOnly = [view, record, clear, filter, search, export]
         NSLayoutConstraint.activate([
             left.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 82),
             left.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -128,6 +130,16 @@ final class TopBar: NSView {
         left.setContentCompressionResistancePriority(.required, for: .horizontal)
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Custom bars get no native title-bar behavior, so double-click zooms or minimizes as the system setting says.
+    override func mouseDown(with event: NSEvent) {
+        guard event.clickCount == 2, let w = window else { return super.mouseDown(with: event) }
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "Minimize": w.performMiniaturize(nil)
+        case "None": break
+        default: w.performZoom(nil)
+        }
+    }
 
     func setSection(_ s: Section) {
         nav.selected = s.rawValue

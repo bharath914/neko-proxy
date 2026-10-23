@@ -53,12 +53,12 @@ impl App {
                         }
                     }
                     ["tab", t] => {
-                        self.tab = match *t {
+                        self.set_tab(match *t {
                             "request" => Tab::Request,
                             "response" => Tab::Response,
                             "timing" => Tab::Timing,
                             _ => Tab::Overview,
-                        }
+                        })
                     }
                     ["section", s] => {
                         self.section = if *s == "settings" { Section::Settings } else { Section::Inspector }

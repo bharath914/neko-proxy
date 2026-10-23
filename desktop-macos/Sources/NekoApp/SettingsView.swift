@@ -122,6 +122,15 @@ final class SettingsView: NSView {
         column.arrangedSubviews.forEach { column.removeArrangedSubview($0); $0.removeFromSuperview() }
         column.addArrangedSubview(label("Settings", .largeTitle, Theme.text))
         column.setCustomSpacing(22, after: column.arrangedSubviews.last!)
+        column.addArrangedSubview(label("Appearance", .headline, Theme.text))
+        column.setCustomSpacing(3, after: column.arrangedSubviews.last!)
+        column.addArrangedSubview(label("Follow the system, or always use light or dark.", .callout, Theme.text2))
+        let theme = Segmented(["Auto", "Light", "Dark"], selected: Appearance.current)
+        theme.onChange = { Appearance.set($0) }
+        let themeRow = NSStackView.horizontal([label("Theme", .body, Theme.text), NSView(), theme], spacing: 12)
+        themeRow.alignment = .centerY
+        full(card([themeRow]))
+        column.setCustomSpacing(20, after: column.arrangedSubviews.last!)
         column.addArrangedSubview(label("Certificate", .headline, Theme.text))
         column.setCustomSpacing(3, after: column.arrangedSubviews.last!)
         column.addArrangedSubview(label("HTTPS traffic is decrypted with a certificate made for this computer. Trust it once so apps accept it.", .callout, Theme.text2))
@@ -184,5 +193,43 @@ final class SettingsView: NSView {
 
         column.setCustomSpacing(20, after: column.arrangedSubviews.last!)
         full(card([installBlock, browsers, envBlock]))
+        aiSection()
+    }
+
+    private func aiSection() {
+        let head = label("AI clients", .headline, Theme.text)
+        column.addArrangedSubview(head)
+        column.setCustomSpacing(20, after: column.arrangedSubviews[column.arrangedSubviews.count - 2])
+        column.setCustomSpacing(3, after: head)
+        column.addArrangedSubview(label("Let a local AI client such as Claude Code read captured traffic and, with your approval, change it.", .callout, Theme.text2))
+        guard let mcp = model.admin.mcp, mcp.enabled else {
+            full(card([row("MCP server is off", "Start the core without --no-mcp to let AI clients connect.")]))
+            return
+        }
+        let cmd = mcp.command.isEmpty ? "claude mcp add --transport http neko \(mcp.url) --header \"Authorization: Bearer \(mcp.token)\"" : mcp.command
+        let copy = Chip("Copy command", symbol: "doc.on.doc"); copy.onClick = { [weak self] in self?.copy(cmd) }
+        let connect = NSStackView.vertical([
+            label("Connect Claude Code", .body, Theme.text),
+            label("Run this once in a terminal. It only works from this computer.", .callout, Theme.text2),
+            codeBlock(cmd), NSStackView.horizontal([copy, NSView()], spacing: 8),
+        ], spacing: 8)
+        connect.setCustomSpacing(12, after: connect.arrangedSubviews[2])
+        stretch(connect)
+
+        let modes: [(String, Neko_Api_V1_McpWrites)] = [("Ask me", .mcpAsk), ("Allow automatically", .mcpAuto), ("Read only", .mcpOff)]
+        let seg = Segmented(modes.map(\.0), selected: modes.firstIndex { $0.1 == mcp.writes } ?? 0)
+        seg.onChange = { [weak self] i in Task { await self?.model.admin.setMcpWrites(modes[i].1) } }
+        let blurb: String
+        switch mcp.writes {
+        case .mcpAuto: blurb = "Changes from AI clients apply at once. Only use this on a machine you trust."
+        case .mcpOff: blurb = "AI clients can read traffic but cannot change anything."
+        default: blurb = "Every change an AI client wants to make waits for your approval."
+        }
+        let policy = NSStackView.vertical([
+            label("Changes from AI clients", .body, Theme.text), seg, label(blurb, .callout, Theme.text2, lines: 0),
+            label("Authorization, Cookie and token values are hidden before anything reaches an AI client.", .callout, Theme.text3, lines: 0),
+        ], spacing: 8)
+        stretch(policy)
+        full(card([connect, policy]))
     }
 }

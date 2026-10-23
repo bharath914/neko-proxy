@@ -13,13 +13,20 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
     let top = TopBar()
     let sidebar: Sidebar
     let list: FlowList
-    let detail = DetailPane()
+    let detail = DetailPane(kind: .request)
+    let response = DetailPane(kind: .response)
     let chips = DeviceChips()
     let settings: SettingsView
+    let breakpoints: BreakpointsView
+    let rules: RulesView
+    let sequence: SequenceView
+    let devicesView: DevicesView
+    let approval = ApprovalCard()
     private var inspector = FlippedView()
-    private var soon: [Section: ComingSoon] = [:]
     private var screen = FlippedView()
     private var split = ThinSplit()
+    private var bottom = ThinSplit()
+    private let traffic = FlippedView()
     private var sidebarWidth: NSLayoutConstraint!
     private var chipsHeight: NSLayoutConstraint!
     private(set) var section: Section = .inspector
@@ -31,6 +38,10 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         sidebar = Sidebar(model: model)
         list = FlowList(model: model)
         settings = SettingsView(model: model)
+        breakpoints = BreakpointsView(admin: model.admin)
+        rules = RulesView(admin: model.admin)
+        sequence = SequenceView(model: model)
+        devicesView = DevicesView(model: model)
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -64,14 +75,28 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         // Inspector: device chips over the list and detail split.
         inspector.translatesAutoresizingMaskIntoConstraints = false
         chips.translatesAutoresizingMaskIntoConstraints = false
-        split.isVertical = true
+        // Traffic on top (list or sequence); request and response side by side below.
+        split.isVertical = false
         split.dividerStyle = .thin
         split.delegate = self
         split.translatesAutoresizingMaskIntoConstraints = false
-        list.translatesAutoresizingMaskIntoConstraints = false
+        bottom.isVertical = true
+        bottom.dividerStyle = .thin
+        bottom.delegate = self
+        bottom.translatesAutoresizingMaskIntoConstraints = true
+        traffic.translatesAutoresizingMaskIntoConstraints = true
+        for v in [list, sequence] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            traffic.addSubview(v)
+            v.pin(to: traffic)
+        }
+        sequence.isHidden = true
         detail.translatesAutoresizingMaskIntoConstraints = true
-        split.addArrangedSubview(list)
-        split.addArrangedSubview(detail)
+        response.translatesAutoresizingMaskIntoConstraints = true
+        bottom.addArrangedSubview(detail)
+        bottom.addArrangedSubview(response)
+        split.addArrangedSubview(traffic)
+        split.addArrangedSubview(bottom)
         inspector.addSubview(chips); inspector.addSubview(split)
         chipsHeight = chips.heightAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
@@ -84,6 +109,12 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
             split.trailingAnchor.constraint(equalTo: inspector.trailingAnchor),
             split.bottomAnchor.constraint(equalTo: inspector.bottomAnchor),
         ])
+        root.addSubview(approval)
+        NSLayoutConstraint.activate([
+            approval.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            approval.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
+            approval.widthAnchor.constraint(equalToConstant: 440),
+        ])
         wire()
         setSection(.inspector)
     }
@@ -94,12 +125,29 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         sidebarWidth.constant = view.bounds.width < 1000 ? 200 : 236
     }
 
-    func splitView(_ splitView: NSSplitView, constrainMinCoordinate p: CGFloat, ofSubviewAt i: Int) -> CGFloat { 440 }
-    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate p: CGFloat, ofSubviewAt i: Int) -> CGFloat { splitView.bounds.width - 340 }
-    func splitView(_ splitView: NSSplitView, shouldAdjustSizeOfSubview view: NSView) -> Bool { view === list }
+    func splitView(_ splitView: NSSplitView, constrainMinCoordinate p: CGFloat, ofSubviewAt i: Int) -> CGFloat {
+        splitView === split ? 150 : 300
+    }
+    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate p: CGFloat, ofSubviewAt i: Int) -> CGFloat {
+        splitView === split ? splitView.bounds.height - 200 : splitView.bounds.width - 300
+    }
+    func splitView(_ splitView: NSSplitView, shouldAdjustSizeOfSubview view: NSView) -> Bool {
+        splitView === split ? view === bottom : true
+    }
 
     func setInitialSplit() {
-        split.setPosition(max(split.bounds.width - 390, 440), ofDividerAt: 0)
+        split.setPosition(max(split.bounds.height * 0.42, 150), ofDividerAt: 0)
+        bottom.setPosition(bottom.bounds.width / 2, ofDividerAt: 0)
+    }
+
+    func selectTab(_ i: Int) { detail.selectTab(i); response.selectTab(i) }
+
+    /// Traffic list or sequence in the top section.
+    func showTraffic(sequence on: Bool) {
+        list.isHidden = on
+        sequence.isHidden = !on
+        top.view.selected = on ? 1 : 0
+        if on { sequence.reload() }
     }
 
     private func wire() {
@@ -120,8 +168,6 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
             self?.model.host = h
             self?.model.filterChanged()
         }
-        sidebar.theme.onChange = { i in Appearance.set(i) }
-        sidebar.theme.selected = Appearance.current
         chips.onPick = { [weak self] ids in
             self?.model.deviceIDs = ids
             self?.model.filterChanged()
@@ -137,7 +183,17 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         detail.onCertSettings = { [weak self] in self?.setSection(.settings) }
         settings.onInstall = { [weak self] in self?.installCA() }
         settings.onShow = { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) }
-        model.onChange = { [weak self] in self?.list.reload() }
+        detail.onMock = { [weak self] in self?.newRule(.mock) }
+        detail.onBreak = { [weak self] in self?.newRule(.breakpoint) }
+        breakpoints.onNewBreakpoint = { [weak self] in self?.setSection(.rules); self?.rules.startNew(.breakpoint) }
+        approval.onDecide = { [weak self] id, allow in Task { await self?.model.admin.decide(id, allow: allow) } }
+        model.admin.onChange = { [weak self] in self?.adminChanged() }
+        top.view.onChange = { [weak self] i in self?.showTraffic(sequence: i == 1) }
+        sequence.onOpen = { [weak self] f in
+            self?.list.select(id: f.id)
+            self?.showTraffic(sequence: false)
+        }
+        model.onChange = { [weak self] in self?.list.reload(); self?.sequence.reload() }
         model.onStatus = { [weak self] in self?.statusChanged() }
         model.onSidebar = { [weak self] in self?.sidebarChanged() }
         model.onError = { [weak self] m in self?.onError?(m) }
@@ -150,28 +206,30 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         let v: NSView
         switch s {
         case .inspector: v = inspector
+        case .breakpoints: v = breakpoints; breakpoints.reload()
+        case .rules: v = rules; rules.reload()
+        case .devices:
+            v = devicesView
+            devicesView.reload()
+            Task { await model.admin.refreshSdk(); devicesView.reload() }
         case .settings: v = settings
-        default:
-            let c = soon[s] ?? ComingSoon(["Inspector", "Breakpoints", "Rules", "Devices", "Settings"][s.rawValue])
-            soon[s] = c
-            v = c
         }
         v.translatesAutoresizingMaskIntoConstraints = false
         screen.addSubview(v)
         v.pin(to: screen)
         if s == .inspector { DispatchQueue.main.async { self.setInitialSplit() } }
-        if s == .settings { settings.rebuild(); Task { await model.loadCA() } }
+        if s == .settings { settings.rebuild(); Task { await model.loadCA(); await model.admin.refreshMcp() } }
     }
 
     private func select(_ f: Flow?) {
         detailTask?.cancel()
-        guard let f, let provider = model.detailProvider else { detail.show(nil); return }
+        guard let f, let provider = model.detailProvider else { detail.show(nil); response.show(nil); return }
         detailTask = Task {
             do {
                 let d = try await provider(f.id)
-                if !Task.isCancelled { detail.show(d) }
+                if !Task.isCancelled { detail.show(d); response.show(d) }
             } catch {
-                if !Task.isCancelled { detail.show(nil) }
+                if !Task.isCancelled { detail.show(nil); response.show(nil) }
             }
         }
     }
@@ -183,8 +241,28 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         sidebar.refresh()
     }
 
+    /// Opens the rule editor on the Rules screen, pre-filled from the selected request.
+    private func newRule(_ kind: RuleKind) {
+        let flow = detail.detail?.summary
+        setSection(.rules)
+        rules.startNew(kind, flow: flow)
+    }
+
+    private func adminChanged() {
+        approval.update(model.admin.approvals)
+        switch section {
+        case .breakpoints: breakpoints.reload()
+        case .rules: rules.reload()
+        case .devices: devicesView.reload()
+        case .settings: settings.rebuild()
+        default: break
+        }
+        sidebarChanged()
+    }
+
     private func sidebarChanged() {
         sidebar.refresh()
+        if section == .devices { devicesView.reload() }
         top.phone.dot = model.pending.isEmpty ? nil : Theme.orange
         refreshChips()
         if section == .settings { settings.rebuild() }

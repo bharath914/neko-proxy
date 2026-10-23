@@ -109,6 +109,65 @@ enum Fixtures {
         }
     }
 
+    static func rule(_ id: String, _ name: String, on: Bool, _ build: (inout Rule) -> Void) -> Rule {
+        var r = Rule()
+        r.id = id; r.name = name; r.enabled = on
+        build(&r)
+        return r
+    }
+
+    static func rulesFixture() -> Neko_Api_V1_RulesResponse {
+        var out = Neko_Api_V1_RulesResponse()
+        out.rules = [
+            rule("r10", "Checkout is down", on: true) {
+                $0.matcher = .with { $0.method = "POST"; $0.host = "api.example.com"; $0.path = "/v1/checkout" }
+                $0.mock = .with { $0.status = 503; $0.delayMs = 300 }
+            },
+            rule("r11", "Hit staging", on: false) {
+                $0.matcher = .with { $0.host = "api.example.com"; $0.path = "/*" }
+                $0.mapRemote = .with { $0.scheme = "https"; $0.host = "staging.example.com" }
+            },
+            rule("r12", "Pause on login", on: true) {
+                $0.matcher = .with { $0.host = "api.example.com"; $0.path = "/v1/login" }
+                $0.breakpoint = .with { $0.phase = .request }
+            },
+        ]
+        return out
+    }
+
+    static func pausedFixture() -> [PausedFlow] {
+        var p = PausedFlow()
+        p.flowID = 40; p.ruleID = "r12"; p.phase = .phaseRequest; p.method = "POST"; p.path = "/v1/login"; p.timeoutS = 60
+        p.summary = .with { $0.scheme = "https"; $0.host = "api.example.com"; $0.path = "/v1/login"; $0.method = "POST" }
+        p.headers = textToHeaders("content-type: application/json\naccept: application/json\nuser-agent: Mozilla/5.0")
+        p.body = Data("{\"email\":\"ann@example.com\",\"password\":\"correct horse\"}".utf8)
+        return [p]
+    }
+
+    static func approvalFixture() -> [Approval] {
+        [Approval.with {
+            $0.id = "a1"; $0.tool = "create_mock"; $0.title = "Mock 503 for POST api.example.com/v1/checkout"
+            $0.detail = "{\n  \"host\": \"api.example.com\",\n  \"method\": \"POST\",\n  \"path\": \"/v1/checkout\",\n  \"status\": 503\n}"
+        }]
+    }
+
+    static func devicesFixture() -> [Device] {
+        func d(_ id: String, _ name: String, _ model: String, _ os: String, _ app: String, _ appID: String, _ ver: String, _ sdk: String,
+               _ conn: String, _ st: Neko_Api_V1_DeviceStatus, _ seen: Int64, _ flows: UInt64) -> Device {
+            Device.with {
+                $0.deviceID = id; $0.deviceName = name; $0.deviceModel = model; $0.osVersion = os; $0.appName = app; $0.appID = appID
+                $0.appVersion = ver; $0.sdkName = sdk; $0.sdkVersion = "0.1.0"; $0.connection = conn; $0.status = st
+                $0.lastSeenMs = Int64(Date().timeIntervalSince1970 * 1000) - seen; $0.flows = flows
+            }
+        }
+        return [
+            d("p8", "Pixel 8", "Google Pixel 8", "Android 15", "Demo Shop", "com.demo.shop", "1.4.2", "android", "wifi", .deviceConnected, 0, 1284),
+            d("p7", "Pixel 7 API 35", "sdk_gphone64_x86_64", "Android 15", "Demo Shop", "com.demo.shop", "1.4.3-debug", "android", "emulator", .deviceConnected, 0, 312),
+            d("ip", "Asha's iPhone", "iPhone 15 Pro", "iOS 19.2", "Demo Shop", "com.demo.shop", "1.4.2", "ios", "wifi", .deviceIdle, 3_600_000, 96),
+            d("s23", "Galaxy S23", "SM-S911B", "Android 14", "Partner Hub", "com.demo.partner", "0.9.0", "android", "usb", .deviceDenied, 259_200_000, 0),
+        ]
+    }
+
     @MainActor static func run(into dir: String) {
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         Theme.registerFonts()
@@ -116,6 +175,24 @@ enum Fixtures {
         model.loadFixture(flows: flows(), hosts: hosts(),
                           devices: ["Pixel 8", "Pixel 7 API 35", "Asha's iPhone"].map { n in .with { $0.deviceID = n; $0.deviceName = n } },
                           pending: 1) { detail($0) }
+        model.admin.loadFixture(
+            rules: rulesFixture(), paused: pausedFixture(), approvals: approvalFixture(),
+            sdk: .with {
+                $0.available = true; $0.enabled = true; $0.autoAcceptLocal = true; $0.lan = true
+                $0.listening = ["192.168.0.109:8897"]; $0.fingerprint = "d7d65b46c5037a"
+                $0.adbState = "ready"; $0.adbLabel = "adb ready, 1 device(s)"; $0.discoveryState = "advertising"
+                $0.checks = [.with { $0.id = "listener"; $0.level = "ok"; $0.title = "Listening on 192.168.0.109:8897"; $0.detail = "Phones on this network can find this computer." }]
+            },
+            mcp: .with {
+                $0.enabled = true; $0.url = "http://127.0.0.1:8898/mcp"; $0.token = "0123456789abcdef"
+                $0.command = "claude mcp add --transport http neko http://127.0.0.1:8898/mcp --header \"Authorization: Bearer 0123456789abcdef\""
+                $0.writes = .mcpAsk
+            })
+        model.setDevices(devicesFixture(), pending: [.with {
+            $0.id = 1; $0.deviceName = "Galaxy Tab A9"; $0.deviceModel = "SM-X110"; $0.appName = "com.demo.shop"
+            $0.sdkName = "android"; $0.sdkVersion = "0.1.0"; $0.connection = "wifi"; $0.osVersion = "Android 14"; $0.code = "482913"
+            $0.expiresMs = Int64(Date().timeIntervalSince1970 * 1000) + 47_000
+        }])
         let wc = MainWindowController(model: model)
         let w = wc.window!
         w.setContentSize(NSSize(width: 1320, height: 820))
@@ -138,19 +215,30 @@ enum Fixtures {
             wc.root.sidebar.refresh()
             wc.root.list.select(id: 39)
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
-            wc.root.detail.selectTab(2)
+            wc.root.selectTab(2)
             snap("mac-inspector-\(scheme)")
             wc.root.list.select(id: 9)
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
-            wc.root.detail.selectTab(0)
+            wc.root.selectTab(0)
             snap("mac-pinned-\(scheme)")
-            wc.root.detail.selectTab(3)
+            wc.root.selectTab(3)
             wc.root.list.select(id: 39)
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
-            wc.root.detail.selectTab(3)
+            wc.root.selectTab(3)
             snap("mac-timing-\(scheme)")
             wc.root.setSection(.settings)
             snap("mac-settings-\(scheme)")
+            wc.root.setSection(.breakpoints)
+            wc.root.approval.update(approvalFixture())
+            snap("mac-breakpoints-\(scheme)")
+            wc.root.setSection(.rules)
+            snap("mac-rules-\(scheme)")
+            wc.root.rules.startNew(.mock)
+            snap("mac-rules-editor-\(scheme)")
+            wc.root.rules.cancelEditing()
+            wc.root.approval.update([])
+            wc.root.setSection(.devices)
+            snap("mac-devices-\(scheme)")
         }
     }
 }

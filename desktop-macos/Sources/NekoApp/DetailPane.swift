@@ -113,9 +113,13 @@ final class DetailPane: NSView {
     var onCopyURL: (() -> Void)?
     var onReplay: (() -> Void)?
     var onCertSettings: (() -> Void)?
+    var onMock: (() -> Void)?
+    var onBreak: (() -> Void)?
 
     private let header = FlippedView()
-    private let tabs = Segmented(["Overview", "Request", "Response", "Timing"])
+    enum Kind { case request, response }
+    let kind: Kind
+    private let tabs: Segmented
     private let scroll = NSScrollView()
     private let doc = FlippedView()
     private let stack = NSStackView()
@@ -128,8 +132,10 @@ final class DetailPane: NSView {
     private var sep = Divider()
     override var isFlipped: Bool { true }
 
-    override init(frame: NSRect) {
-        super.init(frame: frame)
+    init(kind: Kind) {
+        self.kind = kind
+        tabs = Segmented(kind == .request ? ["Request", "Overview"] : ["Response", "Timing"])
+        super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         header.translatesAutoresizingMaskIntoConstraints = false
         tabs.equalWidths = true
@@ -192,7 +198,13 @@ final class DetailPane: NSView {
         rebuild(keepScroll: same)
     }
 
-    func selectTab(_ i: Int) { tabs.selected = i; rebuild(keepScroll: false) }
+    /// Takes the old four-tab numbering (0 overview, 1 request, 2 response, 3 timing); ignored if it belongs to the other pane.
+    func selectTab(_ i: Int) {
+        let mine: [Int: Int] = kind == .request ? [1: 0, 0: 1] : [2: 0, 3: 1]
+        guard let t = mine[i] else { return }
+        tabs.selected = t
+        rebuild(keepScroll: false)
+    }
 
     // MARK: build
 
@@ -217,11 +229,13 @@ final class DetailPane: NSView {
         }
         header.removeConstraints(header.constraints.filter { $0.firstAttribute == .height })
         buildHeader(d)
-        switch tabs.selected {
-        case 1: buildMessage(d, key: "req", headers: d.requestHeaders, body: d.requestBody, name: "Request")
-        case 2: buildMessage(d, key: "res", headers: d.responseHeaders, body: d.responseBody, name: "Response")
-        case 3: buildTiming(d)
-        default: buildOverview(d)
+        switch (kind, tabs.selected) {
+        case (.request, 0): buildMessage(d, key: "req", headers: d.requestHeaders, body: d.requestBody, name: "Request")
+        case (.request, _): buildOverview(d)
+        case (.response, 0):
+            if d.summary.isTunnel { stack.addArrangedSubview(label("A tunnel has no response to show.", .callout, Theme.text3)) }
+            else { buildMessage(d, key: "res", headers: d.responseHeaders, body: d.responseBody, name: "Response") }
+        case (.response, _): buildTiming(d)
         }
         layoutSubtreeIfNeeded()
         scroll.contentView.scroll(to: NSPoint(x: 0, y: keepScroll ? y : 0))
@@ -231,14 +245,25 @@ final class DetailPane: NSView {
     private func buildHeader(_ d: FlowDetail) {
         let s = d.summary
         let method = s.isTunnel ? "CONNECT" : s.method
-        var badges: [NSView] = [Badge(method, color: Theme.method(method), role: .overline)]
-        if s.isPinned {
-            badges.append(Badge("Pinned tunnel", color: Theme.orange))
-        } else if s.status != 0 {
-            badges.append(Badge(Fmt.statusLine(s.status), color: Theme.status(s.status, failed: false)))
-        } else if s.state == .failed {
-            badges.append(Badge("Failed", color: Theme.red))
+        var status: NSView?
+        if s.isPinned { status = Badge("Pinned tunnel", color: Theme.orange) }
+        else if s.status != 0 { status = Badge(Fmt.statusLine(s.status), color: Theme.status(s.status, failed: false)) }
+        else if s.state == .failed { status = Badge("Failed", color: Theme.red) }
+        if kind == .response {
+            var badges: [NSView] = status.map { [$0] } ?? []
+            var parts: [String] = []
+            if s.resSize > 0 { parts.append(Fmt.bytes(s.resSize)) }
+            if s.durationMs > 0 && !s.isTunnel { parts.append(Fmt.duration(s.durationMs)) }
+            if !parts.isEmpty { badges.append(label(parts.joined(separator: "  ·  "), .callout, Theme.text2)) }
+            let hs = NSStackView.vertical([NSStackView.horizontal(badges + [NSView()], spacing: 8), tabs], spacing: 10)
+            header.addSubview(hs)
+            hs.pin(to: header, insets: NSEdgeInsets(top: 12, left: 16, bottom: 10, right: 16))
+            tabs.widthAnchor.constraint(equalTo: hs.widthAnchor).isActive = true
+            tabs.heightAnchor.constraint(equalToConstant: 30).isActive = true
+            return
         }
+        var badges: [NSView] = [Badge(method, color: Theme.method(method), role: .overline)]
+        if s.isPinned, let status { badges.append(status) }
         if !s.protocol.isEmpty && !s.isPinned { badges.append(Badge(s.protocol, color: Theme.text2)) }
         let badgeRow = NSStackView.horizontal(badges, spacing: 6)
 
@@ -256,8 +281,10 @@ final class DetailPane: NSView {
         let url = Chip("Copy URL", symbol: "doc.on.doc"); url.onClick = { [weak self] in self?.onCopyURL?() }
         let replay = Chip("Replay"); replay.onClick = { [weak self] in self?.onReplay?() }
         replay.isEnabled = !s.isTunnel
-        let mock = Chip("Mock"); mock.isEnabled = false; mock.toolTip = "Rules are not in the macOS app yet"
-        let brk = Chip("Break"); brk.isEnabled = false; brk.toolTip = "Breakpoints are not in the macOS app yet"
+        let mock = Chip("Mock"); mock.isEnabled = !s.isTunnel; mock.onClick = { [weak self] in self?.onMock?() }
+        mock.toolTip = "Answer requests like this with a fixed response"
+        let brk = Chip("Break"); brk.isEnabled = !s.isTunnel; brk.onClick = { [weak self] in self?.onBreak?() }
+        brk.toolTip = "Hold requests like this until you resume them"
         for c in [curl, url, replay, mock, brk] { wrap.addSubview(c) }
         rows.append(wrap)
         rows.append(tabs)

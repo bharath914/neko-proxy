@@ -81,12 +81,12 @@ fn detail_tabs() {
         (Tab::Response, "tab-response"),
         (Tab::Timing, "tab-timing"),
     ] {
-        app(&mut h).tab = tab;
+        app(&mut h).set_tab(tab);
         settle(&mut h);
         save(&mut h, name);
     }
     // Pinned flow explains itself and links to settings.
-    app(&mut h).tab = Tab::Overview;
+    app(&mut h).set_tab(Tab::Overview);
     app(&mut h).select(Some(10));
     settle(&mut h);
     save(&mut h, "overview-pinned");
@@ -99,7 +99,7 @@ fn body_viewers() {
         let mut h = harness(dark, (1320.0, 820.0), 60);
         settle(&mut h);
         app(&mut h).select(Some(3));
-        app(&mut h).tab = Tab::Response;
+        app(&mut h).set_tab(Tab::Response);
         app(&mut h).headers_open = false;
         settle(&mut h);
         save(&mut h, &format!("json-{tag}"));
@@ -257,13 +257,13 @@ fn sdk_flows_in_the_inspector() {
         settle(&mut h);
         save(&mut h, &format!("sdk-merged-app-{tag}"));
         assert!(app(&mut h).details.get(&4).unwrap().wire.is_some());
-        app(&mut h).tab = Tab::Request;
+        app(&mut h).set_tab(Tab::Request);
         settle(&mut h);
         save(&mut h, &format!("sdk-request-redacted-{tag}"));
-        app(&mut h).tab = Tab::Timing;
+        app(&mut h).set_tab(Tab::Timing);
         settle(&mut h);
         save(&mut h, &format!("sdk-timing-both-{tag}"));
-        app(&mut h).tab = Tab::Overview;
+        app(&mut h).set_tab(Tab::Overview);
         app(&mut h).wire_view = true;
         settle(&mut h);
         save(&mut h, &format!("sdk-merged-wire-{tag}"));
@@ -276,7 +276,7 @@ fn lazy_bodies_load_on_demand() {
     let mut h = harness(false, (1480.0, 860.0), 60);
     settle(&mut h);
     app(&mut h).select(Some(2));
-    app(&mut h).tab = Tab::Response;
+    app(&mut h).set_tab(Tab::Response);
     app(&mut h).headers_open = false;
     settle(&mut h);
     // Opening the tab asked the device for the body; the fixture answers.

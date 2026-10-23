@@ -3,7 +3,7 @@ use super::widgets::{self, Kind};
 use crate::app::{App, Section, Tab};
 use crate::backend::ConnState;
 use crate::fmt;
-use crate::motion::{self, MOVE};
+use crate::motion;
 use crate::paint::{self, cr};
 use crate::theme::{radius, Role, Style};
 use egui::text::{LayoutJob, TextFormat};
@@ -13,8 +13,14 @@ use egui::{
 use proto::pb;
 use std::sync::Arc;
 
-const DETAIL_MIN: f32 = 340.0;
-const TABLE_MIN: f32 = 440.0;
+const TRAFFIC_MIN: f32 = 140.0;
+const PANE_MIN_H: f32 = 180.0;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Pane {
+    Request,
+    Response,
+}
 
 fn job(text: &str, role: Role, color: Color32) -> LayoutJob {
     let s = role.spec();
@@ -189,125 +195,95 @@ impl App {
         // Device and app chips, when SDK devices are paired.
         body.min.y += self.device_chips(ui, body);
 
-        // Divider: the pane follows the pointer 1:1, resists past its bounds,
-        // and settles on a spring that inherits the release velocity.
-        let max_w = (body.width() - TABLE_MIN).max(DETAIL_MIN);
-        // Until the person drags it, the pane takes about a third of the room:
-        // the list is the main content.
-        if self.detail_raw <= 0.0 {
-            self.detail_raw = (body.width() * 0.34).clamp(DETAIL_MIN, 440.0);
-        }
-        let did = self.id("detail-width");
-        let hit = Rect::from_min_max(
-            pos2(
-                body.right() - self.detail_raw.clamp(DETAIL_MIN, max_w) - 5.0,
-                body.top(),
-            ),
-            pos2(
-                body.right() - self.detail_raw.clamp(DETAIL_MIN, max_w) + 5.0,
-                body.bottom(),
-            ),
-        );
-        let shown_now = motion::with_spring(
-            ui.ctx(),
-            did,
-            self.detail_raw.clamp(DETAIL_MIN, max_w),
-            |s| s.value,
-        );
-        let hit = if shown_now.is_finite() {
-            Rect::from_min_max(
-                pos2(body.right() - shown_now - 5.0, body.top()),
-                pos2(body.right() - shown_now + 5.0, body.bottom()),
-            )
-        } else {
-            hit
-        };
-        let resp = ui.interact(hit, self.id("divider"), Sense::click_and_drag());
+        // Traffic on top, request and response side by side below. Both
+        // dividers are plain drags; double-click resets them.
         let ctx = ui.ctx().clone();
-        if resp.dragged() {
-            self.detail_raw -= resp.drag_delta().x;
-            let clamped = self.detail_raw.clamp(DETAIL_MIN, max_w);
-            let over = self.detail_raw - clamped;
-            let shown = clamped + motion::rubber_band(over, 240.0);
-            motion::with_spring(&ctx, did, shown, |s| {
-                s.value = shown;
-                s.target = shown;
-                s.velocity = 0.0;
-            });
-        } else if resp.drag_stopped() {
-            let vel = -ctx.input(|i| i.pointer.velocity().x);
-            let at = self.detail_raw.clamp(DETAIL_MIN, max_w);
-            // A flick throws the pane to the snap point nearest where its
-            // momentum would carry it; a slow release stays where it was put.
-            let flick = vel.abs() > 700.0;
-            let target = if flick {
-                let landing = at + motion::project(vel).clamp(-600.0, 600.0);
-                [
-                    DETAIL_MIN,
-                    (body.width() * 0.34).clamp(DETAIL_MIN, max_w),
-                    max_w,
-                ]
-                .into_iter()
-                .min_by(|a, b| (a - landing).abs().total_cmp(&(b - landing).abs()))
-                .unwrap_or(at)
-            } else {
-                at
-            };
-            self.detail_raw = target;
-            self.prefs.detail_width = target;
-            self.prefs.save();
-            ctx.data_mut(|d| d.insert_temp(did.with("flick"), flick));
-            motion::with_spring(&ctx, did, at, |s| {
-                s.velocity = vel;
-                s.target = target;
-            });
+        let auto_top = (body.height() * 0.42).clamp(TRAFFIC_MIN, body.height() - PANE_MIN_H);
+        if self.split_top <= 0.0 {
+            self.split_top = auto_top;
         }
-        if resp.drag_started() {
-            ctx.data_mut(|d| d.insert_temp(did.with("flick"), false));
+        let max_top = (body.height() - PANE_MIN_H).max(TRAFFIC_MIN);
+        self.split_top = self.split_top.clamp(TRAFFIC_MIN, max_top);
+        let split_y = body.top() + self.split_top;
+        let hit = Rect::from_min_max(pos2(body.left(), split_y - 4.0), pos2(body.right(), split_y + 4.0));
+        let resp = ui.interact(hit, self.id("divider-h"), Sense::click_and_drag());
+        if resp.dragged() {
+            self.split_top = (self.split_top + resp.drag_delta().y).clamp(TRAFFIC_MIN, max_top);
         }
         if resp.double_clicked() {
-            self.detail_raw = (body.width() * 0.34).clamp(DETAIL_MIN, 440.0);
+            self.split_top = 0.0;
         }
-        let target = self.detail_raw.clamp(DETAIL_MIN, max_w);
-        let detail_w = if resp.dragged() {
-            motion::with_spring(&ctx, did, target, |s| s.value)
-        } else {
-            // Under-damped only when the release carried momentum.
-            let flick: bool = ctx.data(|d| d.get_temp(did.with("flick"))).unwrap_or(false);
-            let cfg = if flick { motion::MOMENTUM } else { MOVE };
-            motion::animate(&ctx, did, target, cfg, st.reduced_motion)
-        };
-        let split_x = body.right() - detail_w;
-        let table_rect = Rect::from_min_max(body.min, pos2(split_x, body.bottom()));
-        let detail_rect = Rect::from_min_max(pos2(split_x, body.top()), body.max);
+        let top_rect = Rect::from_min_max(body.min, pos2(body.right(), split_y));
+        let bottom = Rect::from_min_max(pos2(body.left(), split_y), body.max);
 
-        self.table(ui, table_rect);
-        self.detail(ui, detail_rect);
+        self.split_mid = self.split_mid.clamp(0.25, 0.75);
+        let mid_x = bottom.left() + bottom.width() * self.split_mid;
+        let vhit = Rect::from_min_max(pos2(mid_x - 4.0, bottom.top()), pos2(mid_x + 4.0, bottom.bottom()));
+        let vresp = ui.interact(vhit, self.id("divider-v"), Sense::click_and_drag());
+        if vresp.dragged() {
+            self.split_mid = ((mid_x + vresp.drag_delta().x - bottom.left()) / bottom.width()).clamp(0.25, 0.75);
+        }
+        if vresp.double_clicked() {
+            self.split_mid = 0.5;
+        }
+        let mid_x = bottom.left() + bottom.width() * self.split_mid;
+        let req_rect = Rect::from_min_max(bottom.min, pos2(mid_x, bottom.bottom()));
+        let res_rect = Rect::from_min_max(pos2(mid_x, bottom.top()), bottom.max);
+
+        // A slim strip switches the top section between the table and the sequence.
+        let strip = Rect::from_min_size(top_rect.min, vec2(top_rect.width(), 38.0));
+        let top_rect = Rect::from_min_max(pos2(top_rect.left(), strip.bottom()), top_rect.max);
+        ui.painter().rect_filled(strip, 0.0, st.p.content);
+        let mut sc = ui.new_child(
+            UiBuilder::new()
+                .max_rect(strip.shrink2(vec2(14.0, 0.0)))
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        if let Some(i) = widgets::segmented(
+            &mut sc,
+            &st,
+            self.id("traffic-view"),
+            &["Traffic", "Sequence"],
+            self.traffic_seq as usize,
+        ) {
+            self.traffic_seq = i == 1;
+        }
+        if self.traffic_seq {
+            self.sequence(ui, top_rect);
+        } else {
+            self.table(ui, top_rect);
+        }
+        self.detail(ui, req_rect, Pane::Request);
+        self.detail(ui, res_rect, Pane::Response);
 
         let p = ui.painter();
-        paint::hairline(
-            p,
-            &st,
-            pos2(split_x, body.top()),
-            pos2(split_x, body.bottom()),
-        );
-        let a = motion::fade(
-            &ctx,
-            self.id("divider-fade"),
-            resp.hovered() || resp.dragged(),
-        );
-        if a > 0.0 {
-            p.line_segment(
-                [pos2(split_x, body.top()), pos2(split_x, body.bottom())],
-                Stroke::new(2.0, paint::with_alpha(st.p.accent, a * 0.8)),
-            );
-        }
-        if resp.hovered() || resp.dragged() {
-            ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        paint::hairline(p, &st, pos2(body.left(), split_y), pos2(body.right(), split_y));
+        paint::hairline(p, &st, pos2(mid_x, bottom.top()), pos2(mid_x, bottom.bottom()));
+        for (r, rect, icon) in [
+            (&resp, hit, egui::CursorIcon::ResizeVertical),
+            (&vresp, vhit, egui::CursorIcon::ResizeHorizontal),
+        ] {
+            let a = motion::fade(&ctx, self.id(if rect == hit { "fade-h" } else { "fade-v" }), r.hovered() || r.dragged());
+            if a > 0.0 {
+                let (c, d) = if rect == hit {
+                    (rect.center().y, true)
+                } else {
+                    (rect.center().x, false)
+                };
+                let seg = if d {
+                    [pos2(rect.left(), c), pos2(rect.right(), c)]
+                } else {
+                    [pos2(c, rect.top()), pos2(c, rect.bottom())]
+                };
+                p.line_segment(seg, Stroke::new(2.0, paint::with_alpha(st.p.accent, a * 0.8)));
+            }
+            if r.hovered() || r.dragged() {
+                ctx.set_cursor_icon(icon);
+            }
         }
     }
 
-    pub fn detail(&mut self, ui: &mut Ui, rect: Rect) {
+    pub fn detail(&mut self, ui: &mut Ui, rect: Rect, pane: Pane) {
         let st = self.st.clone();
         ui.painter().rect_filled(rect, 0.0, st.p.panel);
         let mut child = ui.new_child(UiBuilder::new().max_rect(rect.shrink2(vec2(0.0, 0.0))));
@@ -368,10 +344,14 @@ impl App {
         head.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             let mc = st.p.method(&s.method);
-            widgets::badge(ui, &s.method, mc, st.p.tint(mc, 0.16));
+            if pane == Pane::Request {
+                widgets::badge(ui, &s.method, mc, st.p.tint(mc, 0.16));
+            }
             let in_flight = s.state == pb::FlowState::Pending as i32
                 || s.state == pb::FlowState::Receiving as i32;
-            if s.status != 0 {
+            if pane == Pane::Request {
+                // Method, protocol and source are the request's half of the story.
+            } else if s.status != 0 {
                 let c = st.p.status(s.status, failed);
                 let txt = format!("{} {}", s.status, fmt::status_text(s.status))
                     .trim()
@@ -394,6 +374,22 @@ impl App {
                         .selectable(false),
                 );
             }
+            if pane == Pane::Response {
+                let mut parts = Vec::new();
+                if s.res_size > 0 {
+                    parts.push(fmt::size(s.res_size));
+                }
+                if s.duration_ms > 0.0 && s.protocol != "tunnel" {
+                    parts.push(fmt::duration(s.duration_ms));
+                }
+                if !parts.is_empty() {
+                    ui.add(
+                        egui::Label::new(job(&parts.join("  ·  "), Role::Callout, st.p.text2))
+                            .selectable(false),
+                    );
+                }
+                return;
+            }
             if !s.protocol.is_empty() && s.protocol != "tunnel" {
                 widgets::badge(ui, &s.protocol, st.p.text2, st.p.fill);
             }
@@ -407,6 +403,7 @@ impl App {
                 pb::FlowSource::Proxy => {}
             }
         });
+        if pane == Pane::Request {
         if !s.name.is_empty() {
             let who = if s.owner.is_empty() {
                 s.name.clone()
@@ -529,18 +526,24 @@ impl App {
         } else if self.wire_view {
             self.wire_view = false;
         }
-        let tab_idx = Tab::ALL.iter().position(|t| *t == self.tab).unwrap_or(0);
-        let labels: Vec<&str> = Tab::ALL.iter().map(|t| t.label()).collect();
+        }
+        let tabs: [Tab; 2] = match pane {
+            Pane::Request => [Tab::Request, Tab::Overview],
+            Pane::Response => [Tab::Response, Tab::Timing],
+        };
+        let cur = if pane == Pane::Request { self.tab } else { self.tab_res };
+        let tab_idx = tabs.iter().position(|t| *t == cur).unwrap_or(0);
+        let labels: Vec<&str> = tabs.iter().map(|t| t.label()).collect();
         let tab_w = head.available_width();
         if let Some(i) = widgets::segmented_w(
             &mut head,
             &st,
-            self.id("tabs"),
+            self.id(if pane == Pane::Request { "tabs-req" } else { "tabs-res" }),
             &labels,
             tab_idx,
             Some(tab_w),
         ) {
-            self.tab = Tab::ALL[i];
+            self.set_tab(tabs[i]);
         }
         head.add_space(8.0);
         let y = head.min_rect().bottom();
@@ -557,9 +560,10 @@ impl App {
 
         // Content materializes when the selection or tab changes: a short
         // fade up from partial opacity. Reduced motion skips it.
-        let key = (id, self.tab as u8);
-        let key_id = self.id("detail-key");
-        let fade_id = self.id("detail-fade");
+        let key = (id, cur as u8);
+        let salt = pane as u8;
+        let key_id = self.id("detail-key").with(salt);
+        let fade_id = self.id("detail-fade").with(salt);
         let ctx = ui.ctx().clone();
         let last: Option<(u64, u8)> = ctx.data(|d| d.get_temp(key_id));
         if last != Some(key) {
@@ -580,7 +584,7 @@ impl App {
             widgets::spinner(&mut sp, &st, 18.0);
             return;
         }
-        match self.tab {
+        match cur {
             Tab::Overview => self.tab_overview(&mut bu, &st, id, &s),
             Tab::Request => self.tab_http(&mut bu, &st, id, false),
             Tab::Response => self.tab_http(&mut bu, &st, id, true),
