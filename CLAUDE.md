@@ -11,6 +11,10 @@ Design pages (open in a browser):
 
 Built: the Rust capture core and Linux desktop app (`docs/phase-1.md`), then rules, breakpoints, replay and the MCP server (`docs/phase-2.md`), then the in-app SDK: Rust ingest, Devices screen and Inspector changes, Android SDK with Gradle plugin, and an iOS package that is only partly verified (`docs/sdk/`, `docs/sdk/docs/e2e.md`, `docs/sdk/docs/DEVIATIONS.md`). Still not started: macOS, Windows, HTTP/3, scripting, route catalog and MCP tools for SDK data. Everything below describes the long-term design and constraints that new work must not contradict.
 
+## macOS app (in progress)
+
+`desktop-macos/` is a SwiftPM AppKit app that talks to `proxyd` over the same socket API (swift-protobuf bindings from `proto/api.proto` via `desktop-macos/gen-proto.sh`). It mirrors the Linux egui look: tokens in `Theme.swift` are copied from `desktop/src/theme.rs`, so change both together. Built: Inspector (hosts sidebar, flow table, detail with JSON tree) and Settings. Not built: Breakpoints, Rules, Devices screens, approval popover, `.app` bundle and signing. Core on macOS: data in `~/Library/Application Support/proxy`, socket under `$TMPDIR`, CA key in the login Keychain. Run: `cargo build -p proxy-cli && cd desktop-macos && swift run Proxy`. Tests: `swift test`. Screens to PNG: `PROXY_SHOT_DIR=/dir .build/debug/Proxy`.
+
 ## Goals
 
 - Fast: Rust core, startup and scrolling feel instant
