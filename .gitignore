@@ -4,3 +4,4 @@ build/
 *.log
 .idea/
 dist/
+desktop-macos/.build/

@@ -1,11 +1,16 @@
-//! CA key storage: libsecret through `secret-tool` when available, else a
-//! file with mode 0600. `secret-tool` is used instead of linking libsecret so
-//! the core stays a single static-ish binary with no desktop dependencies.
+//! CA key storage: the login Keychain on macOS, libsecret through `secret-tool`
+//! elsewhere when available, else a file with mode 0600. `secret-tool` is used
+//! instead of linking libsecret so the core stays a single static-ish binary
+//! with no desktop dependencies.
 
-use std::io::{Read, Write};
+#[cfg(not(target_os = "macos"))]
+use std::io::Read;
+use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
+#[cfg(not(target_os = "macos"))]
 use std::process::{Command, Stdio};
+#[cfg(not(target_os = "macos"))]
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,6 +38,7 @@ impl KeyStorageKind {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 const SECRET_TOOL_TIMEOUT: Duration = Duration::from_secs(4);
 
 pub(crate) fn load(dir: &Path, storage: KeyStorage) -> Option<(String, KeyStorageKind)> {
@@ -70,6 +76,7 @@ pub(crate) fn save(dir: &Path, storage: KeyStorage, pem: &str) -> std::io::Resul
     Ok(KeyStorageKind::File)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn attrs(dir: &Path) -> [String; 4] {
     [
         "service".into(),
@@ -79,16 +86,19 @@ fn attrs(dir: &Path) -> [String; 4] {
     ]
 }
 
+#[cfg(not(target_os = "macos"))]
 fn keyring_available() -> bool {
     std::env::var_os("DBUS_SESSION_BUS_ADDRESS").is_some() && which("secret-tool")
 }
 
+#[cfg(not(target_os = "macos"))]
 fn which(bin: &str) -> bool {
     std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).any(|d| d.join(bin).is_file()))
         .unwrap_or(false)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn keyring_lookup(dir: &Path) -> Option<String> {
     if !keyring_available() {
         return None;
@@ -114,6 +124,7 @@ fn keyring_lookup(dir: &Path) -> Option<String> {
     out.contains("PRIVATE KEY").then_some(out)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn keyring_store(dir: &Path, pem: &str) -> bool {
     if !keyring_available() {
         return false;
@@ -135,6 +146,7 @@ fn keyring_store(dir: &Path, pem: &str) -> bool {
     wait_with_timeout(&mut child)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn wait_with_timeout(child: &mut std::process::Child) -> bool {
     let start = Instant::now();
     loop {
@@ -150,4 +162,26 @@ fn wait_with_timeout(child: &mut std::process::Child) -> bool {
             }
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+const KEYCHAIN_SERVICE: &str = "proxy-ca";
+
+#[cfg(target_os = "macos")]
+fn keyring_lookup(dir: &Path) -> Option<String> {
+    let bytes =
+        security_framework::passwords::get_generic_password(KEYCHAIN_SERVICE, &dir.to_string_lossy())
+            .ok()?;
+    let pem = String::from_utf8(bytes).ok()?;
+    pem.contains("PRIVATE KEY").then_some(pem)
+}
+
+#[cfg(target_os = "macos")]
+fn keyring_store(dir: &Path, pem: &str) -> bool {
+    security_framework::passwords::set_generic_password(
+        KEYCHAIN_SERVICE,
+        &dir.to_string_lossy(),
+        pem.as_bytes(),
+    )
+    .is_ok()
 }

@@ -195,7 +195,9 @@ fn spawn_core(path: &PathBuf, opts: &CoreOptions) -> std::io::Result<tokio::proc
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true);
-    // If the app is killed outright, the core goes with it.
+    // If the app is killed outright, the core goes with it (Linux only; macOS
+    // has no parent-death signal, so the core is stopped on a clean quit).
+    #[cfg(target_os = "linux")]
     unsafe {
         cmd.pre_exec(|| {
             libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
