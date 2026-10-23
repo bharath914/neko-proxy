@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Neko Proxy</title>
+<meta name="description" content="A fast, free, open-source HTTP and HTTPS debugging proxy with a cat on it. Built in Rust, ready for AI clients.">
+<link rel="icon" href="assets/favicon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="paws" aria-hidden="true">
+    <span style="left:8%;top:30%">🐾</span><span style="left:84%;top:22%">🐾</span>
+    <span style="left:14%;top:78%">🐾</span><span style="left:90%;top:70%">🐾</span>
+  </div>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="./"><img src="assets/neko.png" alt="" width="36" height="36">Neko Proxy</a>
+      <span class="sp"></span>
+      <a class="link hide-s" href="#features">Features</a>
+      <a class="link" href="install-cert.html">Install the cert</a>
+      <a class="link hide-s" href="https://github.com/bharath914/proxy">GitHub</a>
+    </nav>
+    <img class="mascot" src="assets/neko.png" alt="Neko, a white cat peeking over two arrows" width="168" height="168">
+    <h1>Peek at your traffic.<br><em>Purr-fectly</em> simple.</h1>
+    <p class="lede">A fast, free HTTP and HTTPS debugging proxy. Rust inside, a cat on the outside, and your AI assistant can read along.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/bharath914/proxy/releases">Download Neko</a>
+      <a class="btn quiet" href="install-cert.html">🐱 Install the certificate</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="how">
+  <div class="wrap">
+    <h2>Three steps, then you're looking at requests</h2>
+    <p class="sub">No config files. No account.</p>
+    <div class="steps">
+      <div class="card"><div><h3>Run Neko</h3><p>Open the app. It starts the proxy on port <code>8899</code> and listens for traffic.</p></div></div>
+      <div class="card"><div><h3>Point your device at it</h3><p>Browser, phone or terminal: set the proxy to your computer's address. Phones can pair by QR code.</p></div></div>
+      <div class="card"><div><h3>Trust the certificate</h3><p>Open <code>http://neko.local</code> on that device and install Neko's certificate so HTTPS can be read. <a href="install-cert.html">Walk me through it →</a></p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Everything Charles does, with fewer hairballs</h2>
+    <p class="sub">Built to start instantly and stay out of your way.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">⚡</div><h3>Fast</h3><p>A Rust core with a native app. Starts in a blink and scrolls through thousands of requests.</p></div>
+      <div class="card"><div class="ico">🔎</div><h3>Inspector</h3><p>Headers, JSON trees, images, timings and search across everything you captured.</p></div>
+      <div class="card"><div class="ico">🧶</div><h3>Rules and breakpoints</h3><p>Mock responses, map to another server, rewrite, throttle, or pause a request and edit it mid-flight.</p></div>
+      <div class="card"><div class="ico">📱</div><h3>Phones, easy</h3><p>Scan a QR code, or add the in-app SDK to a debug build and skip the proxy setup entirely.</p></div>
+      <div class="card"><div class="ico">🤖</div><h3>AI ready</h3><p>A built-in MCP server lets Claude Code read your traffic. Changes wait for your approval. Secrets are redacted.</p></div>
+      <div class="card"><div class="ico">🔓</div><h3>Open source</h3><p>MIT or Apache-2.0. Your key and your traffic stay on your machine.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="get">
+  <div class="wrap narrow">
+    <h2>Try it from source</h2>
+    <p class="sub">Needs only Rust (<a href="https://rustup.rs">rustup.rs</a>).</p>
+    <div class="cmd"><pre>git clone https://github.com/bharath914/proxy.git
+cd proxy
+cargo run --release -p neko-desktop</pre><button type="button">Copy</button></div>
+    <p class="small muted">On a Mac: <code>cargo build -p neko-cli &amp;&amp; cd desktop-macos &amp;&amp; swift run Neko</code>. Installers are on the <a href="https://github.com/bharath914/proxy/releases">releases page</a>.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  Made with 🐾 · <a href="https://github.com/bharath914/proxy">Source</a> · <a href="install-cert.html">Install the certificate</a> · MIT or Apache-2.0
+</footer>
+<script src="site.js"></script>
+</body>
+</html>
