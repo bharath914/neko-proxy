@@ -157,7 +157,9 @@ enum Theme {
 
     /// Registers the bundled Inter and JetBrains Mono. Call once at launch.
     static func registerFonts() {
-        guard let dir = Bundle.module.url(forResource: "Fonts", withExtension: nil),
+        // Inside Proxy.app the fonts sit in Contents/Resources; under `swift run`
+        // they are in the SwiftPM resource bundle.
+        guard let dir = Bundle.main.url(forResource: "Fonts", withExtension: nil) ?? Bundle.module.url(forResource: "Fonts", withExtension: nil),
               let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
         else { return }
         for f in files where f.pathExtension == "ttf" {
