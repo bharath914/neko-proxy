@@ -3,10 +3,10 @@ use super::widgets::{self, Kind};
 use crate::app::{App, Job, Sheet};
 use crate::paint::{self, cr};
 use crate::platform::{self, LaunchOptions};
-use proto::pb;
 use crate::theme::{radius, Role, Style};
 use egui::text::{LayoutJob, TextFormat};
 use egui::{pos2, vec2, Align, Color32, Frame, Layout, Margin, Rect, ScrollArea, Stroke, Ui};
+use proto::pb;
 
 fn job(text: &str, role: Role, color: Color32) -> LayoutJob {
     let s = role.spec();
@@ -637,8 +637,15 @@ impl App {
                 "Connect Claude Code",
                 "Run this once in a terminal. It includes the access token.",
                 |ui| {
-                    if widgets::button(ui, st, "Copy command", Kind::Primary, Some(Icon::Terminal), true)
-                        .clicked()
+                    if widgets::button(
+                        ui,
+                        st,
+                        "Copy command",
+                        Kind::Primary,
+                        Some(Icon::Terminal),
+                        true,
+                    )
+                    .clicked()
                     {
                         ui.ctx().copy_text(m.command.clone());
                         self.toast(ui.ctx(), "Command copied", true);
@@ -653,7 +660,11 @@ impl App {
             };
             code(ui, st, &shown);
             ui.add_space(6.0);
-            let label = if self.show_token { "Hide token" } else { "Show token" };
+            let label = if self.show_token {
+                "Hide token"
+            } else {
+                "Show token"
+            };
             if widgets::button(ui, st, label, Kind::Plain, None, true).clicked() {
                 self.show_token = !self.show_token;
             }

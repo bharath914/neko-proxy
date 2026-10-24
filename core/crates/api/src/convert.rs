@@ -159,11 +159,29 @@ pub fn body(v: BodyView) -> pb::BodyView {
                 .into_iter()
                 .map(|(name, value)| pb::FormField { name, value })
                 .collect(),
-            events: v.events.into_iter().map(|e| pb::SseEvent {
-                event: e.event, id: e.id, data: e.data, retry_ms: e.retry_ms,
-            }).collect(),
-            protocol: Some(pb::ProtocolView { title: v.protocol.title, note: v.protocol.note,
-                fields: v.protocol.fields.into_iter().map(|f| pb::DecodedField { depth: f.depth, label: f.label, value: f.value }).collect(),
+            events: v
+                .events
+                .into_iter()
+                .map(|e| pb::SseEvent {
+                    event: e.event,
+                    id: e.id,
+                    data: e.data,
+                    retry_ms: e.retry_ms,
+                })
+                .collect(),
+            protocol: Some(pb::ProtocolView {
+                title: v.protocol.title,
+                note: v.protocol.note,
+                fields: v
+                    .protocol
+                    .fields
+                    .into_iter()
+                    .map(|f| pb::DecodedField {
+                        depth: f.depth,
+                        label: f.label,
+                        value: f.value,
+                    })
+                    .collect(),
             }),
             image: v.image,
             note: v.note,
@@ -214,7 +232,17 @@ pub fn rule_to_pb(r: &rules::Rule) -> pb::Rule {
             request_headers: request_headers.iter().map(hdr).collect(),
             response_headers: response_headers.iter().map(hdr).collect(),
         }),
-        rules::Action::Scenario { fail_one_in, delay_ms, jitter_ms, flaky_one_in } => A::Scenario(pb::ScenarioAction { fail_one_in: *fail_one_in, delay_ms: *delay_ms, jitter_ms: *jitter_ms, flaky_one_in: *flaky_one_in }),
+        rules::Action::Scenario {
+            fail_one_in,
+            delay_ms,
+            jitter_ms,
+            flaky_one_in,
+        } => A::Scenario(pb::ScenarioAction {
+            fail_one_in: *fail_one_in,
+            delay_ms: *delay_ms,
+            jitter_ms: *jitter_ms,
+            flaky_one_in: *flaky_one_in,
+        }),
         rules::Action::Throttle { delay_ms } => A::Throttle(pb::ThrottleAction {
             delay_ms: *delay_ms,
         }),
@@ -274,7 +302,12 @@ pub fn rule_from_pb(r: pb::Rule) -> Result<rules::Rule, String> {
             request_headers: a.request_headers.into_iter().map(hdr).collect(),
             response_headers: a.response_headers.into_iter().map(hdr).collect(),
         },
-        A::Scenario(a) => rules::Action::Scenario { fail_one_in: a.fail_one_in, delay_ms: a.delay_ms, jitter_ms: a.jitter_ms, flaky_one_in: a.flaky_one_in },
+        A::Scenario(a) => rules::Action::Scenario {
+            fail_one_in: a.fail_one_in,
+            delay_ms: a.delay_ms,
+            jitter_ms: a.jitter_ms,
+            flaky_one_in: a.flaky_one_in,
+        },
         A::Throttle(a) => rules::Action::Throttle {
             delay_ms: a.delay_ms,
         },

@@ -137,10 +137,14 @@ pub enum Action {
     Throttle { delay_ms: u32 },
     /// Deterministic every-N failure plus bounded delay/jitter and flaky 502s.
     Scenario {
-        #[serde(default)] fail_one_in: u32,
-        #[serde(default)] delay_ms: u32,
-        #[serde(default)] jitter_ms: u32,
-        #[serde(default)] flaky_one_in: u32,
+        #[serde(default)]
+        fail_one_in: u32,
+        #[serde(default)]
+        delay_ms: u32,
+        #[serde(default)]
+        jitter_ms: u32,
+        #[serde(default)]
+        flaky_one_in: u32,
     },
     /// Hold the request, the response, or both until someone resumes it.
     Breakpoint {
@@ -256,9 +260,18 @@ impl Rule {
                     check_headers(std::iter::once((e.name.as_str(), e.value.as_str())))?;
                 }
             }
-            Action::Scenario { fail_one_in, delay_ms, jitter_ms, flaky_one_in } => {
-                if delay_ms.saturating_add(*jitter_ms) > MAX_DELAY_MS { return Err("delay plus jitter is limited to 60 seconds".into()); }
-                if *fail_one_in == 0 && *delay_ms == 0 && *jitter_ms == 0 && *flaky_one_in == 0 { return Err("scenario needs a failure rate or delay".into()); }
+            Action::Scenario {
+                fail_one_in,
+                delay_ms,
+                jitter_ms,
+                flaky_one_in,
+            } => {
+                if delay_ms.saturating_add(*jitter_ms) > MAX_DELAY_MS {
+                    return Err("delay plus jitter is limited to 60 seconds".into());
+                }
+                if *fail_one_in == 0 && *delay_ms == 0 && *jitter_ms == 0 && *flaky_one_in == 0 {
+                    return Err("scenario needs a failure rate or delay".into());
+                }
             }
             Action::Throttle { delay_ms } => {
                 if *delay_ms == 0 || *delay_ms > MAX_DELAY_MS {

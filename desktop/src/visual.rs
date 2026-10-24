@@ -132,7 +132,12 @@ fn sse_event_viewer() {
     detail.detail.response_body = Some(pb::BodyView {
         kind: pb::BodyKind::Text as i32,
         content_type: "text/event-stream".into(),
-        events: vec![pb::SseEvent { event: "update".into(), id: "42".into(), data: "First line\nSecond line".into(), retry_ms: Some(1000) }],
+        events: vec![pb::SseEvent {
+            event: "update".into(),
+            id: "42".into(),
+            data: "First line\nSecond line".into(),
+            retry_ms: Some(1000),
+        }],
         ..Default::default()
     });
     app(&mut h).headers_open = false;
@@ -150,11 +155,27 @@ fn protocol_viewer() {
     let detail = app(&mut h).details.get_mut(&3).unwrap();
     detail.detail.response_body = Some(pb::BodyView {
         kind: pb::BodyKind::Binary as i32,
-        protocol: Some(pb::ProtocolView { title: "gRPC messages (schema unknown)".into(), fields: vec![
-            pb::DecodedField { depth: 0, label: "Message 1".into(), value: "7 bytes".into() },
-            pb::DecodedField { depth: 1, label: "Field 1".into(), value: "150 (varint)".into() },
-            pb::DecodedField { depth: 1, label: "Field 2".into(), value: "Hello".into() },
-        ], note: String::new() }),
+        protocol: Some(pb::ProtocolView {
+            title: "gRPC messages (schema unknown)".into(),
+            fields: vec![
+                pb::DecodedField {
+                    depth: 0,
+                    label: "Message 1".into(),
+                    value: "7 bytes".into(),
+                },
+                pb::DecodedField {
+                    depth: 1,
+                    label: "Field 1".into(),
+                    value: "150 (varint)".into(),
+                },
+                pb::DecodedField {
+                    depth: 1,
+                    label: "Field 2".into(),
+                    value: "Hello".into(),
+                },
+            ],
+            note: String::new(),
+        }),
         ..Default::default()
     });
     app(&mut h).headers_open = false;
@@ -165,10 +186,15 @@ fn protocol_viewer() {
 #[test]
 fn issues_in_overview() {
     let mut h = harness(false, (1320.0, 820.0), 60);
-    settle(&mut h);app(&mut h).select(Some(3));settle(&mut h);
-    app(&mut h).details.get_mut(&3).unwrap().detail.issues = vec!["Slow response".into(), "Possible sensitive data".into()];
-    app(&mut h).set_tab(Tab::Overview);app(&mut h).approvals.clear();
-    settle(&mut h);save(&mut h, "detected-issues");
+    settle(&mut h);
+    app(&mut h).select(Some(3));
+    settle(&mut h);
+    app(&mut h).details.get_mut(&3).unwrap().detail.issues =
+        vec!["Slow response".into(), "Possible sensitive data".into()];
+    app(&mut h).set_tab(Tab::Overview);
+    app(&mut h).approvals.clear();
+    settle(&mut h);
+    save(&mut h, "detected-issues");
 }
 
 #[test]
@@ -405,9 +431,15 @@ fn connection_status_icon_and_popover() {
     for (dark, tag) in [(false, "light"), (true, "dark")] {
         let mut h = harness(dark, (1320.0, 760.0), 20);
         settle(&mut h);
-        let sdk = app(&mut h).sdk.clone().expect("the demo core answers SdkStatus");
+        let sdk = app(&mut h)
+            .sdk
+            .clone()
+            .expect("the demo core answers SdkStatus");
         assert_eq!(sdk.health, "attention", "a pairing request is waiting");
-        assert!(sdk.checks.iter().any(|c| c.id == "adb" && c.level == "warn"));
+        assert!(sdk
+            .checks
+            .iter()
+            .any(|c| c.id == "adb" && c.level == "warn"));
         assert!(app(&mut h).link_rect.is_some(), "the toolbar drew the icon");
         save(&mut h, &format!("link-icon-{tag}"));
 

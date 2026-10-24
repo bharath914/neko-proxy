@@ -123,7 +123,11 @@ impl App {
                 ui.horizontal(|ui| {
                     text(
                         ui,
-                        if form.id.is_empty() { "New rule" } else { "Edit rule" },
+                        if form.id.is_empty() {
+                            "New rule"
+                        } else {
+                            "Edit rule"
+                        },
                         Role::Headline,
                         st.p.text,
                     );
@@ -131,9 +135,11 @@ impl App {
                 ui.add_space(8.0);
                 if form.id.is_empty() {
                     let labels: Vec<&str> = RuleKind::ALL.iter().map(|k| k.label()).collect();
-                    let sel = RuleKind::ALL.iter().position(|k| *k == form.kind).unwrap_or(0);
-                    if let Some(i) =
-                        widgets::segmented(ui, st, self.id("rule-kind"), &labels, sel)
+                    let sel = RuleKind::ALL
+                        .iter()
+                        .position(|k| *k == form.kind)
+                        .unwrap_or(0);
+                    if let Some(i) = widgets::segmented(ui, st, self.id("rule-kind"), &labels, sel)
                     {
                         form.kind = RuleKind::ALL[i];
                     }
@@ -178,16 +184,33 @@ impl App {
                     }
                     RuleKind::Rewrite => {
                         caption(ui, st, "Request headers: set, add or remove, one per line");
-                        multi(ui, &mut form.request_edits, 3, "set X-Env: staging\nremove Cookie");
+                        multi(
+                            ui,
+                            &mut form.request_edits,
+                            3,
+                            "set X-Env: staging\nremove Cookie",
+                        );
                         caption(ui, st, "Response headers");
-                        multi(ui, &mut form.response_edits, 3, "set Cache-Control: no-store");
+                        multi(
+                            ui,
+                            &mut form.response_edits,
+                            3,
+                            "set Cache-Control: no-store",
+                        );
                     }
                     RuleKind::Scenario => {
                         caption(ui, st, "Fail every Nth matching request (503; 0 disables)");
                         single(ui, &mut form.fail_one_in, 110.0, "3");
                         caption(ui, st, "Delay plus random jitter (ms; total at most 60000)");
-                        ui.horizontal(|ui| { single(ui, &mut form.delay_ms, 110.0, "200"); single(ui, &mut form.jitter_ms, 110.0, "100"); });
-                        caption(ui, st, "Random flaky upstream failures: 1 in N (502; 0 disables)");
+                        ui.horizontal(|ui| {
+                            single(ui, &mut form.delay_ms, 110.0, "200");
+                            single(ui, &mut form.jitter_ms, 110.0, "100");
+                        });
+                        caption(
+                            ui,
+                            st,
+                            "Random flaky upstream failures: 1 in N (502; 0 disables)",
+                        );
                         single(ui, &mut form.flaky_one_in, 110.0, "5");
                     }
                     RuleKind::Throttle => {
@@ -287,8 +310,8 @@ impl App {
             for r in &v2 {
                 if !first {
                     ui.add_space(6.0);
-                    let (l, _) =
-                        ui.allocate_exact_size(vec2(ui.available_width(), 1.0), egui::Sense::hover());
+                    let (l, _) = ui
+                        .allocate_exact_size(vec2(ui.available_width(), 1.0), egui::Sense::hover());
                     ui.painter().rect_filled(l, 0.0, st.p.separator);
                     ui.add_space(6.0);
                 }
@@ -326,7 +349,10 @@ impl App {
                             if r.name.is_empty() {
                                 String::new()
                             } else {
-                                format!("  ·  {}", r.matcher.as_ref().map(describe_match).unwrap_or_default())
+                                format!(
+                                    "  ·  {}",
+                                    r.matcher.as_ref().map(describe_match).unwrap_or_default()
+                                )
                             }
                         );
                         text(ui, &detail, Role::Callout, st.p.text2);
@@ -346,8 +372,8 @@ impl App {
             for m in &local {
                 if !first {
                     ui.add_space(6.0);
-                    let (l, _) =
-                        ui.allocate_exact_size(vec2(ui.available_width(), 1.0), egui::Sense::hover());
+                    let (l, _) = ui
+                        .allocate_exact_size(vec2(ui.available_width(), 1.0), egui::Sense::hover());
                     ui.painter().rect_filled(l, 0.0, st.p.separator);
                     ui.add_space(6.0);
                 }

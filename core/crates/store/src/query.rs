@@ -71,9 +71,15 @@ fn fts_term(s: &str) -> Option<String> {
 }
 
 fn issue_bit(value: &str) -> Option<u32> {
-    Some(match value { "issues" => decode::ISSUE_MASK, "sensitive" => flow::flags::SENSITIVE,
-        "duplicate" => flow::flags::DUPLICATE, "large" => flow::flags::LARGE_PAYLOAD,
-        "nplus1" => flow::flags::N_PLUS_ONE, "uncached" => flow::flags::MISSING_CACHE, _ => return None })
+    Some(match value {
+        "issues" => decode::ISSUE_MASK,
+        "sensitive" => flow::flags::SENSITIVE,
+        "duplicate" => flow::flags::DUPLICATE,
+        "large" => flow::flags::LARGE_PAYLOAD,
+        "nplus1" => flow::flags::N_PLUS_ONE,
+        "uncached" => flow::flags::MISSING_CACHE,
+        _ => return None,
+    })
 }
 
 /// Build the WHERE clause and its parameters.
@@ -185,7 +191,10 @@ fn build_where(q: &Query) -> (String, Vec<Value>) {
                     continue;
                 }
                 "is" => {
-                    if let Some(bit) = issue_bit(val) { clauses.push(format!("(flags & {bit}) != 0")); continue; }
+                    if let Some(bit) = issue_bit(val) {
+                        clauses.push(format!("(flags & {bit}) != 0"));
+                        continue;
+                    }
                     match val {
                         "error" | "errors" | "failed" => kind = Kind::Errors,
                         "slow" => kind = Kind::Slow,
@@ -489,7 +498,13 @@ pub fn matches_summary(q: &Query, s: &FlowSummary) -> bool {
                     true
                 }
                 "is" => {
-                    if let Some(bit) = issue_bit(val) { if s.flags & bit == 0 { return false; } else { continue; } }
+                    if let Some(bit) = issue_bit(val) {
+                        if s.flags & bit == 0 {
+                            return false;
+                        } else {
+                            continue;
+                        }
+                    }
                     match val {
                         "error" | "errors" | "failed" => kind = Kind::Errors,
                         "slow" => kind = Kind::Slow,

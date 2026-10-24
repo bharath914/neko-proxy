@@ -205,7 +205,10 @@ impl App {
         let max_top = (body.height() - PANE_MIN_H).max(TRAFFIC_MIN);
         self.split_top = self.split_top.clamp(TRAFFIC_MIN, max_top);
         let split_y = body.top() + self.split_top;
-        let hit = Rect::from_min_max(pos2(body.left(), split_y - 4.0), pos2(body.right(), split_y + 4.0));
+        let hit = Rect::from_min_max(
+            pos2(body.left(), split_y - 4.0),
+            pos2(body.right(), split_y + 4.0),
+        );
         let resp = ui.interact(hit, self.id("divider-h"), Sense::click_and_drag());
         if resp.dragged() {
             self.split_top = (self.split_top + resp.drag_delta().y).clamp(TRAFFIC_MIN, max_top);
@@ -218,10 +221,14 @@ impl App {
 
         self.split_mid = self.split_mid.clamp(0.25, 0.75);
         let mid_x = bottom.left() + bottom.width() * self.split_mid;
-        let vhit = Rect::from_min_max(pos2(mid_x - 4.0, bottom.top()), pos2(mid_x + 4.0, bottom.bottom()));
+        let vhit = Rect::from_min_max(
+            pos2(mid_x - 4.0, bottom.top()),
+            pos2(mid_x + 4.0, bottom.bottom()),
+        );
         let vresp = ui.interact(vhit, self.id("divider-v"), Sense::click_and_drag());
         if vresp.dragged() {
-            self.split_mid = ((mid_x + vresp.drag_delta().x - bottom.left()) / bottom.width()).clamp(0.25, 0.75);
+            self.split_mid =
+                ((mid_x + vresp.drag_delta().x - bottom.left()) / bottom.width()).clamp(0.25, 0.75);
         }
         if vresp.double_clicked() {
             self.split_mid = 0.5;
@@ -257,13 +264,27 @@ impl App {
         self.detail(ui, res_rect, Pane::Response);
 
         let p = ui.painter();
-        paint::hairline(p, &st, pos2(body.left(), split_y), pos2(body.right(), split_y));
-        paint::hairline(p, &st, pos2(mid_x, bottom.top()), pos2(mid_x, bottom.bottom()));
+        paint::hairline(
+            p,
+            &st,
+            pos2(body.left(), split_y),
+            pos2(body.right(), split_y),
+        );
+        paint::hairline(
+            p,
+            &st,
+            pos2(mid_x, bottom.top()),
+            pos2(mid_x, bottom.bottom()),
+        );
         for (r, rect, icon) in [
             (&resp, hit, egui::CursorIcon::ResizeVertical),
             (&vresp, vhit, egui::CursorIcon::ResizeHorizontal),
         ] {
-            let a = motion::fade(&ctx, self.id(if rect == hit { "fade-h" } else { "fade-v" }), r.hovered() || r.dragged());
+            let a = motion::fade(
+                &ctx,
+                self.id(if rect == hit { "fade-h" } else { "fade-v" }),
+                r.hovered() || r.dragged(),
+            );
             if a > 0.0 {
                 let (c, d) = if rect == hit {
                     (rect.center().y, true)
@@ -275,7 +296,10 @@ impl App {
                 } else {
                     [pos2(c, rect.top()), pos2(c, rect.bottom())]
                 };
-                p.line_segment(seg, Stroke::new(2.0, paint::with_alpha(st.p.accent, a * 0.8)));
+                p.line_segment(
+                    seg,
+                    Stroke::new(2.0, paint::with_alpha(st.p.accent, a * 0.8)),
+                );
             }
             if r.hovered() || r.dragged() {
                 ctx.set_cursor_icon(icon);
@@ -404,146 +428,167 @@ impl App {
             }
         });
         if pane == Pane::Request {
-        if !s.name.is_empty() {
-            let who = if s.owner.is_empty() {
-                s.name.clone()
+            if !s.name.is_empty() {
+                let who = if s.owner.is_empty() {
+                    s.name.clone()
+                } else {
+                    format!("{}  ·  {}", s.name, s.owner)
+                };
+                head.add(egui::Label::new(job(&who, Role::Headline, st.p.text)).selectable(true));
+            }
+            let host_port = if s.port != 443 && s.port != 80 && s.port != 0 {
+                format!("{}:{}", s.host, s.port)
             } else {
-                format!("{}  ·  {}", s.name, s.owner)
+                s.host.clone()
             };
-            head.add(egui::Label::new(job(&who, Role::Headline, st.p.text)).selectable(true));
-        }
-        let host_port = if s.port != 443 && s.port != 80 && s.port != 0 {
-            format!("{}:{}", s.host, s.port)
-        } else {
-            s.host.clone()
-        };
-        head.add(
-            egui::Label::new(job(&host_port, Role::Title, st.p.text))
-                .wrap()
-                .selectable(true),
-        );
-        if !s.path.is_empty() {
             head.add(
-                egui::Label::new(job(&s.path, Role::Callout, st.p.text2))
+                egui::Label::new(job(&host_port, Role::Title, st.p.text))
                     .wrap()
                     .selectable(true),
             );
-        }
-        head.add_space(2.0);
-        let detail_ready = self.details.contains_key(&id);
-        head.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
-            let curl = self
-                .details
-                .get(&id)
-                .map(|e| e.detail.curl.clone())
-                .unwrap_or_default();
-            let can_curl = detail_ready && !curl.is_empty() && s.protocol != "tunnel";
-            if widgets::button(
-                ui,
-                &st,
-                "Copy as cURL",
-                Kind::Secondary,
-                Some(Icon::Terminal),
-                can_curl,
-            )
-            .clicked()
-            {
-                ui.ctx().copy_text(curl);
-                self.toast(ui.ctx(), "Copied as cURL", true);
+            if !s.path.is_empty() {
+                head.add(
+                    egui::Label::new(job(&s.path, Role::Callout, st.p.text2))
+                        .wrap()
+                        .selectable(true),
+                );
             }
-            let dio = self.details.get(&id).map(|e| e.detail.dio.clone()).unwrap_or_default();
-            if widgets::button(ui, &st, "Copy as Dio", Kind::Secondary, Some(Icon::Copy), !dio.is_empty()).clicked() {
-                ui.ctx().copy_text(dio);
-                self.toast(ui.ctx(), "Copied as Dio", true);
-            }
-            if widgets::button(
-                ui,
-                &st,
-                "Copy URL",
-                Kind::Secondary,
-                Some(Icon::Copy),
-                detail_ready,
-            )
-            .clicked()
-            {
-                let url = self
+            head.add_space(2.0);
+            let detail_ready = self.details.contains_key(&id);
+            head.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
+                let curl = self
                     .details
                     .get(&id)
-                    .map(|e| e.detail.url.clone())
+                    .map(|e| e.detail.curl.clone())
                     .unwrap_or_default();
-                ui.ctx().copy_text(url);
-                self.toast(ui.ctx(), "URL copied", true);
-            }
-            // Flows that are plain HTTP exchanges can be sent again or turned
-            // into a rule that matches them.
-            let exchange = s.protocol != "tunnel" && s.flags & 3 == 0;
-            if widgets::button(
-                ui,
-                &st,
-                "Replay",
-                Kind::Secondary,
-                None,
-                detail_ready && exchange,
-            )
-            .on_hover_text("Send this request again as a new flow")
-            .clicked()
-            {
-                self.replay(id);
-            }
-            if widgets::button(ui, &st, "Mock", Kind::Secondary, None, exchange)
-                .on_hover_text("New mock rule for this request")
+                let can_curl = detail_ready && !curl.is_empty() && s.protocol != "tunnel";
+                if widgets::button(
+                    ui,
+                    &st,
+                    "Copy as cURL",
+                    Kind::Secondary,
+                    Some(Icon::Terminal),
+                    can_curl,
+                )
                 .clicked()
-            {
-                let mut f = crate::edit::RuleForm::for_flow(crate::edit::RuleKind::Mock, &s);
-                f.status = s.status.max(200).to_string();
-                self.rule_form = Some(f);
-                self.section = Section::Rules;
-            }
-            if widgets::button(ui, &st, "Break", Kind::Secondary, None, exchange)
-                .on_hover_text("New breakpoint for requests like this")
+                {
+                    ui.ctx().copy_text(curl);
+                    self.toast(ui.ctx(), "Copied as cURL", true);
+                }
+                let dio = self
+                    .details
+                    .get(&id)
+                    .map(|e| e.detail.dio.clone())
+                    .unwrap_or_default();
+                if widgets::button(
+                    ui,
+                    &st,
+                    "Copy as Dio",
+                    Kind::Secondary,
+                    Some(Icon::Copy),
+                    !dio.is_empty(),
+                )
                 .clicked()
-            {
-                self.rule_form = Some(crate::edit::RuleForm::for_flow(
-                    crate::edit::RuleKind::Breakpoint,
-                    &s,
-                ));
-                self.section = Section::Rules;
-            }
-        });
-        head.add_space(6.0);
-        // A merged flow has two views: the app's, and the wire's.
-        let has_wire = self.details.get(&id).is_some_and(|e| e.wire.is_some());
-        if has_wire {
-            let sel = self.wire_view as usize;
-            let w = head.available_width();
-            if let Some(i) = widgets::segmented_w(
-                &mut head,
-                &st,
-                self.id("app-wire"),
-                &["App", "Wire"],
-                sel,
-                Some(w),
-            ) {
-                self.wire_view = i == 1;
-            }
+                {
+                    ui.ctx().copy_text(dio);
+                    self.toast(ui.ctx(), "Copied as Dio", true);
+                }
+                if widgets::button(
+                    ui,
+                    &st,
+                    "Copy URL",
+                    Kind::Secondary,
+                    Some(Icon::Copy),
+                    detail_ready,
+                )
+                .clicked()
+                {
+                    let url = self
+                        .details
+                        .get(&id)
+                        .map(|e| e.detail.url.clone())
+                        .unwrap_or_default();
+                    ui.ctx().copy_text(url);
+                    self.toast(ui.ctx(), "URL copied", true);
+                }
+                // Flows that are plain HTTP exchanges can be sent again or turned
+                // into a rule that matches them.
+                let exchange = s.protocol != "tunnel" && s.flags & 3 == 0;
+                if widgets::button(
+                    ui,
+                    &st,
+                    "Replay",
+                    Kind::Secondary,
+                    None,
+                    detail_ready && exchange,
+                )
+                .on_hover_text("Send this request again as a new flow")
+                .clicked()
+                {
+                    self.replay(id);
+                }
+                if widgets::button(ui, &st, "Mock", Kind::Secondary, None, exchange)
+                    .on_hover_text("New mock rule for this request")
+                    .clicked()
+                {
+                    let mut f = crate::edit::RuleForm::for_flow(crate::edit::RuleKind::Mock, &s);
+                    f.status = s.status.max(200).to_string();
+                    self.rule_form = Some(f);
+                    self.section = Section::Rules;
+                }
+                if widgets::button(ui, &st, "Break", Kind::Secondary, None, exchange)
+                    .on_hover_text("New breakpoint for requests like this")
+                    .clicked()
+                {
+                    self.rule_form = Some(crate::edit::RuleForm::for_flow(
+                        crate::edit::RuleKind::Breakpoint,
+                        &s,
+                    ));
+                    self.section = Section::Rules;
+                }
+            });
             head.add_space(6.0);
-        } else if self.wire_view {
-            self.wire_view = false;
-        }
+            // A merged flow has two views: the app's, and the wire's.
+            let has_wire = self.details.get(&id).is_some_and(|e| e.wire.is_some());
+            if has_wire {
+                let sel = self.wire_view as usize;
+                let w = head.available_width();
+                if let Some(i) = widgets::segmented_w(
+                    &mut head,
+                    &st,
+                    self.id("app-wire"),
+                    &["App", "Wire"],
+                    sel,
+                    Some(w),
+                ) {
+                    self.wire_view = i == 1;
+                }
+                head.add_space(6.0);
+            } else if self.wire_view {
+                self.wire_view = false;
+            }
         }
         let tabs: [Tab; 2] = match pane {
             Pane::Request => [Tab::Request, Tab::Overview],
             Pane::Response => [Tab::Response, Tab::Timing],
         };
-        let cur = if pane == Pane::Request { self.tab } else { self.tab_res };
+        let cur = if pane == Pane::Request {
+            self.tab
+        } else {
+            self.tab_res
+        };
         let tab_idx = tabs.iter().position(|t| *t == cur).unwrap_or(0);
         let labels: Vec<&str> = tabs.iter().map(|t| t.label()).collect();
         let tab_w = head.available_width();
         if let Some(i) = widgets::segmented_w(
             &mut head,
             &st,
-            self.id(if pane == Pane::Request { "tabs-req" } else { "tabs-res" }),
+            self.id(if pane == Pane::Request {
+                "tabs-req"
+            } else {
+                "tabs-res"
+            }),
             &labels,
             tab_idx,
             Some(tab_w),
@@ -1039,8 +1084,23 @@ impl App {
             copy = true;
         }
         if decoded.is_some() || !v.events.is_empty() {
-            let labels = [if decoded.is_some() { "Decoded" } else { "Events" }, "Raw"];
-            if let Some(i) = widgets::segmented(&mut right, st, self.id("decoded-mode"), &labels, self.raw_view as usize) { self.raw_view = i == 1; }
+            let labels = [
+                if decoded.is_some() {
+                    "Decoded"
+                } else {
+                    "Events"
+                },
+                "Raw",
+            ];
+            if let Some(i) = widgets::segmented(
+                &mut right,
+                st,
+                self.id("decoded-mode"),
+                &labels,
+                self.raw_view as usize,
+            ) {
+                self.raw_view = i == 1;
+            }
         } else if is_json {
             let sel = self.raw_view as usize;
             if let Some(i) =
@@ -1144,34 +1204,59 @@ impl App {
             let decoded = decoded.unwrap();
             let mut sub = ui.new_child(UiBuilder::new().max_rect(view.shrink(14.0)));
             sub.set_opacity(fade);
-            egui::ScrollArea::vertical().id_salt(("protocol", salt)).show(&mut sub, |ui| {
-                ui.strong(&decoded.title);
-                if !decoded.note.is_empty() { ui.label(&decoded.note); }
-                for (i, field) in decoded.fields.iter().enumerate() {
-                    ui.push_id(i, |ui| { ui.indent(field.depth, |ui| {
-                        ui.label(&field.label);
-                        ui.add(egui::Label::new(egui::RichText::new(&field.value).monospace()).selectable(true));
-                    }); });
-                }
-            });
+            egui::ScrollArea::vertical()
+                .id_salt(("protocol", salt))
+                .show(&mut sub, |ui| {
+                    ui.strong(&decoded.title);
+                    if !decoded.note.is_empty() {
+                        ui.label(&decoded.note);
+                    }
+                    for (i, field) in decoded.fields.iter().enumerate() {
+                        ui.push_id(i, |ui| {
+                            ui.indent(field.depth, |ui| {
+                                ui.label(&field.label);
+                                ui.add(
+                                    egui::Label::new(egui::RichText::new(&field.value).monospace())
+                                        .selectable(true),
+                                );
+                            });
+                        });
+                    }
+                });
         } else if show_events {
             let mut sub = ui.new_child(UiBuilder::new().max_rect(view.shrink(14.0)));
             sub.set_opacity(fade);
-            egui::ScrollArea::vertical().id_salt(("sse", salt)).show_rows(&mut sub, 90.0, v.events.len(), |ui, rows| {
-                for index in rows {
-                    let event = &v.events[index];
-                    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 90.0), Sense::hover());
-                    let mut row = ui.new_child(UiBuilder::new().max_rect(rect));
-                    row.set_clip_rect(rect.intersect(ui.clip_rect()));
-                    row.horizontal(|ui| {
-                        ui.label(format!("#{} · {} · id {}", index + 1, event.event, event.id));
-                        if ui.small_button("Copy event").clicked() { ui.ctx().copy_text(event.data.clone()); }
-                    });
-                    if let Some(ms) = event.retry_ms { row.small(format!("Retry: {ms} ms")); }
-                    row.add(egui::Label::new(egui::RichText::new(&event.data).monospace()).truncate().selectable(true));
-                    row.separator();
-                }
-            });
+            egui::ScrollArea::vertical()
+                .id_salt(("sse", salt))
+                .show_rows(&mut sub, 90.0, v.events.len(), |ui, rows| {
+                    for index in rows {
+                        let event = &v.events[index];
+                        let (rect, _) = ui
+                            .allocate_exact_size(vec2(ui.available_width(), 90.0), Sense::hover());
+                        let mut row = ui.new_child(UiBuilder::new().max_rect(rect));
+                        row.set_clip_rect(rect.intersect(ui.clip_rect()));
+                        row.horizontal(|ui| {
+                            ui.label(format!(
+                                "#{} · {} · id {}",
+                                index + 1,
+                                event.event,
+                                event.id
+                            ));
+                            if ui.small_button("Copy event").clicked() {
+                                ui.ctx().copy_text(event.data.clone());
+                            }
+                        });
+                        if let Some(ms) = event.retry_ms {
+                            row.small(format!("Retry: {ms} ms"));
+                        }
+                        row.add(
+                            egui::Label::new(egui::RichText::new(&event.data).monospace())
+                                .truncate()
+                                .selectable(true),
+                        );
+                        row.separator();
+                    }
+                });
         } else if show_source {
             viewer::source_view(ui, st, ("src", salt), inner_view, &v.source, fade);
         } else {

@@ -451,8 +451,17 @@ impl App {
         let mut host_x = x;
         if !s.issue_labels.is_empty() {
             let marker = Rect::from_center_size(pos2(host_x + 6.0, mid), vec2(14.0, 18.0));
-            paint::text_fit(p, ui, pos2(host_x, mid), 14.0, "!", Role::Caption, on(st.p.orange));
-            ui.interact(marker, ui.id().with((s.id, "issues")), Sense::hover()).on_hover_text(s.issue_labels.join("\n"));
+            paint::text_fit(
+                p,
+                ui,
+                pos2(host_x, mid),
+                14.0,
+                "!",
+                Role::Caption,
+                on(st.p.orange),
+            );
+            ui.interact(marker, ui.id().with((s.id, "issues")), Sense::hover())
+                .on_hover_text(s.issue_labels.join("\n"));
             host_x += 18.0;
         }
         if s.flags & 1 != 0 {

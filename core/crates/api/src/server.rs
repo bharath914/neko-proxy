@@ -431,19 +431,29 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
                 let ids = records.iter().map(|r| r.id).collect();
                 for chunk in records.chunks(32) {
                     for record in chunk {
-                        flow::FlowSink::publish(&ctx.hub, flow::FlowEvent::Finished(record.clone()));
+                        flow::FlowSink::publish(
+                            &ctx.hub,
+                            flow::FlowEvent::Finished(record.clone()),
+                        );
                         ctx.store.enqueue(record.clone());
                     }
                     ctx.store.flush();
                 }
                 Ok(ids)
-            }).await;
+            })
+            .await;
             match result {
-                Ok(Ok(ids)) => pb::ServerMessage { id, body: Some(Res::ImportedHar(pb::ImportHarResponse { count: ids.len() as u32, ids })) },
+                Ok(Ok(ids)) => pb::ServerMessage {
+                    id,
+                    body: Some(Res::ImportedHar(pb::ImportHarResponse {
+                        count: ids.len() as u32,
+                        ids,
+                    })),
+                },
                 Ok(Err(e)) => error(id, "import_har", e),
                 Err(e) => error(id, "internal", e.to_string()),
             }
-        },
+        }
         Req::Clear(_) => {
             let ctx2 = ctx.clone();
             match tokio::task::spawn_blocking(move || ctx2.store.clear()).await {
@@ -672,7 +682,9 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
         Req::McpInfo(_) => mcp_info(&ctx, id),
         Req::SdkStatus(_) => pb::ServerMessage {
             id,
-            body: Some(Res::SdkStatus(crate::sdk_api::status(ctx.sdk.as_deref()).await)),
+            body: Some(Res::SdkStatus(
+                crate::sdk_api::status(ctx.sdk.as_deref()).await,
+            )),
         },
         Req::SdkSetEnabled(r) => {
             let Some(sdk) = &ctx.sdk else {
@@ -898,7 +910,9 @@ fn build_detail(rec: &flow::FlowRecord, parts: u32) -> pb::FlowDetail {
         ..Default::default()
     };
     if parts & PART_OVERVIEW != 0 {
-        if let Ok(a) = store::export("dio", &[Arc::new(rec.clone())], "") { d.dio = String::from_utf8_lossy(&a.data).into_owned(); }
+        if let Ok(a) = store::export("dio", &[Arc::new(rec.clone())], "") {
+            d.dio = String::from_utf8_lossy(&a.data).into_owned();
+        }
         d.request_headers = rec
             .req_headers
             .iter()
@@ -993,13 +1007,17 @@ async fn export(ctx: Arc<ApiContext>, id: u64, r: pb::ExportRequest) -> pb::Serv
         } else {
             r.ids.clone()
         };
-        if ids.len() > 10_000 { return Err("export limited to 10,000 flows".into()); }
+        if ids.len() > 10_000 {
+            return Err("export limited to 10,000 flows".into());
+        }
         let mut total = 0usize;
         let mut recs = Vec::with_capacity(ids.len());
         for id in ids {
             if let Some(rec) = ctx2.store.get(id).map_err(|e| e.to_string())? {
                 total += rec.req_body.len() + rec.res_body.len();
-                if total > 32 * 1024 * 1024 { return Err("export source bodies exceed 32 MiB".into()); }
+                if total > 32 * 1024 * 1024 {
+                    return Err("export source bodies exceed 32 MiB".into());
+                }
                 recs.push(rec);
             }
         }

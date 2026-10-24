@@ -2,8 +2,8 @@
 //! zstd blobs next to it. Writes happen on one dedicated thread so the data
 //! path only ever pushes onto a queue.
 
-mod blobs;
 mod audit;
+mod blobs;
 mod har;
 mod query;
 mod schema;
@@ -121,7 +121,9 @@ impl Store {
         })
     }
 
-    pub fn set_analysis_sink(&self, sink: Arc<dyn FlowSink>) { *self.shared.analysis_sink.lock().unwrap() = Some(sink); }
+    pub fn set_analysis_sink(&self, sink: Arc<dyn FlowSink>) {
+        *self.shared.analysis_sink.lock().unwrap() = Some(sink);
+    }
 
     pub fn dir(&self) -> &Path {
         &self.shared.dir
@@ -502,7 +504,9 @@ fn writer_loop(mut conn: Connection, shared: Arc<Shared>, rx: mpsc::Receiver<Msg
             if let Err(e) = write_batch(&mut conn, &shared, &flows) {
                 tracing::error!("store write failed: {e}");
                 let mut p = shared.pending.lock().unwrap();
-                for f in &flows { p.remove(&f.id); }
+                for f in &flows {
+                    p.remove(&f.id);
+                }
             }
         }
         for m in control {
@@ -565,7 +569,18 @@ fn sort_msg(m: Msg, flows: &mut Vec<Arc<FlowRecord>>, control: &mut Vec<Msg>, sh
 fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]) -> Result<()> {
     let analyzed: Vec<_> = {
         let mut audit = shared.audit.lock().unwrap();
-        flows.iter().map(|f| { let mut rec = (**f).clone(); rec.flags |= if rec.state == FlowState::Receiving { decode::static_flags(&rec) } else { audit.inspect(&rec) }; Arc::new(rec) }).collect()
+        flows
+            .iter()
+            .map(|f| {
+                let mut rec = (**f).clone();
+                rec.flags |= if rec.state == FlowState::Receiving {
+                    decode::static_flags(&rec)
+                } else {
+                    audit.inspect(&rec)
+                };
+                Arc::new(rec)
+            })
+            .collect()
     };
     let flows = &analyzed;
     // Blobs first, outside the transaction.
@@ -689,10 +704,20 @@ fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]
     tx.commit()?;
     {
         let mut pending = shared.pending.lock().unwrap();
-        for rec in flows { pending.remove(&rec.id); }
+        for rec in flows {
+            pending.remove(&rec.id);
+        }
     }
     let sink = shared.analysis_sink.lock().unwrap().clone();
-    if let Some(sink) = sink { for rec in flows { sink.publish(if rec.state == FlowState::Receiving { FlowEvent::Snapshot(rec.clone()) } else { FlowEvent::Finished(rec.clone()) }); } }
+    if let Some(sink) = sink {
+        for rec in flows {
+            sink.publish(if rec.state == FlowState::Receiving {
+                FlowEvent::Snapshot(rec.clone())
+            } else {
+                FlowEvent::Finished(rec.clone())
+            });
+        }
+    }
     Ok(())
 }
 

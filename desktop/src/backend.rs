@@ -164,8 +164,7 @@ async fn manage(
                         }
                     } else if attempt >= 3 {
                         emit(Event::Conn(ConnState::Failed(
-                            "nekod was not found and nothing is listening on the API socket"
-                                .into(),
+                            "nekod was not found and nothing is listening on the API socket".into(),
                         )));
                     }
                 }
@@ -1197,7 +1196,13 @@ fn demo_checks(s: &DemoState) -> Vec<pb::SdkCheck> {
         )];
     }
     let mut v = vec![
-        c("listener", "ok", "Accepting SDK connections", "Listening on port 8897.", ""),
+        c(
+            "listener",
+            "ok",
+            "Accepting SDK connections",
+            "Listening on port 8897.",
+            "",
+        ),
         c(
             "auto-accept",
             if s.sdk_auto_accept { "ok" } else { "info" },
@@ -1483,7 +1488,10 @@ impl Backend for DemoBackend {
                 key_storage: "keyring".into(),
                 spki_sha256: "qYb1x1vQ0n6y1p2x0cV3m3o1f9wq3b3m1k1F5pQ0v9k=".into(),
             }),
-            Req::ImportHar(_) => Res::Error(pb::ErrorResponse { code: "demo".into(), message: "Import requires a running core".into() }),
+            Req::ImportHar(_) => Res::Error(pb::ErrorResponse {
+                code: "demo".into(),
+                message: "Import requires a running core".into(),
+            }),
             Req::Export(_) => Res::Export(pb::ExportResponse {
                 data: b"{\"log\":{\"version\":\"1.2\",\"entries\":[]}}".to_vec(),
                 filename: "neko-demo.har".into(),
@@ -1800,7 +1808,15 @@ mod e2e {
         });
 
         let status = std::process::Command::new("curl")
-            .args(["-s", "--noproxy", "", "-o", "/dev/null", "-x", &format!("http://{listen}")])
+            .args([
+                "-s",
+                "--noproxy",
+                "",
+                "-o",
+                "/dev/null",
+                "-x",
+                &format!("http://{listen}"),
+            ])
             .arg(format!("http://127.0.0.1:{origin_port}/hello?x=1"))
             .status()
             .unwrap();

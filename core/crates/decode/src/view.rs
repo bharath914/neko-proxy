@@ -144,8 +144,8 @@ pub fn build_view(
         form: Vec::new(),
         image: Vec::new(),
         note: String::new(),
-            events: Vec::new(),
-            protocol: crate::ProtocolView::default(),
+        events: Vec::new(),
+        protocol: crate::ProtocolView::default(),
     };
 
     view.protocol = crate::protocol_view(content_type, &body);
@@ -171,9 +171,17 @@ pub fn build_view(
             } else {
                 &body[..]
             };
-            let text = if content_type.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("text/event-stream") {
+            let text = if content_type
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .eq_ignore_ascii_case("text/event-stream")
+            {
                 String::from_utf8_lossy(slice).into_owned()
-            } else { to_text(slice, content_type) };
+            } else {
+                to_text(slice, content_type)
+            };
             if cut {
                 view.preview_truncated = true;
                 notes.push(format!(
@@ -213,11 +221,19 @@ pub fn build_view(
                 }
                 _ => {}
             }
-            if content_type.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("text/event-stream") {
+            if content_type
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .eq_ignore_ascii_case("text/event-stream")
+            {
                 let (events, events_cut) = crate::parse_sse(&text, opts.json_lines);
                 view.events = events;
                 view.preview_truncated |= events_cut;
-                if events_cut { notes.push("Event limit reached.".into()); }
+                if events_cut {
+                    notes.push("Event limit reached.".into());
+                }
             }
             view.text = text;
         }
@@ -313,10 +329,19 @@ mod tests {
     }
 }
 
-#[cfg(test)] mod sse_charset_tests {
-    #[test] fn event_stream_is_always_utf8() {
-        let body="data: café\n\n".as_bytes();
-        let view=super::build_view("text/event-stream; charset=latin1","",body,body.len() as u64,false,&super::ViewOptions::default());
-        assert_eq!(view.events[0].data,"café");
+#[cfg(test)]
+mod sse_charset_tests {
+    #[test]
+    fn event_stream_is_always_utf8() {
+        let body = "data: café\n\n".as_bytes();
+        let view = super::build_view(
+            "text/event-stream; charset=latin1",
+            "",
+            body,
+            body.len() as u64,
+            false,
+            &super::ViewOptions::default(),
+        );
+        assert_eq!(view.events[0].data, "café");
     }
 }

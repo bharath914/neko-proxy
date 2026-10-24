@@ -7,8 +7,8 @@ mod html;
 mod json;
 mod kind;
 pub mod redact;
-mod view;
 mod sse;
+mod view;
 pub use sse::{parse_sse, SseEvent};
 
 pub use codec::{decode_content, Decoded, DEFAULT_DECODE_LIMIT};
@@ -25,4 +25,4 @@ mod protocol;
 pub use protocol::{protocol_view, DecodedField, ProtocolView};
 
 mod issues;
-pub use issues::{issue_labels, sensitive, static_flags, route_path, ISSUE_MASK};
+pub use issues::{issue_labels, route_path, sensitive, static_flags, ISSUE_MASK};

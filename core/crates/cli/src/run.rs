@@ -75,9 +75,14 @@ impl FlowSink for Fanout {
     fn publish(&self, event: FlowEvent) {
         // Live previews are announced by the store after persistence so the
         // subscriber can immediately fetch their bodies.
-        if matches!(event, FlowEvent::Snapshot(_)) { self.store.publish(event); return; }
+        if matches!(event, FlowEvent::Snapshot(_)) {
+            self.store.publish(event);
+            return;
+        }
         self.hub.publish(event.clone());
-        if matches!(event, FlowEvent::Finished(_)) { self.store.publish(event); }
+        if matches!(event, FlowEvent::Finished(_)) {
+            self.store.publish(event);
+        }
     }
 }
 
@@ -168,9 +173,16 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     };
     // The listener follows the remembered setting (on by default). `--sdk` forces it on for this run.
     if let Some(s) = &sdk {
-        let started = if args.sdk { s.set_enabled(true).await } else { s.start_saved().await };
+        let started = if args.sdk {
+            s.set_enabled(true).await
+        } else {
+            s.start_saved().await
+        };
         if let Err(e) = started {
-            tracing::warn!("could not start the SDK listener on port {}: {e}", args.sdk_port);
+            tracing::warn!(
+                "could not start the SDK listener on port {}: {e}",
+                args.sdk_port
+            );
         }
     }
     let sink = Arc::new(ProxySink {

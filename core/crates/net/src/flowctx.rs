@@ -216,13 +216,22 @@ impl FlowCtx {
             let mut previous = 0;
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                let Some(ctx) = weak.upgrade() else { break; };
-                if ctx.finalized.load(Ordering::Acquire) { break; }
+                let Some(ctx) = weak.upgrade() else {
+                    break;
+                };
+                if ctx.finalized.load(Ordering::Acquire) {
+                    break;
+                }
                 let retained = ctx.res_cap.retained_len();
-                if retained == previous { continue; }
+                if retained == previous {
+                    continue;
+                }
                 previous = retained;
-                let _ = tokio::task::spawn_blocking(move || ctx.publish_snapshot(PREVIEW_CAP)).await;
-                if retained >= PREVIEW_CAP { break; }
+                let _ =
+                    tokio::task::spawn_blocking(move || ctx.publish_snapshot(PREVIEW_CAP)).await;
+                if retained >= PREVIEW_CAP {
+                    break;
+                }
             }
         });
     }
@@ -231,16 +240,26 @@ impl FlowCtx {
         // Serialize publication with finalization, so a preview never follows
         // the final record. Capture locks are released before finalize locks state.
         let s = self.state.lock().unwrap();
-        if self.finalized.load(Ordering::Acquire) { return; }
+        if self.finalized.load(Ordering::Acquire) {
+            return;
+        }
         let request = self.req_cap.snapshot(limit);
         let response = self.res_cap.snapshot(limit);
-        if self.finalized.load(Ordering::Acquire) { return; }
+        if self.finalized.load(Ordering::Acquire) {
+            return;
+        }
         let timings = self.capture_timings(&s, &request, Instant::now());
         let mut rec = s.rec.clone();
-        rec.req_body = request.bytes; rec.res_body = response.bytes;
-        rec.req_size = request.size; rec.res_size = response.size;
-        if request.truncated { rec.flags |= flags::REQ_TRUNCATED; }
-        if response.truncated || rec.res_body.len() >= limit { rec.flags |= flags::RES_TRUNCATED; }
+        rec.req_body = request.bytes;
+        rec.res_body = response.bytes;
+        rec.req_size = request.size;
+        rec.res_size = response.size;
+        if request.truncated {
+            rec.flags |= flags::REQ_TRUNCATED;
+        }
+        if response.truncated || rec.res_body.len() >= limit {
+            rec.flags |= flags::RES_TRUNCATED;
+        }
         rec.timings = timings;
         rec.state = FlowState::Receiving;
         self.sink.publish(FlowEvent::Snapshot(Arc::new(rec)));

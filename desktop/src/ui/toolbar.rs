@@ -101,8 +101,24 @@ impl App {
             return;
         }
         right.menu_button("Export", |ui| {
-            for kind in ["har", "postman", "k6", "wiremock", "msw", "mockoon", "openapi", "dart", "kotlin", "swift", "typescript", "dio"] {
-                if ui.button(kind).clicked() { self.export_kind(kind); ui.close(); }
+            for kind in [
+                "har",
+                "postman",
+                "k6",
+                "wiremock",
+                "msw",
+                "mockoon",
+                "openapi",
+                "dart",
+                "kotlin",
+                "swift",
+                "typescript",
+                "dio",
+            ] {
+                if ui.button(kind).clicked() {
+                    self.export_kind(kind);
+                    ui.close();
+                }
             }
         });
         let avail = inner.width();

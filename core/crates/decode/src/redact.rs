@@ -105,7 +105,9 @@ pub fn redact_text(s: &str) -> String {
             out.push_str(MASK);
         } else {
             for (i, part) in token.split('/').enumerate() {
-                if i > 0 { out.push('/'); }
+                if i > 0 {
+                    out.push('/');
+                }
                 out.push_str(if looks_like_secret(part) { MASK } else { part });
             }
         }
@@ -145,7 +147,10 @@ pub fn redact_pairs(s: &str) -> String {
                 let name = k.replace('+', " ");
                 let name = percent_encoding::percent_decode_str(&name).decode_utf8_lossy();
                 let value = percent_encoding::percent_decode_str(v).decode_utf8_lossy();
-                if is_sensitive_key(&name) || looks_like_secret(&value) || redact_text(&value) != value {
+                if is_sensitive_key(&name)
+                    || looks_like_secret(&value)
+                    || redact_text(&value) != value
+                {
                     format!("{k}={MASK}")
                 } else {
                     format!("{k}={v}")
@@ -157,33 +162,61 @@ pub fn redact_pairs(s: &str) -> String {
         .join("&")
 }
 
-pub fn redact_json_value(v: &mut Value) { redact_value(v, 0); }
+pub fn redact_json_value(v: &mut Value) {
+    redact_value(v, 0);
+}
 fn redact_value(v: &mut Value, depth: usize) {
-    if depth > 32 { *v = Value::String(MASK.into()); return; }
+    if depth > 32 {
+        *v = Value::String(MASK.into());
+        return;
+    }
     match v {
         Value::Object(map) => {
-            let sensitive_header = map.get("name").or_else(||map.get("key")).and_then(Value::as_str).is_some_and(is_sensitive_header);
-            if sensitive_header && map.contains_key("value") { map.insert("value".into(), Value::String(MASK.into())); }
+            let sensitive_header = map
+                .get("name")
+                .or_else(|| map.get("key"))
+                .and_then(Value::as_str)
+                .is_some_and(is_sensitive_header);
+            if sensitive_header && map.contains_key("value") {
+                map.insert("value".into(), Value::String(MASK.into()));
+            }
             for (k, item) in map.iter_mut() {
-                if is_sensitive_header(k) && !item.is_null() { *item = Value::String(MASK.into()); }
-                else if matches!(k.as_str(), "body" | "text" | "raw") && item.is_string() {
+                if is_sensitive_header(k) && !item.is_null() {
+                    *item = Value::String(MASK.into());
+                } else if matches!(k.as_str(), "body" | "text" | "raw") && item.is_string() {
                     let text = item.as_str().unwrap();
                     let redacted = if let Ok(mut embedded) = serde_json::from_str::<Value>(text) {
-                        redact_value(&mut embedded, depth+1); embedded.to_string()
-                    } else { redact_text(&redact_pairs(text)) };
+                        redact_value(&mut embedded, depth + 1);
+                        embedded.to_string()
+                    } else {
+                        redact_text(&redact_pairs(text))
+                    };
                     *item = Value::String(redacted);
-                } else if k == "query" && item.is_string() { *item = Value::String(redact_text(&redact_pairs(item.as_str().unwrap()))); }
-                else { redact_value(item, depth+1); }
+                } else if k == "query" && item.is_string() {
+                    *item = Value::String(redact_text(&redact_pairs(item.as_str().unwrap())));
+                } else {
+                    redact_value(item, depth + 1);
+                }
             }
         }
         Value::Array(items) => {
-            if items.len() == 2 && items[0].as_str().is_some_and(is_sensitive_header) { items[1] = Value::String(MASK.into()); }
-            for item in items { redact_value(item, depth+1); }
+            if items.len() == 2 && items[0].as_str().is_some_and(is_sensitive_header) {
+                items[1] = Value::String(MASK.into());
+            }
+            for item in items {
+                redact_value(item, depth + 1);
+            }
         }
         Value::String(s) => {
-            let text = if (s.starts_with("http://") || s.starts_with("https://")) && !s.chars().any(char::is_whitespace) {
-                s.split_once('?').map(|(path,q)| format!("{path}?{}", redact_pairs(q))).unwrap_or_else(||s.clone())
-            } else { s.clone() };
+            let text = if (s.starts_with("http://") || s.starts_with("https://"))
+                && !s.chars().any(char::is_whitespace)
+            {
+                s.split_once('?')
+                    .map(|(path, q)| format!("{path}?{}", redact_pairs(q)))
+                    .unwrap_or_else(|| s.clone())
+            } else {
+                s.clone()
+            };
             *s = redact_text(&text);
         }
         _ => {}
@@ -261,12 +294,26 @@ mod tests {
     }
 }
 
-#[cfg(test)] mod structured_tests {
+#[cfg(test)]
+mod structured_tests {
     use super::*;
-    #[test] fn encoded_keys_headers_and_embedded_json() {
-        assert_eq!(redact_pairs("%61pi_key=short&ok=1"),format!("%61pi_key={MASK}&ok=1"));
-        let mut v=serde_json::json!({"headers":[["Cookie","short-cookie"]],"header":{"key":"X-Api-Key","value":"short-key"},"body":"{\"password\":{\"nested\":\"short-password\"}}","url":"https://api.test/sk-abcdefghijklmnopqrstuvwxyz?token=short-query"});
-        redact_json_value(&mut v);let text=v.to_string();
-        for secret in ["short-cookie","short-key","short-password","short-query","sk-abcdefghijklmnopqrstuvwxyz"] { assert!(!text.contains(secret),"{text}"); }
+    #[test]
+    fn encoded_keys_headers_and_embedded_json() {
+        assert_eq!(
+            redact_pairs("%61pi_key=short&ok=1"),
+            format!("%61pi_key={MASK}&ok=1")
+        );
+        let mut v = serde_json::json!({"headers":[["Cookie","short-cookie"]],"header":{"key":"X-Api-Key","value":"short-key"},"body":"{\"password\":{\"nested\":\"short-password\"}}","url":"https://api.test/sk-abcdefghijklmnopqrstuvwxyz?token=short-query"});
+        redact_json_value(&mut v);
+        let text = v.to_string();
+        for secret in [
+            "short-cookie",
+            "short-key",
+            "short-password",
+            "short-query",
+            "sk-abcdefghijklmnopqrstuvwxyz",
+        ] {
+            assert!(!text.contains(secret), "{text}");
+        }
     }
 }

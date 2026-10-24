@@ -26,7 +26,11 @@ enum Command {
     /// Export captured flows.
     Export(ExportArgs),
     /// Import a HAR file into the running core.
-    ImportHar { file: PathBuf, #[arg(long)] socket: Option<PathBuf> },
+    ImportHar {
+        file: PathBuf,
+        #[arg(long)]
+        socket: Option<PathBuf>,
+    },
     /// Show how to connect a local AI client (Claude Code) to the MCP server.
     Mcp(McpArgs),
     /// Turn SDK connections on or off, and see their state (needs a running core).
@@ -200,16 +204,28 @@ fn main() -> Result<()> {
         }
         Command::Flows(a) => flows(a),
         Command::Export(a) => export(a),
-        Command::ImportHar { file, socket } => tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async {
-            use std::io::Read;
-            let mut data = Vec::new();
-            std::fs::File::open(file)?.take(store::HAR_IMPORT_LIMIT as u64 + 1).read_to_end(&mut data)?;
-            anyhow::ensure!(data.len() <= store::HAR_IMPORT_LIMIT, "HAR exceeds 64 MiB");
-            let mut c = client::Client::connect(&socket.unwrap_or_else(paths::socket_path)).await?;
-            let result = c.call(api::pb::client_message::Body::ImportHar(api::pb::ImportHarRequest { data })).await?;
-            if let api::pb::server_message::Body::ImportedHar(r) = result { println!("Imported {} flows", r.count); }
-            Ok(())
-        }),
+        Command::ImportHar { file, socket } => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(async {
+                use std::io::Read;
+                let mut data = Vec::new();
+                std::fs::File::open(file)?
+                    .take(store::HAR_IMPORT_LIMIT as u64 + 1)
+                    .read_to_end(&mut data)?;
+                anyhow::ensure!(data.len() <= store::HAR_IMPORT_LIMIT, "HAR exceeds 64 MiB");
+                let mut c =
+                    client::Client::connect(&socket.unwrap_or_else(paths::socket_path)).await?;
+                let result = c
+                    .call(api::pb::client_message::Body::ImportHar(
+                        api::pb::ImportHarRequest { data },
+                    ))
+                    .await?;
+                if let api::pb::server_message::Body::ImportedHar(r) = result {
+                    println!("Imported {} flows", r.count);
+                }
+                Ok(())
+            }),
         Command::Ca { action } => ca(action),
         Command::Sdk { action } => tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -362,12 +378,16 @@ fn export(a: ExportArgs) -> Result<()> {
     for id in ids {
         if let Some(r) = store.get(id)? {
             total += r.req_body.len() + r.res_body.len();
-            anyhow::ensure!(total <= 32 * 1024 * 1024, "export source bodies exceed 32 MiB");
+            anyhow::ensure!(
+                total <= 32 * 1024 * 1024,
+                "export source bodies exceed 32 MiB"
+            );
             recs.push(r);
         }
     }
     anyhow::ensure!(!a.no_redact, "exports always redact credentials");
-    let artifact = store::export(&a.kind, &recs, env!("CARGO_PKG_VERSION")).map_err(anyhow::Error::msg)?;
+    let artifact =
+        store::export(&a.kind, &recs, env!("CARGO_PKG_VERSION")).map_err(anyhow::Error::msg)?;
     let bytes = artifact.data;
     match a.output {
         Some(p) => {
@@ -422,10 +442,28 @@ fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
         println!("This core runs without the SDK listener.");
         return;
     }
-    println!("SDK connections  {}  ({})", if st.enabled { "on" } else { "off" }, st.health);
+    println!(
+        "SDK connections  {}  ({})",
+        if st.enabled { "on" } else { "off" },
+        st.health
+    );
     println!("Port             {}", st.port);
-    println!("Wi-Fi phones     {}", if st.lan { "allowed (they need an Allow)" } else { "off (this computer only)" });
-    println!("Auto-accept      {}", if st.auto_accept_local { "connections from this computer" } else { "off, every device asks" });
+    println!(
+        "Wi-Fi phones     {}",
+        if st.lan {
+            "allowed (they need an Allow)"
+        } else {
+            "off (this computer only)"
+        }
+    );
+    println!(
+        "Auto-accept      {}",
+        if st.auto_accept_local {
+            "connections from this computer"
+        } else {
+            "off, every device asks"
+        }
+    );
     println!("Fingerprint      {}", st.fingerprint);
     for l in &st.listening {
         println!("Listening on     {l}");
@@ -442,8 +480,20 @@ fn print_sdk_status(st: &api::pb::SdkStatus, json: bool) {
     );
     println!("Sessions         {}", st.sessions);
     // Only what needs a person; the rest is the happy path.
-    for c in st.checks.iter().filter(|c| matches!(c.level.as_str(), "warn" | "error")) {
-        println!("{:<16} {}", if c.level == "error" { "Problem" } else { "Attention" }, c.title);
+    for c in st
+        .checks
+        .iter()
+        .filter(|c| matches!(c.level.as_str(), "warn" | "error"))
+    {
+        println!(
+            "{:<16} {}",
+            if c.level == "error" {
+                "Problem"
+            } else {
+                "Attention"
+            },
+            c.title
+        );
         if !c.detail.is_empty() {
             println!("{:<16} {}", "", c.detail);
         }
@@ -474,14 +524,23 @@ async fn sdk_cmd(action: SdkAction) -> Result<()> {
         SdkAction::Set { key, value, s } => {
             // Read the current state first, so only the named setting changes.
             let mut c = connect(&s).await?;
-            let Res::SdkStatus(cur) = c.call(Req::SdkStatus(api::pb::SdkStatusRequest {})).await? else {
+            let Res::SdkStatus(cur) = c.call(Req::SdkStatus(api::pb::SdkStatusRequest {})).await?
+            else {
                 bail!("unexpected answer from the core")
             };
             let on = value == "on";
-            let (lan, auto) = if key == "lan" { (on, cur.auto_accept_local) } else { (cur.lan, on) };
+            let (lan, auto) = if key == "lan" {
+                (on, cur.auto_accept_local)
+            } else {
+                (cur.lan, on)
+            };
             (
                 s,
-                Req::SdkSetSettings(api::pb::SdkSetSettingsRequest { enabled: cur.enabled, lan, auto_accept_local: auto }),
+                Req::SdkSetSettings(api::pb::SdkSetSettingsRequest {
+                    enabled: cur.enabled,
+                    lan,
+                    auto_accept_local: auto,
+                }),
             )
         }
     };
