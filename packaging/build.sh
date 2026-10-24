@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build release packages for the current Linux architecture into dist/:
-#   proxy-<ver>-linux-<arch>.tar.gz    portable tarball (also what install.sh downloads)
-#   proxy_<ver>_<deb-arch>.deb         Debian/Ubuntu, assembled with ar and tar (no dpkg needed)
-#   proxy-<ver>-1.<arch>.rpm           Fedora/RHEL/openSUSE, needs rpmbuild (skipped if absent)
+#   neko-<ver>-linux-<arch>.tar.gz     portable tarball (also what install.sh downloads)
+#   neko_<ver>_<deb-arch>.deb          Debian/Ubuntu, assembled with ar and tar (no dpkg needed)
+#   neko-<ver>-1.<arch>.rpm            Fedora/RHEL/openSUSE, needs rpmbuild (skipped if absent)
 #   Neko-<ver>-<arch>.AppImage        needs APPIMAGETOOL=/path/to/appimagetool (skipped if unset)
 #   SHA256SUMS                         checksums of everything above
 #
@@ -20,7 +20,7 @@ case "$(uname -m)" in
   aarch64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
 esac
-NAME=proxy-$VERSION-linux-$ARCH
+NAME=neko-$VERSION-linux-$ARCH
 OUT=$ROOT/dist
 STAGE=$OUT/$NAME
 MAINTAINER=${NEKO_MAINTAINER:-Neko Proxy contributors <noreply@example.invalid>}
@@ -67,7 +67,7 @@ License: MIT OR Apache-2.0 (declared in Cargo.toml; confirm before release)
 TXT
 INSTALLED_KB=$(du -sk "$DEB/data" | cut -f1)
 cat > "$DEB/control/control" <<TXT
-Package: proxy
+Package: neko
 Version: $VERSION
 Section: devel
 Priority: optional
@@ -93,7 +93,7 @@ if command -v rpmbuild >/dev/null; then
   RPM=$OUT/rpmtop
   mkdir -p "$RPM"
   cat > "$RPM/neko.spec" <<TXT
-Name:           proxy
+Name:           neko
 Version:        $VERSION
 Release:        1
 Summary:        HTTP and HTTPS debugging proxy
@@ -107,17 +107,17 @@ Recommends:     xdg-utils
 
 %description
 Capture, inspect and search HTTP/1.1 and HTTP/2 traffic, decrypt HTTPS with a
-per-install certificate, and export HAR. Ships a native desktop app (proxy) and
+per-install certificate, and export HAR. Ships a native desktop app (neko) and
 the headless capture core (nekod).
 
 %install
-install -Dm755 $STAGE/bin/neko  %{buildroot}%{_bindir}/proxy
+install -Dm755 $STAGE/bin/neko  %{buildroot}%{_bindir}/neko
 install -Dm755 $STAGE/bin/nekod %{buildroot}%{_bindir}/nekod
 install -Dm644 $STAGE/share/applications/dev.nekoproxy.Neko.desktop %{buildroot}%{_datadir}/applications/dev.nekoproxy.Neko.desktop
 install -Dm644 $STAGE/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png
 
 %files
-%{_bindir}/proxy
+%{_bindir}/neko
 %{_bindir}/nekod
 %{_datadir}/applications/dev.nekoproxy.Neko.desktop
 %{_datadir}/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png
@@ -139,7 +139,7 @@ if [ -n "${APPIMAGETOOL:-}" ]; then
   install -m 0644 packaging/icon/neko-512.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png"
   install -m 0644 packaging/dev.nekoproxy.Neko.desktop "$APPDIR/"
   install -m 0644 packaging/icon/neko-512.png "$APPDIR/dev.nekoproxy.Neko.png"
-  # proxy finds nekod next to its own executable, so only the PATH needs help.
+  # neko finds nekod next to its own executable, so only the PATH needs help.
   cat > "$APPDIR/AppRun" <<'SH'
 #!/bin/sh
 HERE=$(dirname "$(readlink -f "$0")")
