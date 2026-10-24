@@ -27,26 +27,59 @@ func infoCard(_ rows: [(String, String, Bool)]) -> NSView {
 
 func overline(_ s: String) -> NSTextField { label(s.uppercased(), .overline, Theme.text3) }
 
-/// A bar per timing phase, scaled to the largest.
+/// One waterfall: the total, a summary bar, and a bar per phase placed where it
+/// starts. Phases the source did not measure (negative) show as dashes.
 final class TimingView: Surface {
     private let rows: [(String, Double, NSColor)]
     private let total: Double
-    init(_ t: Neko_Api_V1_Timings) {
+    private let note: String
+    private let heading: String?
+    private var headH: CGFloat { heading == nil ? 0 : 22 }
+
+    init(_ t: Neko_Api_V1_Timings, heading: String? = nil, pending: Bool = false) {
+        self.heading = heading
         rows = [("DNS", t.dnsMs, Theme.purple), ("Connect", t.connectMs, Theme.orange), ("TLS", t.tlsMs, Theme.pink),
                 ("Send", t.sendMs, Theme.teal), ("Wait", t.waitMs, Theme.accent), ("Receive", t.receiveMs, Theme.green)]
         total = max(t.totalMs, rows.reduce(0) { $0 + max($1.1, 0) }, 0.001)
+        note = pending ? "in progress" : t.reusedConnection ? "connection reused" : "new connection"
         super.init(frame: .zero)
         fill = Theme.card; border = Theme.separator; radius = Theme.Radius.card
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: CGFloat(rows.count) * 30 + 56).isActive = true
+        heightAnchor.constraint(equalToConstant: CGFloat(rows.count) * 30 + 80 + headH).isActive = true
     }
     required init?(coder: NSCoder) { fatalError() }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        var y: CGFloat = 14
+        if let heading {
+            (heading.uppercased() as NSString).draw(at: NSPoint(x: 14, y: y), withAttributes: Theme.attrs(.overline, Theme.text3))
+            y += headH
+        }
+        // Total and note.
+        let big = Fmt.duration(total > 0.001 ? total : -1) as NSString
+        let bigA = Theme.attrs(.title, Theme.text)
+        big.draw(at: NSPoint(x: 14, y: y), withAttributes: bigA)
+        let bw = big.size(withAttributes: bigA).width
+        (note as NSString).draw(at: NSPoint(x: 14 + bw + 8, y: y + 8), withAttributes: Theme.attrs(.callout, Theme.text2))
+        y += 40
+        // Summary bar.
+        let barW = bounds.width - 28
+        Theme.fill.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 14, y: y, width: barW, height: 10), xRadius: 5, yRadius: 5).fill()
+        var x: CGFloat = 14
+        for (_, ms, color) in rows where ms > 0 {
+            let w = barW * CGFloat(ms / total)
+            if w > 0.5 {
+                color.setFill()
+                NSBezierPath(roundedRect: NSRect(x: x + 0.5, y: y, width: max(w - 1, 1), height: 10), xRadius: 3, yRadius: 3).fill()
+                x += w
+            }
+        }
+        y += 24
+        // Waterfall.
         let labelW: CGFloat = 70, valueW: CGFloat = 62
         let trackX = 14 + labelW, trackW = bounds.width - trackX - valueW - 14
-        var y: CGFloat = 14
         var offset = 0.0
         for (name, ms, color) in rows {
             let la = Theme.attrs(.body, Theme.text2)
@@ -55,25 +88,18 @@ final class TimingView: Surface {
             Theme.fill.setFill()
             NSBezierPath(roundedRect: NSRect(x: trackX, y: y + 10, width: trackW, height: 10), xRadius: 5, yRadius: 5).fill()
             if ms > 0 {
-                let x = trackX + trackW * CGFloat(offset / total)
+                let bx = trackX + trackW * CGFloat(offset / total)
                 let w = max(trackW * CGFloat(ms / total), 4)
                 color.setFill()
-                NSBezierPath(roundedRect: NSRect(x: x, y: y + 10, width: w, height: 10), xRadius: 5, yRadius: 5).fill()
+                NSBezierPath(roundedRect: NSRect(x: bx, y: y + 10, width: w, height: 10), xRadius: 5, yRadius: 5).fill()
                 offset += ms
             }
-            let va = Theme.attrs(.mono, ms >= 0 ? Theme.text : Theme.text3)
-            let vs = (ms >= 0 ? Fmt.duration(ms) : "—") as NSString
+            let va = Theme.attrs(.mono, ms > 0 ? Theme.text : Theme.text3)
+            let vs = (ms > 0 ? Fmt.duration(ms) : "—") as NSString
             let vz = vs.size(withAttributes: va)
             vs.draw(at: NSPoint(x: bounds.width - 14 - vz.width, y: y + 15 - vz.height / 2), withAttributes: va)
             y += 30
         }
-        Theme.separator.setFill()
-        NSRect(x: 14, y: y + 6, width: bounds.width - 28, height: 1).fill()
-        let ta = Theme.attrs(.bodyMedium, Theme.text)
-        ("Total" as NSString).draw(at: NSPoint(x: 14, y: y + 20), withAttributes: ta)
-        let tv = Fmt.duration(total > 0.001 ? total : -1) as NSString
-        let tz = tv.size(withAttributes: Theme.attrs(.mono, Theme.text))
-        tv.draw(at: NSPoint(x: bounds.width - 14 - tz.width, y: y + 21), withAttributes: Theme.attrs(.mono, Theme.text))
     }
 }
 
@@ -394,11 +420,21 @@ final class DetailPane: NSView {
     }
 
     private func buildTiming(_ d: FlowDetail) {
+        let pending = d.summary.state == .pending
         stack.addArrangedSubview(overline("Timing"))
-        addFull(TimingView(d.timings))
-        let t = d.timings
-        stack.setCustomSpacing(14, after: stack.arrangedSubviews.last!)
-        addFull(infoCard([("Connection", t.reusedConnection ? "Reused" : "New connection", false)]))
+        // A merged flow shows both: the client stack's own timings and the proxy's.
+        let app = d.hasSdk && d.sdk.hasTimings ? d.sdk.timings : d.timings
+        if d.hasWire {
+            addFull(TimingView(app, heading: "As the app saw it", pending: pending))
+            stack.setCustomSpacing(10, after: stack.arrangedSubviews.last!)
+            addFull(TimingView(d.wire.timings, heading: "On the wire (proxy)", pending: pending))
+        } else {
+            addFull(TimingView(app, pending: pending))
+        }
+        if app.reusedConnection {
+            stack.setCustomSpacing(10, after: stack.arrangedSubviews.last!)
+            addFull(label("DNS, connect and TLS are zero because this request reused an open connection.", .callout, Theme.text3, lines: 0))
+        }
     }
 
     // MARK: body
