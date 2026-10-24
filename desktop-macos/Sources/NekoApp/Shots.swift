@@ -239,6 +239,10 @@ enum Fixtures {
             wc.root.approval.update([])
             wc.root.setSection(.devices)
             snap("mac-devices-\(scheme)")
+            wc.root.setSection(.inspector)
+            wc.root.showPalette()
+            snap("mac-palette-\(scheme)")
+            wc.root.closePalette()
         }
     }
 }

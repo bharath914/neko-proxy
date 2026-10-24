@@ -311,6 +311,66 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
     func copyCurl() { copy(detail.detail?.curl) }
     func copyURL() { copy(detail.detail?.url) }
 
+    // MARK: command palette
+
+    private var palette: CommandPalette?
+
+    func showPalette() {
+        if palette != nil { return }
+        let p = CommandPalette()
+        p.commands = { [weak self] in self?.paletteCommands() ?? [] }
+        p.flows = { [weak self] q in self?.paletteFlows(q) ?? [] }
+        p.onClose = { [weak self] in self?.palette = nil }
+        palette = p
+        p.open(in: view)
+    }
+
+    func closePalette() { palette?.close() }
+
+    private func paletteCommands() -> [PaletteItem] {
+        var c: [PaletteItem] = []
+        let names = ["Inspector", "Breakpoints", "Rules", "Devices", "Settings"]
+        for s in Section.allCases {
+            c.append(PaletteItem(title: "Go to \(names[s.rawValue])", detail: "⌘\(s.rawValue + 1)") { [weak self] in self?.setSection(s) })
+        }
+        c.append(PaletteItem(title: model.recording ? "Pause capture" : "Resume capture", detail: "⌘R") { [weak self] in self?.toggleRecording() })
+        c.append(PaletteItem(title: "Clear all requests", detail: "⌘K") { [weak self] in self?.confirmClear() })
+        c.append(PaletteItem(title: "Find requests", detail: "⌘F") { [weak self] in self?.setSection(.inspector); self?.focusSearch() })
+        c.append(PaletteItem(title: "Show sequence view") { [weak self] in self?.setSection(.inspector); self?.showTraffic(sequence: true) })
+        c.append(PaletteItem(title: "Show traffic list") { [weak self] in self?.setSection(.inspector); self?.showTraffic(sequence: false) })
+        c.append(PaletteItem(title: "Export HAR…") { [weak self] in self?.exportHAR() })
+        c.append(PaletteItem(title: "Install CA certificate…") { [weak self] in self?.setSection(.settings); self?.installCA() })
+        if detail.detail != nil {
+            c.append(PaletteItem(title: "Copy as cURL", detail: "⇧⌘C") { [weak self] in self?.copyCurl() })
+            c.append(PaletteItem(title: "Copy URL", detail: "⌥⌘C") { [weak self] in self?.copyURL() })
+            c.append(PaletteItem(title: "Replay selected request") { [weak self] in
+                guard let id = self?.detail.detail?.summary.id else { return }
+                Task { await self?.model.replay(id) }
+            })
+        }
+        for k in RuleKind.allCases {
+            c.append(PaletteItem(title: "New \(k.label.lowercased()) rule") { [weak self] in self?.setSection(.rules); self?.rules.startNew(k, flow: self?.detail.detail?.summary) })
+        }
+        return c
+    }
+
+    private func paletteFlows(_ q: String) -> [PaletteItem] {
+        var hits: [(Int, Flow)] = []
+        for f in model.flows.reversed() {
+            let text = "\(f.method) \(f.host)\(f.path) \(f.statusText)"
+            if let s = fuzzyScore(q, text) { hits.append((s, f)) }
+            if hits.count > 400 { break }
+        }
+        hits.sort { $0.0 > $1.0 }
+        return hits.prefix(6).map { _, f in
+            PaletteItem(title: "\(f.method) \(f.host)\(f.path)", detail: f.statusText) { [weak self] in
+                self?.setSection(.inspector)
+                self?.showTraffic(sequence: false)
+                self?.list.select(id: f.id)
+            }
+        }
+    }
+
     func focusSearch() { view.window?.makeFirstResponder(top.search.field) }
 
     /// Shows the exact command first and only runs it after the person confirms.

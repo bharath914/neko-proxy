@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func menuCopyURL() { controller?.root.copyURL() }
     @objc func menuFind() { controller?.root.setSection(.inspector); controller?.root.focusSearch() }
     @objc func menuRecord() { controller?.root.toggleRecording() }
+    @objc func menuPalette() { controller?.root.showPalette() }
+    @objc func menuGo(_ sender: NSMenuItem) { if let s = Section(rawValue: sender.tag) { controller?.root.setSection(s) } }
     @objc func menuClear() { controller?.root.confirmClear() }
 
     /// Debug aid for scripted runs: `NEKO_LIVE_CTL=/dir` makes the app read one command
@@ -115,6 +117,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add("Capture") { m in
             item(m, "Pause or Resume", #selector(AppDelegate.menuRecord), "r")
             item(m, "Clear All", #selector(AppDelegate.menuClear), "k")
+        }
+        add("Go") { m in
+            item(m, "Command Palette…", #selector(AppDelegate.menuPalette), "p", [.command, .shift])
+            m.addItem(.separator())
+            for (i, n) in ["Inspector", "Breakpoints", "Rules", "Devices", "Settings"].enumerated() {
+                item(m, n, #selector(AppDelegate.menuGo(_:)), String(i + 1))
+                m.items.last?.tag = i
+            }
         }
         add("Window") { m in
             item(m, "Minimize", #selector(NSWindow.performMiniaturize(_:)), "m")
