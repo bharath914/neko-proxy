@@ -26,6 +26,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+case $PREFIX in /*) ;; *) PREFIX=$PWD/$PREFIX ;; esac
+if printf '%s' "$PREFIX" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+  echo "install prefix must not contain control characters" >&2
+  exit 2
+fi
+
 APPS=$PREFIX/share/applications
 ICONS=$PREFIX/share/icons/hicolor/512x512/apps
 
@@ -59,7 +65,7 @@ if [ -z "$TARBALL" ]; then
     VERSION=${VERSION##*/}
     case $VERSION in v*) ;; *) echo "could not find a release of $REPO" >&2; exit 1 ;; esac
   fi
-  NAME=proxy-${VERSION#v}-linux-$ARCH.tar.gz
+  NAME=neko-${VERSION#v}-linux-$ARCH.tar.gz
   BASE=https://github.com/$REPO/releases/download/$VERSION
   echo "Downloading $NAME"
   curl -fSL --progress-bar -o "$TMP/$NAME" "$BASE/$NAME"
@@ -73,18 +79,20 @@ else
 fi
 
 tar -xzf "$TARBALL" -C "$TMP"
-SRC=$(find "$TMP" -maxdepth 1 -type d -name 'proxy-*-linux-*' | head -1)
+SRC=$(find "$TMP" -maxdepth 1 -type d -name 'neko-*-linux-*' | head -1)
 [ -x "$SRC/bin/neko" ] || { echo "unexpected tarball layout" >&2; exit 1; }
 
 mkdir -p "$PREFIX/bin" "$APPS" "$ICONS"
 # Install over a running copy safely: write a new file, then rename.
-for b in proxy nekod; do
+for b in neko nekod; do
   install -m 0755 "$SRC/bin/$b" "$PREFIX/bin/.$b.new"
   mv -f "$PREFIX/bin/.$b.new" "$PREFIX/bin/$b"
 done
 install -m 0644 "$SRC/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png" "$ICONS/"
-# Absolute Exec so the launcher works even when ~/.local/bin is not on PATH.
-sed "s|^Exec=proxy\$|Exec=$PREFIX/bin/neko|" "$SRC/share/applications/dev.nekoproxy.Neko.desktop" \
+# Absolute, quoted Exec also supports prefixes containing spaces or punctuation.
+DESKTOP_EXEC=$(printf '%s/bin/neko' "$PREFIX" | sed 's/[\\"`$]/\\&/g')
+SED_EXEC=$(printf '%s' "$DESKTOP_EXEC" | sed 's/[\\&|]/\\&/g')
+sed "s|^Exec=neko\$|Exec=\"$SED_EXEC\"|" "$SRC/share/applications/dev.nekoproxy.Neko.desktop" \
   > "$APPS/dev.nekoproxy.Neko.desktop"
 refresh
 
