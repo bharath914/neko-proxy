@@ -117,7 +117,14 @@ fn rejection_in_chain(e: &(dyn std::error::Error + 'static)) -> Option<&'static 
 impl Inner {
     pub(crate) async fn serve_plain(self: Arc<Self>, stream: TcpStream, peer: SocketAddr) {
         let _ = stream.set_nodelay(true);
-        self.serve_io(stream, peer).await;
+        let mut first = [0; 1];
+        match tokio::time::timeout(HANDSHAKE_TIMEOUT, stream.peek(&mut first)).await {
+            Ok(Ok(1)) if first[0] == 5 => {
+                self.serve_socks(stream, peer).await;
+            }
+            Ok(Ok(1)) => self.serve_io(stream, peer).await,
+            _ => {}
+        }
     }
 
     pub(crate) async fn serve_io<T>(self: Arc<Self>, io: T, peer: SocketAddr)
@@ -187,7 +194,7 @@ impl Inner {
         Response::new(empty())
     }
 
-    async fn after_connect<T>(
+    pub(crate) async fn after_connect<T>(
         self: Arc<Self>,
         mut io: T,
         host: String,

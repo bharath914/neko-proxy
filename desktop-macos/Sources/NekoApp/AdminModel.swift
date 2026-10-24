@@ -83,6 +83,21 @@ final class AdminModel {
         return why
     }
 
+    /// Nil on success, otherwise the reason the core gave.
+    func putMapLocal(_ rule: Neko_Api_V1_MapLocalRule) async -> String? {
+        let r = await call { $0.putMapLocal = .with { $0.rule = rule } }
+        let why = r == nil ? (lastError ?? "The core rejected this rule.") : nil
+        await refreshRules()
+        return why
+    }
+
+    func setSsl(_ ssl: Neko_Api_V1_SslSettings) async -> String? {
+        let r = await call { $0.setSsl = .with { $0.ssl = ssl } }
+        let why = r == nil ? (lastError ?? "The core rejected these settings.") : nil
+        await refreshRules()
+        return why
+    }
+
     func setEnabled(_ id: String, _ on: Bool) async {
         _ = await call { $0.setRuleEnabled = .with { $0.id = id; $0.enabled = on } }
         await refreshRules()
