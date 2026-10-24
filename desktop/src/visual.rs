@@ -5,6 +5,7 @@ use crate::app::{App, Section, Tab};
 use crate::backend::DemoBackend;
 use crate::platform::{Prefs, SystemAppearance};
 use egui_kittest::Harness;
+use proto::pb;
 
 fn harness(dark: bool, size: (f32, f32), flows: usize) -> Harness<'static, Option<App>> {
     Harness::builder()
@@ -118,6 +119,25 @@ fn body_viewers() {
         save(&mut h, &format!("html-source-{tag}"));
         app(&mut h).html_source = false;
     }
+}
+
+#[test]
+fn sse_event_viewer() {
+    let mut h = harness(false, (1320.0, 820.0), 60);
+    settle(&mut h);
+    app(&mut h).select(Some(3));
+    app(&mut h).set_tab(Tab::Response);
+    settle(&mut h);
+    let detail = app(&mut h).details.get_mut(&3).unwrap();
+    detail.detail.response_body = Some(pb::BodyView {
+        kind: pb::BodyKind::Text as i32,
+        content_type: "text/event-stream".into(),
+        events: vec![pb::SseEvent { event: "update".into(), id: "42".into(), data: "First line\nSecond line".into(), retry_ms: Some(1000) }],
+        ..Default::default()
+    });
+    app(&mut h).headers_open = false;
+    settle(&mut h);
+    save(&mut h, "sse-events");
 }
 
 #[test]

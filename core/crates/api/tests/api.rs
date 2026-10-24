@@ -1013,3 +1013,18 @@ async fn sdk_settings_round_trip_and_show_in_the_checks() {
         other => panic!("{other:?}"),
     }
 }
+
+#[tokio::test]
+async fn stored_sse_events_are_decoded_over_api() {
+    let (mut c, ctx, _d) = setup().await;
+    let mut rec = (*record(77, "events.example.com", 200, "id: 2\nevent: update\ndata: first\ndata: second\n\ndata: incomplete")).clone();
+    rec.res_headers = vec![("content-type".into(), "text/event-stream; charset=utf-8".into())];
+    ctx.store.enqueue(Arc::new(rec));
+    ctx.store.flush();
+    let Res::Flow(d) = c.call(Req::GetFlow(pb::GetFlowRequest { id: 77, parts: 4 })).await else { panic!() };
+    let body = d.response_body.unwrap();
+    assert_eq!(body.events.len(), 1);
+    assert_eq!(body.events[0].data, "first\nsecond");
+    assert_eq!(body.events[0].id, "2");
+    assert_eq!(body.events[0].event, "update");
+}
