@@ -482,7 +482,7 @@ impl App {
             .map(|s| s.data_dir.clone())
             .unwrap_or_default();
         let count = self.status.as_ref().map(|s| s.flows).unwrap_or(0);
-        let mut redact = self.redact_export;
+
         group(ui, st, |ui| {
             row(
                 ui,
@@ -510,10 +510,10 @@ impl App {
             row(
                 ui,
                 st,
-                "Hide secrets in exports",
+                "Secrets are hidden in exports",
                 "Authorization, cookies and token-shaped values become [redacted].",
                 |ui| {
-                    widgets::toggle(ui, st, &mut redact);
+                    ui.label("Always on");
                 },
             );
             divider(ui, st);
@@ -559,7 +559,7 @@ impl App {
                 },
             );
         });
-        self.redact_export = redact;
+        self.redact_export = true;
     }
 
     fn settings_ai(&mut self, ui: &mut Ui, st: &Style) {

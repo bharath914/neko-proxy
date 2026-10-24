@@ -100,18 +100,11 @@ impl App {
         if !inspector {
             return;
         }
-        if widgets::icon_button(
-            &mut right,
-            &st,
-            Icon::Download,
-            "Export as HAR",
-            false,
-            self.table.total() > 0,
-        )
-        .clicked()
-        {
-            self.export_har();
-        }
+        right.menu_button("Export", |ui| {
+            for kind in ["har", "postman", "k6", "wiremock", "msw", "mockoon", "openapi", "dart", "kotlin", "swift", "typescript", "dio"] {
+                if ui.button(kind).clicked() { self.export_kind(kind); ui.close(); }
+            }
+        });
         let avail = inner.width();
         let search_w = (avail * 0.2).clamp(150.0, 280.0);
         let sid = self.id("search");

@@ -144,6 +144,8 @@ struct ExportArgs {
     /// HAR 1.2 (the only format for now).
     #[arg(long, default_value_t = true)]
     har: bool,
+    #[arg(long, default_value = "har")]
+    kind: String,
     /// Write to a file instead of stdout.
     #[arg(short, long)]
     output: Option<PathBuf>,
@@ -153,7 +155,7 @@ struct ExportArgs {
     /// Comma-separated flow ids.
     #[arg(long, value_delimiter = ',')]
     ids: Vec<u64>,
-    /// Keep Authorization, cookies and tokens as captured.
+    /// Deprecated: unredacted exports are refused.
     #[arg(long)]
     no_redact: bool,
     #[arg(long)]
@@ -350,18 +352,23 @@ fn export(a: ExportArgs) -> Result<()> {
             text: a.query.unwrap_or_default(),
             ..Default::default()
         };
-        store.ids(&q, 1_000_000)?
+        store.ids(&q, 10_001)?
     } else {
         a.ids
     };
+    anyhow::ensure!(ids.len() <= 10_000, "export limited to 10,000 flows");
+    let mut total = 0usize;
     let mut recs = Vec::with_capacity(ids.len());
     for id in ids {
         if let Some(r) = store.get(id)? {
+            total += r.req_body.len() + r.res_body.len();
+            anyhow::ensure!(total <= 32 * 1024 * 1024, "export source bodies exceed 32 MiB");
             recs.push(r);
         }
     }
-    let har = store::to_har(&recs, !a.no_redact, env!("CARGO_PKG_VERSION"));
-    let bytes = serde_json::to_vec_pretty(&har)?;
+    anyhow::ensure!(!a.no_redact, "exports always redact credentials");
+    let artifact = store::export(&a.kind, &recs, env!("CARGO_PKG_VERSION")).map_err(anyhow::Error::msg)?;
+    let bytes = artifact.data;
     match a.output {
         Some(p) => {
             std::fs::write(&p, &bytes).with_context(|| format!("writing {}", p.display()))?;

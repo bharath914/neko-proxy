@@ -897,6 +897,7 @@ fn build_detail(rec: &flow::FlowRecord, parts: u32) -> pb::FlowDetail {
         ..Default::default()
     };
     if parts & PART_OVERVIEW != 0 {
+        if let Ok(a) = store::export("dio", &[Arc::new(rec.clone())], "") { d.dio = String::from_utf8_lossy(&a.data).into_owned(); }
         d.request_headers = rec
             .req_headers
             .iter()
@@ -982,48 +983,41 @@ async fn get_flow(ctx: Arc<ApiContext>, id: u64, r: pb::GetFlowRequest) -> pb::S
 }
 
 async fn export(ctx: Arc<ApiContext>, id: u64, r: pb::ExportRequest) -> pb::ServerMessage {
-    if !r.kind.is_empty() && r.kind != "har" {
-        return error(
-            id,
-            "unsupported",
-            format!("unknown export kind {:?}", r.kind),
-        );
-    }
     let q = to_query(r.filter.as_ref(), 0, 0);
-    let redact = r.redact;
+    let kind = r.kind.clone();
     let ctx2 = ctx.clone();
-    let res = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u32), String> {
+    let res = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u32, String), String> {
         let ids = if r.ids.is_empty() {
             ctx2.store.ids(&q, 100_000).map_err(|e| e.to_string())?
         } else {
             r.ids.clone()
         };
+        if ids.len() > 10_000 { return Err("export limited to 10,000 flows".into()); }
+        let mut total = 0usize;
         let mut recs = Vec::with_capacity(ids.len());
         for id in ids {
             if let Some(rec) = ctx2.store.get(id).map_err(|e| e.to_string())? {
+                total += rec.req_body.len() + rec.res_body.len();
+                if total > 32 * 1024 * 1024 { return Err("export source bodies exceed 32 MiB".into()); }
                 recs.push(rec);
             }
         }
-        let har = store::to_har(&recs, redact, &ctx2.info.version);
-        let count = har["log"]["entries"]
-            .as_array()
-            .map(|a| a.len())
-            .unwrap_or(0) as u32;
-        let bytes = serde_json::to_vec_pretty(&har).map_err(|e| e.to_string())?;
-        Ok((bytes, count))
+        let artifact = store::export(&kind, &recs, &ctx2.info.version)?;
+        Ok((artifact.data, artifact.count, artifact.extension.into()))
     })
     .await;
     match res {
-        Ok(Ok((data, count))) => {
+        Ok(Ok((data, count, extension))) => {
             let now = time::OffsetDateTime::now_utc();
             let filename = format!(
-                "proxy-{:04}{:02}{:02}-{:02}{:02}{:02}.har",
+                "proxy-{:04}{:02}{:02}-{:02}{:02}{:02}.{}",
                 now.year(),
                 u8::from(now.month()),
                 now.day(),
                 now.hour(),
                 now.minute(),
-                now.second()
+                now.second(),
+                extension
             );
             pb::ServerMessage {
                 id,

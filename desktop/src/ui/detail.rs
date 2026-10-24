@@ -452,6 +452,11 @@ impl App {
                 ui.ctx().copy_text(curl);
                 self.toast(ui.ctx(), "Copied as cURL", true);
             }
+            let dio = self.details.get(&id).map(|e| e.detail.dio.clone()).unwrap_or_default();
+            if widgets::button(ui, &st, "Copy as Dio", Kind::Secondary, Some(Icon::Copy), !dio.is_empty()).clicked() {
+                ui.ctx().copy_text(dio);
+                self.toast(ui.ctx(), "Copied as Dio", true);
+            }
             if widgets::button(
                 ui,
                 &st,

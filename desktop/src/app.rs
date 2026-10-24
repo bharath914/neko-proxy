@@ -810,11 +810,13 @@ impl App {
         self.send(Req::Clear(pb::ClearRequest {}), Pending::Clear);
     }
 
-    pub fn export_har(&mut self) {
+    pub fn export_har(&mut self) { self.export_kind("har"); }
+
+    pub fn export_kind(&mut self, kind: &str) {
         let filter = self.current_filter();
         self.send(
             Req::Export(pb::ExportRequest {
-                kind: "har".into(),
+                kind: kind.into(),
                 ids: vec![],
                 filter: Some(filter),
                 redact: self.redact_export,
@@ -1187,7 +1189,6 @@ impl App {
         std::thread::spawn(move || {
             let picked = rfd::FileDialog::new()
                 .set_file_name(&x.filename)
-                .add_filter("HTTP Archive", &["har"])
                 .save_file();
             let result = match picked {
                 Some(path) => std::fs::write(&path, &x.data)

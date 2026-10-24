@@ -320,6 +320,7 @@ message FlowDetail {
   string curl = 6;
   BodyView request_body = 7;
   BodyView response_body = 8;
+  string dio = 30;
   SdkContext sdk = 9;     // set for SDK and merged flows
   FlowDetail wire = 10;   // set for merged flows: what the proxy saw
 }

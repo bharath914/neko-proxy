@@ -1056,3 +1056,16 @@ async fn grpc_and_graphql_views_are_prepared_in_core() {
     assert!(p.title.starts_with("gRPC")); assert_eq!(p.fields[1].label, "Field 1");
     assert!(p.fields[1].value.starts_with("42"));
 }
+
+#[tokio::test]
+async fn export_kinds_share_redaction_even_when_client_disables_it() {
+    let (mut c, ctx, _d) = setup().await;
+    let mut rec = (*record(90, "export.example.com", 200, "{\"password\":\"never-leak-password\",\"id\":1}")).clone();
+    rec.req_headers.push(("authorization".into(), "Bearer never-leak-password".into()));
+    ctx.store.enqueue(Arc::new(rec));ctx.store.flush();
+    for kind in store::EXPORT_KINDS {
+        let Res::Export(r) = c.call(Req::Export(pb::ExportRequest { kind: kind.to_string(), ids: vec![90], redact: false, ..Default::default() })).await else {panic!("{kind}")};
+        assert!(!String::from_utf8_lossy(&r.data).contains("never-leak-password"), "{kind}");
+        assert_eq!(r.count, 1);
+    }
+}

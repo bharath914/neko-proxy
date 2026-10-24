@@ -58,7 +58,7 @@ fn parse_args() -> Args {
 
 fn main() -> eframe::Result {
     // CLI verbs are implemented by the core executable, including all parsing.
-    if std::env::args().nth(1).as_deref() == Some("import-har") {
+    if matches!(std::env::args().nth(1).as_deref(), Some("import-har" | "export")) {
         let status = platform::find_nekod().and_then(|path| {
             std::process::Command::new(path).args(std::env::args_os().skip(1)).status().ok()
         });

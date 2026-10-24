@@ -988,6 +988,7 @@ fn demo_proxy_flow(id: u64) -> pb::FlowDetail {
     };
     let url = format!("https://{h}{p}");
     pb::FlowDetail {
+        dio: String::new(),
         curl: format!("curl \\\n  '{url}' \\\n  -H 'Accept: application/json' \\\n  -H 'User-Agent: okhttp/4.12.0' \\\n  --compressed"),
         url,
         request_headers: vec![
