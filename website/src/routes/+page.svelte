@@ -9,7 +9,7 @@
 	import AI from '#lib/components/AI.svelte';
 	import Phones from '#lib/components/Phones.svelte';
 	import Roadmap from '#lib/components/Roadmap.svelte';
-	import GetStarted from '#lib/components/GetStarted.svelte';
+	import Download from '#lib/components/Download.svelte';
 
 	const description =
 		'Neko Proxy is a fast, free, open-source HTTP and HTTPS debugging proxy with a Rust core, native apps, an in-app mobile SDK and a built-in MCP server for AI assistants.';
@@ -23,7 +23,8 @@
 	<meta property="og:type" content="website" />
 	<meta property="og:image" content="https://bharath914.github.io/neko-proxy/shots/inspector-light.jpg" />
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="theme-color" content="#2f7bff" />
+	<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+	<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
 </svelte:head>
 
 <Hero />
@@ -35,4 +36,4 @@
 <AI />
 <Phones />
 <Roadmap />
-<GetStarted />
+<Download />
