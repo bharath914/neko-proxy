@@ -8,6 +8,8 @@ mod json;
 mod kind;
 pub mod redact;
 mod view;
+mod sse;
+pub use sse::{parse_sse, SseEvent};
 
 pub use codec::{decode_content, Decoded, DEFAULT_DECODE_LIMIT};
 pub use curl::curl_command;
