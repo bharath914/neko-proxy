@@ -76,7 +76,14 @@ else
   codesign --force --sign - "$APP"
 fi
 codesign --verify --strict --deep "$APP"
-[ -n "${UNIVERSAL:-}" ] && lipo -archs "$APP/Contents/MacOS/Neko" "$APP/Contents/MacOS/nekod"
+if [ -n "${UNIVERSAL:-}" ]; then
+  for b in Neko nekod; do
+    a=$(lipo -archs "$APP/Contents/MacOS/$b")
+    echo "    $b: $a"
+    case " $a " in *" x86_64 "*) ;; *) echo "$b is missing x86_64" >&2; exit 1 ;; esac
+    case " $a " in *" arm64 "*) ;; *) echo "$b is missing arm64" >&2; exit 1 ;; esac
+  done
+fi
 
 echo "==> disk image"
 STAGE=$OUT/dmg

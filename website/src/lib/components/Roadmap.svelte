@@ -37,20 +37,20 @@
 	];
 </script>
 
-<section class="block" id="roadmap">
+<section class="block alt" id="roadmap">
 	<div class="wrap">
 		<div class="center" use:reveal>
-			<span class="eyebrow">Roadmap</span>
-			<h2 class="section-title">Built in the open, one milestone at a time.</h2>
+			<span class="eyebrow tint">Roadmap</span>
+			<h2 class="section-title">Built in the open,<br />one milestone at a time.</h2>
 			<p class="section-lede">Capture core first, then the app, then rules and AI, then phones. Here’s where things stand.</p>
 		</div>
 		<div class="cols">
 			{#each cols as c, i}
-				<div class="col {c.tone}" use:reveal={i * 90}>
-					<h3><span class="dot"></span>{c.name}<span class="count">{c.items.length}</span></h3>
+				<div class="col {c.tone}" use:reveal={i * 80}>
+					<h3><span class="dot"></span>{c.name}</h3>
 					<ul>
 						{#each c.items as [t, d]}
-							<li class="card"><b>{t}</b><span>{d}</span></li>
+							<li><b>{t}</b><span>{d}</span></li>
 						{/each}
 					</ul>
 				</div>
@@ -60,15 +60,15 @@
 </section>
 
 <style>
-	.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 48px; align-items: start; }
+	.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 64px; align-items: start; }
 	@media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
-	.col { padding: 16px; border-radius: var(--r-lg); background: var(--bg-2); border: 1px solid var(--line); }
+	.col { padding: 28px; border-radius: var(--r-lg); background: var(--surface); }
 	.green { --tone: var(--green); } .amber { --tone: var(--amber); } .blue { --tone: var(--blue); }
-	h3 { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; padding: 4px 6px 14px; }
-	.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 20%, transparent); }
-	.count { margin-left: auto; font: 600 0.78rem var(--mono); color: var(--ink-3); }
-	ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-	li { padding: 14px 16px; display: flex; flex-direction: column; gap: 3px; border-left: 3px solid var(--tone); }
-	li b { font-weight: 800; }
-	li span { color: var(--ink-2); font-size: 0.88rem; }
+	h3 { display: flex; align-items: center; gap: 10px; font-size: 1.3rem; margin-bottom: 8px; }
+	.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--tone); }
+	ul { list-style: none; margin: 0; padding: 0; }
+	li { display: flex; flex-direction: column; gap: 3px; padding: 14px 0; border-top: 1px solid var(--line); }
+	li:first-child { border-top: 0; }
+	li b { font-weight: 600; letter-spacing: -0.014em; }
+	li span { color: var(--ink-2); font-size: 0.92rem; }
 </style>

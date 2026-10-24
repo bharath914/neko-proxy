@@ -31,7 +31,6 @@
 </svelte:head>
 
 <header class="top">
-	<div class="glow" aria-hidden="true"></div>
 	<div class="wrap narrow">
 		<img class="cat" src={asset('/assets/neko.png')} alt="" width="104" height="104" />
 		<h1>Teach your device to trust Neko</h1>
@@ -133,35 +132,33 @@
 </div>
 
 <style>
-	.narrow { max-width: 48rem; }
-	.top { position: relative; text-align: center; padding: 48px 0 40px; overflow: hidden; }
-	.glow { position: absolute; inset: -40% 0 0; background: radial-gradient(40% 60% at 30% 30%, var(--glow-a), transparent 70%), radial-gradient(35% 50% at 75% 30%, var(--glow-b), transparent 70%); }
-	.top .wrap { position: relative; }
-	.cat { width: 104px; height: 104px; border-radius: 26px; margin: 0 auto; box-shadow: var(--shadow-lg); animation: bob 5s ease-in-out infinite; }
-	@keyframes bob { 50% { transform: translateY(-8px) rotate(-2deg); } }
-	h1 { font-size: clamp(2rem, 5.5vw, 3rem); margin: 22px 0 12px; }
-	.lede { color: var(--ink-2); font-size: 1.12rem; max-width: 34rem; margin: 0 auto; }
-	.body { display: grid; gap: 40px; padding-bottom: 40px; }
-	h2 { display: flex; align-items: center; gap: 12px; font-size: 1.4rem; margin-bottom: 14px; }
-	.step { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, var(--blue), var(--pink)); color: #fff; font-size: 1rem; flex: none; }
+	.narrow { max-width: 46rem; }
+	.top { text-align: center; padding: 64px 0 48px; }
+	.cat { width: 96px; height: 96px; border-radius: 22px; margin: 0 auto; box-shadow: 0 10px 30px color-mix(in srgb, var(--blue) 30%, transparent); }
+	h1 { font-size: clamp(2.2rem, 6vw, 3.6rem); margin: 24px 0 14px; }
+	.lede { color: var(--ink-2); font-size: clamp(1.1rem, 2vw, 1.3rem); line-height: 1.4; letter-spacing: -0.016em; max-width: 34rem; margin: 0 auto; }
+	.body { display: grid; gap: 56px; padding-bottom: 96px; }
+	h2 { display: flex; align-items: center; gap: 12px; font-size: 1.6rem; letter-spacing: -0.024em; margin-bottom: 16px; }
+	.step { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--blue); color: var(--on-blue); font-size: 0.95rem; font-weight: 600; flex: none; }
 	h3 { font-size: 1rem; margin: 18px 0 8px; }
-	.card.why, .pad { padding: 24px; }
-	.why h2 { font-size: 1.2rem; }
+	.card { background: var(--bg-alt); }
+	.card.why, .pad { padding: 28px; }
+	.why h2 { font-size: 1.3rem; }
 	.why p, .pad p, .panel li { color: var(--ink-2); }
-	.why p + p, .why .big-url + p { margin-top: 0; }
-	.big-url { display: block; text-align: center; font: 900 clamp(1.4rem, 5vw, 2.1rem) var(--font); background: var(--blue-soft); color: var(--blue); border-radius: 16px; padding: 16px; margin: 16px 0; word-break: break-all; }
-	.muted { color: var(--ink-3) !important; font-size: 0.92rem; margin-top: 10px; }
-	.sub { color: var(--ink-2); margin-bottom: 16px; }
+	.big-url { display: block; text-align: center; font: 600 clamp(1.4rem, 5vw, 2rem) var(--font-display); letter-spacing: -0.02em; background: var(--blue-soft); color: var(--blue); border-radius: 16px; padding: 18px; margin: 18px 0; word-break: break-all; }
+	.muted { color: var(--ink-3) !important; font-size: 0.9rem; margin-top: 10px; }
+	.sub { color: var(--ink-2); margin-bottom: 18px; }
 	ol, ul { padding-left: 1.3rem; margin: 0 0 8px; display: grid; gap: 8px; }
 	.panel { display: grid; gap: 12px; }
 	.panel > p { margin: 0; }
-	.tabs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 14px; }
-	.tabs button { flex: none; font: inherit; font-weight: 800; font-size: 0.92rem; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; }
-	.tabs button[aria-selected='true'] { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
-	.note { background: var(--amber-soft); color: var(--amber); border-radius: 14px; padding: 12px 14px; font-size: 0.93rem; }
-	.faq { padding: 6px 24px; }
-	details { border-top: 1px solid var(--line); padding: 16px 0; }
+	.tabs { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 16px; border-radius: 999px; background: var(--fill); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+	.tabs button { flex: none; font: 500 0.9rem var(--font); letter-spacing: -0.01em; padding: 7px 15px; border-radius: 999px; border: 0; background: none; color: var(--ink-2); cursor: pointer; transition: background-color 0.2s, color 0.2s, transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1); }
+	.tabs button[aria-selected='true'] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
+	.tabs button:active { transform: scale(0.95); transition-duration: 0.1s; }
+	.note { background: var(--amber-soft); color: var(--amber); border-radius: 14px; padding: 14px 16px; font-size: 0.93rem; }
+	.faq { padding: 4px 28px; }
+	details { border-top: 1px solid var(--line); padding: 18px 0; }
 	details:first-child { border-top: 0; }
-	summary { cursor: pointer; font-weight: 800; }
+	summary { cursor: pointer; font-weight: 600; letter-spacing: -0.014em; }
 	details p, details ul { margin: 10px 0 0; color: var(--ink-2); }
 </style>
