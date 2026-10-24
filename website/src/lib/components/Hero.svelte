@@ -3,7 +3,7 @@
 	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
 	import { asset } from '$app/paths';
-	import { latestRelease, detectPlatform, mb } from '#lib/release.js';
+	import { bestDownload } from '#lib/release.js';
 	import { reducedMotion } from '#lib/spring.js';
 	import Shot from './Shot.svelte';
 
@@ -63,15 +63,8 @@
 		});
 		io.observe(stage);
 
-		Promise.all([latestRelease(), detectPlatform()]).then(([rel, p]) => {
-			if (!rel) return;
-			const file = p.os === 'mac' ? rel.mac : p.os === 'linux' ? rel.appimage[p.arch] ?? rel.appimage.x86_64 : null;
-			if (!file) return;
-			dl = {
-				href: file.url,
-				label: p.os === 'mac' ? 'Download for Mac' : 'Download for Linux',
-				note: `${rel.version} · ${p.os === 'mac' ? 'Apple silicon and Intel' : `AppImage, ${p.arch}`} · ${mb(file.size)}`
-			};
+		bestDownload().then((d) => {
+			if (d) dl = { href: d.file.url, label: d.label, note: d.note };
 		});
 
 		return () => {

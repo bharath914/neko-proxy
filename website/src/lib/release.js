@@ -50,3 +50,16 @@ export async function detectPlatform() {
 }
 
 export const mb = (bytes) => `${(bytes / 1048576).toFixed(bytes > 10485760 ? 0 : 1)} MB`;
+
+/** The one file a Download button should start for this visitor, or null to show the options instead. */
+export async function bestDownload() {
+	const [rel, p] = await Promise.all([latestRelease(), detectPlatform()]);
+	if (!rel) return null;
+	const file = p.os === 'mac' ? rel.mac : p.os === 'linux' ? rel.appimage[p.arch] ?? rel.appimage.x86_64 : null;
+	if (!file) return null;
+	return {
+		file,
+		label: p.os === 'mac' ? 'Download for Mac' : 'Download for Linux',
+		note: `${rel.version} · ${p.os === 'mac' ? 'Apple silicon and Intel' : `AppImage, ${p.arch}`} · ${mb(file.size)}`
+	};
+}
