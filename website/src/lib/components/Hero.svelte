@@ -3,7 +3,8 @@
 	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
 	import { asset } from '$app/paths';
-	import { repo } from '#lib/site.js';
+	import { latestRelease, detectPlatform, mb } from '#lib/release.js';
+	import { reducedMotion } from '#lib/spring.js';
 	import Shot from './Shot.svelte';
 
 	// Requests from the capture behind the screenshots on this page.
@@ -16,203 +17,169 @@
 		['GET', 'httpbin.org', '/status/500', 500, '1.07 s'],
 		['PATCH', 'jsonplaceholder.typicode.com', '/posts/1', 200, '345 ms'],
 		['GET', 'cdn.dummyjson.com', '/products/images/…/thumbnail.png', 200, '1.87 s', 'throttled'],
-		['POST', 'dummyjson.com', '/auth/login', 0, 'held', 'breakpoint'],
+		['POST', 'dummyjson.com', '/auth/login', 0, 'held', 'paused'],
 		['GET', 'api.open-meteo.com', '/v1/forecast?latitude=12.97…', 200, '728 ms'],
 		['DELETE', 'dummyjson.com', '/products/1', 200, '311 ms'],
 		['GET', 'registry.npmjs.org', '/svelte/latest', 200, '307 ms']
 	];
 	let next = 4;
 	let rows = $state(feed.slice(0, 4).map((r, i) => ({ id: i, r })));
+	const tone = (s) => (s === 0 ? 'held' : s >= 500 ? 'bad' : s >= 400 ? 'warn' : 'ok');
+
+	// The download button names the visitor's platform once we know it.
+	let dl = $state({ href: '#download', label: 'Download', note: 'Free and open source · macOS 13+ and Linux' });
+
+	let stage;
+	let tilt = $state(1);
 
 	onMount(() => {
-		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-		const t = setInterval(() => {
-			const r = feed[next % feed.length];
-			rows = [{ id: next, r }, ...rows].slice(0, 4);
-			next++;
-		}, 1700);
-		return () => clearInterval(t);
-	});
+		const still = reducedMotion();
 
-	const tone = (s) => (s === 0 ? 'held' : s >= 500 ? 'bad' : s >= 400 ? 'warn' : 'ok');
+		// The screenshot lies back a little and comes upright as you scroll to it:
+		// tied 1:1 to the scroll position, so it moves only when you do.
+		let raf = 0;
+		const measure = () => {
+			raf = 0;
+			const top = stage.getBoundingClientRect().top;
+			tilt = Math.min(1, Math.max(0, (innerHeight - top) / (innerHeight * 0.85)));
+		};
+		const onScroll = () => (raf ||= requestAnimationFrame(measure));
+		if (!still) {
+			measure();
+			addEventListener('scroll', onScroll, { passive: true });
+			addEventListener('resize', onScroll);
+		}
+
+		// New rows arrive only while the ticker is on screen.
+		let timer = 0;
+		const io = new IntersectionObserver(([e]) => {
+			clearInterval(timer);
+			if (e.isIntersecting && !still) {
+				timer = setInterval(() => {
+					rows = [{ id: next, r: feed[next % feed.length] }, ...rows].slice(0, 4);
+					next++;
+				}, 1800);
+			}
+		});
+		io.observe(stage);
+
+		Promise.all([latestRelease(), detectPlatform()]).then(([rel, p]) => {
+			if (!rel) return;
+			const file = p.os === 'mac' ? rel.mac : p.os === 'linux' ? rel.appimage[p.arch] ?? rel.appimage.x86_64 : null;
+			if (!file) return;
+			dl = {
+				href: file.url,
+				label: p.os === 'mac' ? 'Download for Mac' : 'Download for Linux',
+				note: `${rel.version} · ${p.os === 'mac' ? 'Apple silicon and Intel' : `AppImage, ${p.arch}`} · ${mb(file.size)}`
+			};
+		});
+
+		return () => {
+			removeEventListener('scroll', onScroll);
+			removeEventListener('resize', onScroll);
+			clearInterval(timer);
+			io.disconnect();
+		};
+	});
 </script>
 
 <section class="hero">
-	<div class="glow" aria-hidden="true"></div>
-	<div class="wrap">
-		<div class="intro">
-			<div class="copy">
-				<a class="badge" href={repo}>
-					<span class="new">Open source</span>
-					<span>Rust core · native apps · MCP built in</span>
-					<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" /></svg>
-				</a>
-				<h1>See every request.<br /><span class="grad">Change any of them.</span></h1>
-				<p class="lede">
-					Neko is a fast, free HTTP and HTTPS debugging proxy. Inspect traffic from your browser, terminal or phone,
-					mock and pause requests mid-flight, and let your AI assistant read along, without paying for a licence
-					or fighting certificate settings.
-				</p>
-				<div class="cta">
-					<a class="btn" href="#start">
-						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-						Get Neko
-					</a>
-					<a class="btn ghost" href="#why">Why we built it</a>
-				</div>
-				<p class="meta">Linux today · macOS app in progress · MIT or Apache-2.0</p>
-			</div>
-			<div class="mascot" aria-hidden="true">
-				<div class="halo"></div>
-				<img src={asset('/assets/neko.png')} alt="" width="220" height="220" />
-				<span class="paw p1">🐾</span><span class="paw p2">🐾</span>
-			</div>
+	<div class="wrap intro">
+		<img class="icon" src={asset('/assets/neko.png')} alt="" width="104" height="104" />
+		<p class="name">Neko Proxy</p>
+		<h1>See every request.<br /><span class="grad">Change any of them.</span></h1>
+		<p class="lede">
+			A fast, free HTTP and HTTPS debugging proxy. Inspect traffic from your browser, terminal or phone, mock and
+			pause requests mid-flight, and let your AI assistant read along.
+		</p>
+		<div class="cta">
+			<a class="btn lg" href={dl.href}>
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+				{dl.label}
+			</a>
+			<a class="link-arrow" href="#tour">Take the tour</a>
 		</div>
+		<p class="note">{dl.note}</p>
+	</div>
 
-		<div class="stage">
-			<Shot name="inspector" eager alt="The Neko Inspector showing 87 captured requests, with a JSON product response open in a tree view" />
+	<div class="wrap">
+		<div class="stage" bind:this={stage} style="--t:{tilt}">
+			<div class="tilt">
+				<Shot name="inspector" eager alt="The Neko Inspector showing 87 captured requests, with a JSON product response open in a tree view" />
+			</div>
 
 			<div class="ticker" aria-hidden="true">
 				<div class="tk-head"><span class="rec"></span> Recording <span class="tk-port">127.0.0.1:8899</span></div>
 				<div class="tk-rows">
-				{#each rows as row (row.id)}
-					<div class="tk-row" animate:flip={{ duration: 400 }} in:fly={{ y: -14, duration: 400 }}>
-						<span class="m m-{row.r[0].toLowerCase()}">{row.r[0]}</span>
-						<span class="u"><b>{row.r[1]}</b>{row.r[2]}</span>
-						<span class="s {tone(row.r[3])}">{row.r[3] || '⏸'}</span>
-						{#if row.r[5]}<span class="tag">{row.r[5]}</span>{:else}<span class="t">{row.r[4]}</span>{/if}
-					</div>
-				{/each}
+					{#each rows as row (row.id)}
+						<div class="tk-row" animate:flip={{ duration: 450 }} in:fly={{ y: -12, duration: 450 }}>
+							<span class="m m-{row.r[0].toLowerCase()}">{row.r[0]}</span>
+							<span class="u"><b>{row.r[1]}</b>{row.r[2]}</span>
+							<span class="s {tone(row.r[3])}">{row.r[3] || '⏸'}</span>
+							{#if row.r[5]}<span class="tag">{row.r[5]}</span>{:else}<span class="t">{row.r[4]}</span>{/if}
+						</div>
+					{/each}
 				</div>
 			</div>
-
-			<div class="chip c1"><b>18 ms</b> core cold start</div>
-			<div class="chip c2"><span class="ai">AI</span> asks before it changes anything</div>
 		</div>
-		<p class="caption">Real traffic, captured by Neko on a Mac: GitHub, PokéAPI, dummyjson and friends, with one mock, one throttle and one breakpoint switched on.</p>
+		<p class="caption">Real traffic, captured by Neko on a Mac, with one mock, one throttle and one breakpoint switched on.</p>
 	</div>
 </section>
 
 <style>
-	.hero { position: relative; padding: 40px 0 72px; overflow: hidden; }
-	.glow {
-		position: absolute;
-		inset: -20% -10% auto;
-		height: 900px;
-		background:
-			radial-gradient(40% 50% at 20% 25%, var(--glow-a), transparent 70%),
-			radial-gradient(35% 45% at 85% 20%, var(--glow-b), transparent 70%),
-			radial-gradient(50% 40% at 50% 80%, var(--glow-a), transparent 70%);
-		filter: blur(10px);
-		pointer-events: none;
+	.hero { padding: 72px 0 96px; overflow: hidden; }
+	.intro { text-align: center; display: flex; flex-direction: column; align-items: center; }
+	.icon { width: 104px; height: 104px; border-radius: 23px; box-shadow: 0 10px 30px color-mix(in srgb, var(--blue) 30%, transparent); }
+	.name { margin-top: 18px; font-size: 1.3rem; font-weight: 600; letter-spacing: -0.02em; }
+	h1 { margin-top: 6px; }
+	.lede { margin-top: 22px; max-width: 40rem; font-size: clamp(1.15rem, 2vw, 1.45rem); line-height: 1.38; letter-spacing: -0.018em; color: var(--ink-2); }
+	.cta { display: flex; align-items: center; justify-content: center; gap: 28px; flex-wrap: wrap; margin-top: 34px; }
+	.note { margin-top: 14px; font-size: 0.86rem; color: var(--ink-3); letter-spacing: -0.005em; }
+
+	.stage { position: relative; margin-top: 64px; perspective: 1800px; }
+	/* --t runs 0 → 1 as the screenshot scrolls into view. */
+	.tilt {
+		transform-origin: 50% 100%;
+		transform: rotateX(calc((1 - var(--t)) * 14deg)) scale(calc(0.93 + var(--t) * 0.07));
+		will-change: transform;
 	}
-	.glow::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		background-image: radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px);
-		background-size: 22px 22px;
-		mask-image: radial-gradient(60% 50% at 50% 30%, #000, transparent 75%);
-		-webkit-mask-image: radial-gradient(60% 50% at 50% 30%, #000, transparent 75%);
-	}
-	.intro { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; padding-top: 32px; }
-	@media (max-width: 860px) { .intro { grid-template-columns: 1fr; } .intro .mascot { display: none; } }
 
-	.badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 10px;
-		padding: 5px 12px 5px 5px;
-		border-radius: 999px;
-		background: var(--surface);
-		border: 1px solid var(--line);
-		box-shadow: var(--shadow-sm);
-		color: var(--ink-2);
-		text-decoration: none;
-		font-size: 0.88rem;
-		font-weight: 700;
-	}
-	.badge .new { flex: none; white-space: nowrap; background: var(--blue); color: var(--on-blue); border-radius: 999px; padding: 2px 10px; font-weight: 800; font-size: 0.8rem; }
-	@media (max-width: 480px) { .badge { font-size: 0.8rem; } }
-	.badge svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
-	.badge:hover { color: var(--ink); }
-
-	h1 { font-size: clamp(2.6rem, 7vw, 4.9rem); line-height: 1.02; letter-spacing: -0.035em; margin: 22px 0 22px; }
-	.lede { font-size: clamp(1.08rem, 2vw, 1.25rem); color: var(--ink-2); max-width: 38rem; }
-	.cta { display: flex; gap: 12px; flex-wrap: wrap; margin: 30px 0 16px; }
-	.meta { color: var(--ink-3); font-size: 0.9rem; font-weight: 600; }
-
-	.mascot { position: relative; width: 260px; height: 260px; display: grid; place-items: center; }
-	.mascot img { position: relative; width: 220px; height: 220px; border-radius: 52px; box-shadow: var(--shadow-lg); animation: bob 5s ease-in-out infinite; }
-	.halo { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, var(--blue), var(--pink), var(--blue)); filter: blur(48px); opacity: 0.35; animation: spin 14s linear infinite; }
-	.paw { position: absolute; font-size: 1.3rem; opacity: 0.55; }
-	.p1 { left: -6px; bottom: 30px; transform: rotate(-20deg); }
-	.p2 { right: 0; top: 18px; transform: rotate(25deg); }
-	@keyframes bob { 50% { transform: translateY(-10px) rotate(-2deg); } }
-	@keyframes spin { to { transform: rotate(360deg); } }
-
-	.stage { position: relative; margin-top: 64px; perspective: 1600px; }
-	.stage :global(.window) { transform: rotateX(6deg); transform-origin: 50% 0; animation: rise 1.2s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-	@keyframes rise { from { opacity: 0; transform: rotateX(18deg) translateY(40px); } }
-
+	/* A thick material floating over the screenshot. */
 	.ticker {
 		position: absolute;
-		right: -12px;
-		bottom: -36px;
-		width: min(440px, 62%);
+		right: -14px;
+		bottom: -40px;
+		width: min(440px, 60%);
 		padding: 12px;
-		border-radius: 16px;
-		background: color-mix(in srgb, var(--surface) 97%, transparent);
-		backdrop-filter: blur(18px) saturate(1.5);
-		-webkit-backdrop-filter: blur(18px) saturate(1.5);
-		border: 1px solid var(--line-2);
-		box-shadow: var(--shadow-lg);
+		border-radius: 18px;
+		background: var(--material-thick);
+		backdrop-filter: blur(30px) saturate(1.8);
+		-webkit-backdrop-filter: blur(30px) saturate(1.8);
+		box-shadow: 0 0 0 0.5px var(--line-2), inset 0 1px 0 var(--material-edge), var(--shadow-lg);
 		font-size: 0.8rem;
-		overflow: hidden;
 	}
-	.tk-head { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--ink-2); padding: 0 4px 8px; }
-	.rec { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 20%, transparent); animation: pulse 1.6s ease-in-out infinite; }
-	@keyframes pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--red) 0%, transparent); } }
-	.tk-port { margin-left: auto; font: 500 0.74rem var(--mono); color: var(--ink-3); }
-	.tk-rows { min-height: 152px; }
-	.tk-row { display: grid; grid-template-columns: 54px 1fr auto 62px; gap: 8px; align-items: center; padding: 7px 6px; border-radius: 9px; font-family: var(--mono); }
-	.tk-row:first-of-type { background: var(--blue-soft); }
+	.tk-head { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 2px 6px 8px; }
+	.rec { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+	.tk-port { margin-left: auto; font: 0.74rem var(--mono); color: var(--ink-3); }
+	.tk-rows { min-height: 148px; }
+	.tk-row { display: grid; grid-template-columns: 54px 1fr auto 64px; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 10px; font-family: var(--mono); }
+	.tk-row:first-child { background: var(--blue-soft); }
 	.m { font-weight: 600; font-size: 0.72rem; color: var(--green); }
 	.m-post { color: var(--amber); } .m-put { color: var(--blue); } .m-patch { color: var(--purple); } .m-delete { color: var(--red); }
 	.u { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-3); font-size: 0.74rem; }
 	.u b { color: var(--ink); font-weight: 500; }
 	.s { font-weight: 600; font-size: 0.74rem; }
-	.s.ok { color: var(--green); } .s.warn { color: var(--amber); } .s.bad { color: var(--red); } .s.held { color: var(--amber); }
+	.s.ok { color: var(--green); } .s.warn, .s.held { color: var(--amber); } .s.bad { color: var(--red); }
 	.t { text-align: right; color: var(--ink-3); font-size: 0.72rem; }
-	.tag { justify-self: end; font: 800 0.66rem var(--font); padding: 1px 7px; border-radius: 999px; background: var(--pink-soft); color: var(--pink); }
+	.tag { justify-self: end; font: 600 0.66rem var(--font); letter-spacing: 0; padding: 2px 7px; border-radius: 999px; background: var(--pink-soft); color: var(--pink); }
 
-	.chip {
-		position: absolute;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 9px 14px;
-		border-radius: 999px;
-		background: var(--surface);
-		border: 1px solid var(--line-2);
-		box-shadow: var(--shadow);
-		font-size: 0.86rem;
-		font-weight: 700;
-		color: var(--ink-2);
-		animation: float 6s ease-in-out infinite;
-	}
-	.chip b { color: var(--ink); font-weight: 900; }
-	.c1 { left: -14px; top: 22%; }
-	.c2 { left: 6%; bottom: -24px; animation-delay: -3s; }
-	.ai { background: var(--blue); color: var(--on-blue); font-size: 0.68rem; font-weight: 900; border-radius: 6px; padding: 1px 6px; }
-	@keyframes float { 50% { transform: translateY(-8px); } }
+	.caption { margin: 72px auto 0; text-align: center; color: var(--ink-3); font-size: 0.86rem; max-width: 36rem; }
 
-	.caption { margin-top: 64px; text-align: center; color: var(--ink-3); font-size: 0.9rem; max-width: 40rem; margin-inline: auto; }
-
-	@media (max-width: 720px) {
-		.stage { margin-top: 40px; }
-		.ticker { position: relative; right: auto; bottom: auto; width: 100%; margin-top: 16px; }
-		.chip { display: none; }
+	@media (max-width: 734px) {
+		.hero { padding: 48px 0 64px; }
+		.stage { margin-top: 44px; }
+		.ticker { position: relative; right: auto; bottom: auto; width: 100%; margin-top: 18px; }
 		.caption { margin-top: 24px; }
 	}
+	@media (prefers-reduced-motion: reduce) { .tilt { transform: none; } }
 </style>
