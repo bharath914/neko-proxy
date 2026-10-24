@@ -40,8 +40,8 @@ A team can also commit the unzipped repository into its own repository (a `libs/
 Run the workflow by hand (Actions, sdk, Run workflow) with **publish_pages** on. It pushes the repository to the `gh-pages` branch under `/maven`. Turn Pages on for that branch once (Settings, Pages). Then anyone can use:
 
 ```kotlin
-pluginManagement { repositories { maven(url = "https://bharath914.github.io/proxy/maven/"); google(); mavenCentral(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositories { maven(url = "https://bharath914.github.io/proxy/maven/"); google(); mavenCentral() } }
+pluginManagement { repositories { maven(url = "https://bharath914.github.io/neko-proxy-sdk-maven/"); google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositories { maven(url = "https://bharath914.github.io/neko-proxy-sdk-maven/"); google(); mavenCentral() } }
 ```
 ```kotlin
 plugins { id("com.android.application"); id("dev.nekoproxy.inspector") version "0.1.0" }

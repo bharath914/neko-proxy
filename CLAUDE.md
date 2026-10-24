@@ -116,11 +116,11 @@ Phase 1 = steps 1 and 2, Linux only, trimmed as described in `docs/phase-1.md`. 
 
 ## License
 
-Open source under `MIT OR Apache-2.0` (decided Oct 2026): `LICENSE-MIT`, `LICENSE-APACHE`. The repo is public at github.com/bharath914/proxy; the SDK Maven repository is at github.com/bharath914/proxy-sdk-maven (served by Pages).
+Open source under `MIT OR Apache-2.0` (decided Oct 2026): `LICENSE-MIT`, `LICENSE-APACHE`. The repo is public at github.com/bharath914/proxy; the SDK Maven repository is at github.com/bharath914/neko-proxy-sdk-maven (served by Pages).
 
 ## Naming
 
-Decided Oct 2026: **Neko Proxy**. CLI `neko`, daemon `nekod`, crates `neko-*`, app and bundle `Neko`, ids under `dev.nekoproxy`. The public GitHub repos (`bharath914/proxy`, `proxy-sdk-maven`) and the Pages URLs still use the old names until renamed on GitHub; then update the URLs in `sdk/`, `docs/` and `packaging/`. The bare `proxy` label stays for the flow source (`source:proxy`).
+Decided Oct 2026: **Neko Proxy**. CLI `neko`, daemon `nekod`, crates `neko-*`, app and bundle `Neko`, ids under `dev.nekoproxy`. The GitHub repos are `bharath914/neko-proxy` and `bharath914/neko-proxy-sdk-maven` (renamed Oct 2026; the SDK Pages URL is `bharath914.github.io/neko-proxy-sdk-maven/`). The old Pages URL no longer resolves, so published Gradle snippets must use the new one. The bare `proxy` label stays for the flow source (`source:proxy`).
 
 ## How to work in this repo
 

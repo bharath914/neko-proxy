@@ -35,8 +35,8 @@ Add one Gradle plugin to a debug build and its network calls show up in the Insp
 
 ```kotlin
 // settings.gradle.kts
-pluginManagement { repositories { maven("https://bharath914.github.io/proxy-sdk-maven/"); google(); mavenCentral(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositories { maven("https://bharath914.github.io/proxy-sdk-maven/"); google(); mavenCentral() } }
+pluginManagement { repositories { maven("https://bharath914.github.io/neko-proxy-sdk-maven/"); google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement { repositories { maven("https://bharath914.github.io/neko-proxy-sdk-maven/"); google(); mavenCentral() } }
 // app/build.gradle.kts
 plugins { id("com.android.application"); id("dev.nekoproxy.inspector") version "0.1.0" }
 ```
