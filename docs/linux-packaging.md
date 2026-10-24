@@ -60,3 +60,7 @@ inspection test now normalizes that allowed syntax; all tests pass.
 References:
 - https://manpages.debian.org/bookworm/dpkg-dev/deb.5.en.html
 - https://github.com/AppImage/appimagetool
+
+The portable installer's default repository follows the current rename to
+bharath914/neko-proxy. The separate primary checkout's branch is not changed
+by this feature work.

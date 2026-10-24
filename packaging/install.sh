@@ -6,10 +6,10 @@
 #   sh install.sh --tarball neko-0.1.0-linux-x86_64.tar.gz     (offline, skips download)
 #   sh install.sh --uninstall
 #
-# Env: NEKO_REPO (default bharath914/proxy), PREFIX (default ~/.local)
+# Env: NEKO_REPO (default bharath914/neko-proxy), PREFIX (default ~/.local)
 set -eu
 
-REPO=${NEKO_REPO:-bharath914/proxy}
+REPO=${NEKO_REPO:-bharath914/neko-proxy}
 PREFIX=${PREFIX:-$HOME/.local}
 VERSION=latest
 TARBALL=
