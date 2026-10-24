@@ -149,6 +149,11 @@ final class AdminModel {
         await refreshSdk()
     }
 
+    func setDeviceConfig(_ f: DeviceForm) async -> String? {
+        let r = await call { $0.setDeviceConfig = .with { $0.deviceID = f.deviceID; $0.appID = f.appID; $0.config = f.config } }
+        return r == nil ? (lastError ?? "The core rejected these settings.") : nil
+    }
+
     func deviceAction(_ kind: Neko_Api_V1_DeviceActionRequest.Kind, pendingID: UInt64 = 0, deviceID: String = "", appID: String = "") async {
         _ = await call {
             $0.deviceAction = .with { $0.kind = kind; $0.pendingID = pendingID; $0.deviceID = deviceID; $0.appID = appID }

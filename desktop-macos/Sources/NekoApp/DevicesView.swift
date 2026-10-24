@@ -6,6 +6,8 @@ import NekoAPI
 final class DevicesView: Page {
     let model: FlowModel
     private var hintsOpen = false
+    private var drawer: DeviceForm?
+    private var drawerError: String?
     private var admin: AdminModel { model.admin }
 
     init(model: FlowModel) {
@@ -17,6 +19,11 @@ final class DevicesView: Page {
     private static let cols: [(String, CGFloat)] = [("Device", 200), ("App", 190), ("SDK", 80), ("Connection", 100), ("Status", 110), ("Last seen", 90)]
 
     func reload() {
+        if drawer != nil { return }  // keep typing undisturbed; Save and Close rebuild
+        render()
+    }
+
+    private func render() {
         let sdk = admin.sdk
         var views: [NSView] = []
 
@@ -46,6 +53,7 @@ final class DevicesView: Page {
 
         for p in model.pending { views.append(pendingCard(p)) }
 
+        if drawer != nil { views.append(drawerCard()) }
         views.append(label("Paired devices", .headline, Theme.text))
         views.append(devicesTable())
         views.append(hints(sdk))
@@ -129,7 +137,9 @@ final class DevicesView: Page {
         } else {
             let r = Chip("Revoke", style: .danger)
             r.onClick = { [weak self] in Task { await self?.admin.deviceAction(.revoke, deviceID: d.deviceID, appID: d.appID) } }
-            action = r
+            let cfg = IconButton("gearshape", tip: "Settings for this app")
+            cfg.onClick = { [weak self] in self?.drawer = DeviceForm(d); self?.drawerError = nil; self?.render() }
+            action = NSStackView.horizontal([cfg, r], spacing: 6)
         }
         return NSStackView.horizontal([
             cell(two(d.deviceName.isEmpty ? d.deviceID : d.deviceName, model_), Self.cols[0].1),
@@ -156,7 +166,7 @@ final class DevicesView: Page {
 
     private func hints(_ sdk: SdkStatus?) -> NSView {
         let dh = DisclosureHeader("Connection hints", count: sdk?.checks.count ?? 0, open: hintsOpen)
-        dh.onToggle = { [weak self] in self?.hintsOpen.toggle(); self?.reload() }
+        dh.onToggle = { [weak self] in self?.hintsOpen.toggle(); self?.render() }
         guard hintsOpen, let sdk, !sdk.checks.isEmpty else { return dh }
         var rows: [NSView] = []
         for c in sdk.checks {
@@ -173,5 +183,76 @@ final class DevicesView: Page {
         }
         let box = NSStackView.vertical([dh, groupCard(rows)], spacing: 8)
         return box
+    }
+
+    // MARK: settings drawer
+
+    private func drawerCard() -> NSView {
+        guard let f = drawer else { return NSView() }
+        func bound(_ kp: WritableKeyPath<DeviceForm, String>, _ ph: String, width: CGFloat) -> Field {
+            let fld = Field(drawer?[keyPath: kp] ?? "", placeholder: ph, width: width)
+            fld.onChange = { [weak self] v in self?.drawer?[keyPath: kp] = v }
+            return fld
+        }
+        func area(_ kp: WritableKeyPath<DeviceForm, String>, _ rows: Int, _ ph: String) -> Area {
+            let a = Area(drawer?[keyPath: kp] ?? "", rows: rows, placeholder: ph)
+            a.onChange = { [weak self] v in self?.drawer?[keyPath: kp] = v }
+            return a
+        }
+        var rows: [NSView] = [label("Settings for \(f.title)", .headline, Theme.text)]
+        let sw = Switch(on: f.capture)
+        sw.onToggle = { [weak self] on in self?.drawer?.capture = on }
+        rows.append(NSStackView.horizontal([sw, label("Capture this app's calls", .body, Theme.text), NSView()], spacing: 10))
+        let lists = NSStackView.horizontal([
+            labelled("Only these hosts (empty = all)", area(\.allow, 3, "api.example.com\n*.cdn.example.com")),
+            labelled("Never capture these hosts", area(\.deny, 3, "ads.example.com")),
+        ], spacing: 12)
+        lists.distribution = .fillEqually
+        rows.append(lists)
+        rows.append(NSStackView.horizontal([
+            label("Body limit", .body, Theme.text), bound(\.bodyCapKB, "1024", width: 84), label("KB", .callout, Theme.text2),
+            label("Send bodies up to", .body, Theme.text), bound(\.eagerKB, "64", width: 84),
+            label("KB right away; larger ones load when opened", .callout, Theme.text2), NSView(),
+        ], spacing: 8))
+        let sel: Int = { switch f.redaction { case .redactStrict: return 1; case .redactNone: return 2; default: return 0 } }()
+        let seg = Segmented(["Default", "Strict", "None"], selected: sel)
+        seg.onChange = { [weak self] i in
+            self?.drawer?.redaction = [.redactDefault, .redactStrict, .redactNone][min(i, 2)]
+            self?.render()
+        }
+        rows.append(labelled("Redaction", seg, fill: false))
+        let note: String = {
+            switch f.redaction {
+            case .redactStrict: return "Strict: only a short list of headers is sent, and no bodies."
+            case .redactNone: return "None: nothing is hidden."
+            default: return "Default: Authorization, cookies, API keys, and passwords or tokens in JSON are replaced on the device before they are sent."
+            }
+        }()
+        rows.append(label(note, .callout, Theme.text2, lines: 0))
+        if f.revealsSecrets {
+            rows.append(label("Tokens, passwords and cookies from this app will appear in the inspector, in exports and in anything an AI client reads.", .callout, Theme.orange, lines: 0))
+        }
+        rows.append(labelled("Also hide these keys (one per line)", area(\.extraKeys, 2, "ssn\nnational_id")))
+        if let drawerError { rows.append(label(drawerError, .callout, Theme.red, lines: 2)) }
+        let save = Chip("Save", symbol: "checkmark", style: .accent)
+        save.onClick = { [weak self] in
+            guard let self, let f = self.drawer else { return }
+            Task {
+                if let why = await self.admin.setDeviceConfig(f) { self.drawerError = why } else { self.drawer = nil; self.drawerError = nil }
+                self.render()
+            }
+        }
+        let close = Chip(f.dirty ? "Cancel" : "Close", style: .text)
+        close.onClick = { [weak self] in self?.drawer = nil; self?.drawerError = nil; self?.render() }
+        rows.append(NSStackView.horizontal([save, close, NSView()], spacing: 8))
+
+        let card = Surface()
+        card.fill = Theme.card; card.border = Theme.accent; card.radius = Theme.Radius.card
+        card.translatesAutoresizingMaskIntoConstraints = false
+        let st = NSStackView.vertical(rows, spacing: 10)
+        card.addSubview(st)
+        st.pin(to: card, insets: NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18))
+        for r in rows where !(r is Segmented) { r.widthAnchor.constraint(equalTo: st.widthAnchor).isActive = true }
+        return card
     }
 }
