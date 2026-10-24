@@ -41,6 +41,7 @@ pub struct BodyView {
     pub form: Vec<(String, String)>,
     pub image: Vec<u8>,
     pub note: String,
+    pub events: Vec<crate::SseEvent>,
 }
 
 impl BodyView {
@@ -61,6 +62,7 @@ impl BodyView {
             form: Vec::new(),
             image: Vec::new(),
             note: String::new(),
+            events: Vec::new(),
         }
     }
 }
@@ -140,6 +142,7 @@ pub fn build_view(
         form: Vec::new(),
         image: Vec::new(),
         note: String::new(),
+            events: Vec::new(),
     };
 
     match view.kind {
@@ -202,6 +205,12 @@ pub fn build_view(
                     }
                 }
                 _ => {}
+            }
+            if content_type.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("text/event-stream") {
+                let (events, events_cut) = crate::parse_sse(&text, opts.json_lines);
+                view.events = events;
+                view.preview_truncated |= events_cut;
+                if events_cut { notes.push("Event limit reached.".into()); }
             }
             view.text = text;
         }

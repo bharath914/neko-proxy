@@ -273,6 +273,13 @@ message SourceLine {
   repeated SourceToken tokens = 1;
 }
 
+message SseEvent {
+  string event = 1;
+  string id = 2;
+  string data = 3;
+  optional uint64 retry_ms = 4;
+}
+
 message BodyView {
   BodyKind kind = 1;
   string content_type = 2;
@@ -289,6 +296,7 @@ message BodyView {
   repeated HtmlBlock html = 13;     // preview blocks for HTML
   string html_title = 14;
   repeated SourceLine source = 15;  // highlighted markup lines for HTML
+  repeated SseEvent events = 16;
 }
 
 // parts bit mask for GetFlowRequest.

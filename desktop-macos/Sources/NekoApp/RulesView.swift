@@ -56,7 +56,11 @@ final class RulesView: Page {
             guard let self else { return }
             self.ssl = SslDraft(self.admin.rules.ssl); self.sslError = nil; self.rebuild()
         }
-        let head = NSStackView.horizontal([title, NSView(), sslChip, newLocal, new], spacing: 8)
+        let imp = Chip("Import", symbol: "square.and.arrow.down", style: .text)
+        imp.onClick = { [weak self] in self?.importFile() }
+        let exp = Chip("Export", symbol: "square.and.arrow.up", style: .text)
+        exp.onClick = { [weak self] in self?.exportFile() }
+        let head = NSStackView.horizontal([title, NSView(), imp, exp, sslChip, newLocal, new], spacing: 8)
         views.append(head)
         let d = label("Rules change traffic as it passes through. They apply to new requests, in the order listed.", .callout, Theme.text2)
         views.append(d)
@@ -181,6 +185,43 @@ final class RulesView: Page {
         }
         rows.last?.widthAnchor.constraint(equalTo: st.widthAnchor).isActive = true
         return card
+    }
+
+    // MARK: import and export
+
+    private func exportFile() {
+        let r = admin.rules
+        if r.rules.isEmpty && r.mapLocal.isEmpty { onToast?("No rules to export yet."); return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "neko-rules.json"
+        panel.allowedContentTypes = [.json]
+        panel.message = "Save your rules, Map Local rules and SSL proxying list"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try RulesBundle.export(r).write(to: url, options: .atomic)
+            onToast?("Exported \(r.rules.count + r.mapLocal.count) rules")
+        } catch {
+            onToast?("Could not save: \(error.localizedDescription)")
+        }
+    }
+
+    private func importFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        panel.message = "Choose a Neko rules file"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            do {
+                let c = try RulesBundle.parse(try Data(contentsOf: url))
+                let r = await admin.importRules(c)
+                if let why = r.failure { onToast?("Imported \(r.added). Some were refused: \(why)") }
+                else { onToast?("Imported \(r.added) rules") }
+            } catch {
+                onToast?(error.localizedDescription)
+            }
+            rebuild()
+        }
     }
 
     // MARK: SSL proxying

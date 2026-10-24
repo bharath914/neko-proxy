@@ -936,6 +936,7 @@ impl App {
             format!("{short} · {} on the wire", fmt::size(v.wire_size))
         };
 
+        let show_events = !v.events.is_empty() && !self.raw_view;
         let is_json = kind == pb::BodyKind::Json && !v.json.is_empty();
         let is_html = kind == pb::BodyKind::Html && !v.html.is_empty();
         let show_tree = is_json && !self.raw_view;
@@ -956,7 +957,9 @@ impl App {
             Vec::new()
         };
         let rows_h = |n: usize| n as f32 * viewer::ROW_H + 16.0;
-        let content_h = if show_tree {
+        let content_h = if show_events {
+            fill_h
+        } else if show_tree {
             rows_h(visible.len())
         } else if show_preview {
             viewer::estimate_preview_height(&v.html, width)
@@ -1120,6 +1123,17 @@ impl App {
                 ui.ctx().copy_text(href);
                 self.toast(ui.ctx(), "Link copied", true);
             }
+        } else if show_events {
+            let mut sub = ui.new_child(UiBuilder::new().max_rect(view.shrink(14.0)));
+            sub.set_opacity(fade);
+            egui::ScrollArea::vertical().id_salt(("sse", salt)).show(&mut sub, |ui| {
+                for (index, event) in v.events.iter().enumerate() {
+                    ui.label(format!("#{} · {} · id {}", index + 1, event.event, event.id));
+                    if let Some(ms) = event.retry_ms { ui.small(format!("Retry: {ms} ms")); }
+                    ui.add(egui::Label::new(egui::RichText::new(&event.data).monospace()).selectable(true));
+                    ui.separator();
+                }
+            });
         } else if show_source {
             viewer::source_view(ui, st, ("src", salt), inner_view, &v.source, fade);
         } else {

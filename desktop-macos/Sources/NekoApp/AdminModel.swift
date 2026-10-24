@@ -98,6 +98,20 @@ final class AdminModel {
         return why
     }
 
+    /// Adds every rule in a file. Returns how many were added and the first reason one was refused.
+    func importRules(_ c: RulesBundle.Contents) async -> (added: Int, failure: String?) {
+        var added = 0
+        var failure: String?
+        for r in c.rules {
+            if let why = await put(r) { failure = failure ?? why } else { added += 1 }
+        }
+        for m in c.mapLocal {
+            if let why = await putMapLocal(m) { failure = failure ?? why } else { added += 1 }
+        }
+        if let ssl = c.ssl, let why = await setSsl(ssl) { failure = failure ?? why }
+        return (added, failure)
+    }
+
     func setEnabled(_ id: String, _ on: Bool) async {
         _ = await call { $0.setRuleEnabled = .with { $0.id = id; $0.enabled = on } }
         await refreshRules()
