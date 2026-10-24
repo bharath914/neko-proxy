@@ -1089,3 +1089,46 @@ async fn replay_sends_a_new_flow_straight_upstream() {
         .unwrap_err();
     assert!(err.contains("http"), "{err}");
 }
+
+#[tokio::test]
+async fn socks5_connect_intercepts_tls() {
+    let h = start_proxy().await;
+    let origin = start_origin_tls().await;
+    for atyp in [1, 3] {
+        let mut tcp = TcpStream::connect(h.addr).await.unwrap();
+        tcp.write_all(&[5, 1, 0]).await.unwrap();
+        let mut method = [0; 2];
+        tcp.read_exact(&mut method).await.unwrap();
+        assert_eq!(method, [5, 0]);
+        let mut req = vec![5, 1, 0, atyp];
+        if atyp == 1 { req.extend_from_slice(&[127, 0, 0, 1]); }
+        else { req.push(9); req.extend_from_slice(b"127.0.0.1"); }
+        req.extend_from_slice(&origin.addr.port().to_be_bytes());
+        tcp.write_all(&req).await.unwrap();
+        let mut reply = [0; 10];
+        tcp.read_exact(&mut reply).await.unwrap();
+        assert_eq!(reply[1], 0);
+        let tls = TlsConnector::from(client_config(Some(h.ca.cert_der()), &[b"http/1.1"]))
+            .connect(ServerName::try_from("127.0.0.1").unwrap(), tcp).await.unwrap();
+        let (status, body) = get_over(tls, false, "GET", "/json", b"").await;
+        assert_eq!(status, 200);
+        assert_eq!(&body[..], br#"{"ok":true,"n":1}"#);
+    }
+    assert_eq!(h.sink.finished(2).await.len(), 2);
+}
+
+#[tokio::test]
+async fn socks5_rejects_auth_and_udp() {
+    let h = start_proxy().await;
+    let mut tcp = TcpStream::connect(h.addr).await.unwrap();
+    tcp.write_all(&[5, 1, 2]).await.unwrap();
+    let mut reply = [0; 2]; tcp.read_exact(&mut reply).await.unwrap();
+    assert_eq!(reply, [5, 255]);
+    let mut tcp = TcpStream::connect(h.addr).await.unwrap();
+    tcp.write_all(&[5, 1, 0]).await.unwrap();
+    tcp.read_exact(&mut reply).await.unwrap();
+    tcp.write_all(&[5, 3, 0, 1]).await.unwrap();
+    let mut reply = [0; 10]; tcp.read_exact(&mut reply).await.unwrap();
+    assert_eq!(reply[1], 7);
+    assert_eq!(h.sink.count(), 0);
+}
