@@ -603,6 +603,7 @@ impl App {
         };
         let d = &entry.detail;
         let url = d.url.clone();
+        let issues = d.issues.clone();
         // The SDK's context belongs to the App half; the Wire half is the proxy's.
         let wire_half = self.wire_view && self.details.get(&id).is_some_and(|e| e.wire.is_some());
         let sdk = if wire_half {
@@ -614,6 +615,12 @@ impl App {
         let mut open_device: Option<(String, String)> = None;
         ScrollArea::vertical().id_salt("overview").auto_shrink([false, false]).show(ui, |ui| {
             ui.add_space(12.0);
+            if !issues.is_empty() {
+                ui.strong("Detected issues");
+                for issue in &issues { ui.label(issue); }
+                ui.label("Heuristics; inspect locally before drawing conclusions.");
+                ui.separator();
+            }
             if s.flags & 1 != 0 {
                 banner(
                     ui,

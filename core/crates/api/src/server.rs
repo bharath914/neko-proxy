@@ -431,8 +431,8 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
                 let ids = records.iter().map(|r| r.id).collect();
                 for chunk in records.chunks(32) {
                     for record in chunk {
-                        ctx.store.enqueue(record.clone());
                         flow::FlowSink::publish(&ctx.hub, flow::FlowEvent::Finished(record.clone()));
+                        ctx.store.enqueue(record.clone());
                     }
                     ctx.store.flush();
                 }
@@ -894,6 +894,7 @@ fn build_detail(rec: &flow::FlowRecord, parts: u32) -> pb::FlowDetail {
     let mut d = pb::FlowDetail {
         summary: Some(convert::summary(&rec.summary())),
         url: rec.url(),
+        issues: decode::issue_labels(rec.flags),
         ..Default::default()
     };
     if parts & PART_OVERVIEW != 0 {

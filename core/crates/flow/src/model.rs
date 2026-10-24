@@ -34,6 +34,12 @@ pub mod flags {
     pub const REDACTED: u32 = 4096;
     /// Events for this SDK flow were dropped under load.
     pub const DROPPED: u32 = 8192;
+    pub const SLOW: u32 = 1 << 14;
+    pub const DUPLICATE: u32 = 1 << 15;
+    pub const LARGE_PAYLOAD: u32 = 1 << 16;
+    pub const MISSING_CACHE: u32 = 1 << 17;
+    pub const N_PLUS_ONE: u32 = 1 << 18;
+    pub const SENSITIVE: u32 = 1 << 19;
 }
 
 /// Where a flow was observed.

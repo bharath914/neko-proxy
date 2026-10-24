@@ -163,6 +163,15 @@ fn protocol_viewer() {
 }
 
 #[test]
+fn issues_in_overview() {
+    let mut h = harness(false, (1320.0, 820.0), 60);
+    settle(&mut h);app(&mut h).select(Some(3));settle(&mut h);
+    app(&mut h).details.get_mut(&3).unwrap().detail.issues = vec!["Slow response".into(), "Possible sensitive data".into()];
+    app(&mut h).set_tab(Tab::Overview);app(&mut h).approvals.clear();
+    settle(&mut h);save(&mut h, "detected-issues");
+}
+
+#[test]
 fn settings_screen() {
     let mut h = harness(false, (1100.0, 900.0), 20);
     settle(&mut h);

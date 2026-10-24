@@ -137,6 +137,8 @@ enum FlowState {
 // 256 edited        a rule or a breakpoint edit changed the request or response
 // 512 breakpoint    the flow was held at a breakpoint
 // 1024 replayed     sent again by the proxy
+// 16384 slow, 32768 possible duplicate, 65536 large payload,
+// 131072 missing cache headers, 262144 possible N+1, 524288 sensitive data.
 message FlowSummary {
   uint64 id = 1;
   int64 started_at_ms = 2;
@@ -166,6 +168,7 @@ message FlowSummary {
   string screen = 25;
   string route_template = 26;
   string client_stack = 27;
+  repeated string issue_labels = 28;
 }
 
 enum FlowSource {
@@ -321,6 +324,7 @@ message FlowDetail {
   BodyView request_body = 7;
   BodyView response_body = 8;
   string dio = 30;
+  repeated string issues = 31;
   SdkContext sdk = 9;     // set for SDK and merged flows
   FlowDetail wire = 10;   // set for merged flows: what the proxy saw
 }

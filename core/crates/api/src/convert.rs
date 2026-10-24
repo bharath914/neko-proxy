@@ -27,6 +27,7 @@ pub fn summary(s: &FlowSummary) -> pb::FlowSummary {
                 FlowState::Failed => pb::FlowState::Failed,
             } as i32,
             flags: s.flags,
+            issue_labels: decode::issue_labels(s.flags),
             content_type: s.content_type.clone(),
             error: s.error.clone(),
             source: match s.source {

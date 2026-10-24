@@ -1069,3 +1069,13 @@ async fn export_kinds_share_redaction_even_when_client_disables_it() {
         assert_eq!(r.count, 1);
     }
 }
+
+#[tokio::test]
+async fn issue_labels_are_core_generated_without_captured_values() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.enqueue(record(95,"issues.example.com",200,"{\"password\":\"never-report-this-value\"}"));ctx.store.flush();
+    let Res::Flow(d)=c.call(Req::GetFlow(pb::GetFlowRequest{id:95,parts:1})).await else{panic!()};
+    assert!(d.issues.iter().any(|s|s.contains("sensitive")));
+    assert!(!d.issues.join(" ").contains("never-report-this-value"));
+    assert!(!d.summary.unwrap().issue_labels.is_empty());
+}

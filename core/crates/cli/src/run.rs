@@ -73,10 +73,8 @@ struct Fanout {
 
 impl FlowSink for Fanout {
     fn publish(&self, event: FlowEvent) {
-        if matches!(event, FlowEvent::Finished(_)) {
-            self.store.publish(event.clone());
-        }
-        self.hub.publish(event);
+        self.hub.publish(event.clone());
+        if matches!(event, FlowEvent::Finished(_)) { self.store.publish(event); }
     }
 }
 
@@ -140,6 +138,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     let store = store::Store::open(&data_dir).context("opening the store")?;
     let ids = Arc::new(IdGen::starting_after(store.last_id().unwrap_or(0)));
     let hub = api::Hub::new();
+    store.set_analysis_sink(Arc::new(hub.clone()));
     let fanout = Fanout {
         hub: hub.clone(),
         store: store.clone(),

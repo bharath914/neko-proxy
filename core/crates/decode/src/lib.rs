@@ -23,3 +23,6 @@ pub use view::{build_view, BodyView, ViewOptions};
 
 mod protocol;
 pub use protocol::{protocol_view, DecodedField, ProtocolView};
+
+mod issues;
+pub use issues::{issue_labels, sensitive, static_flags, route_path, ISSUE_MASK};

@@ -402,3 +402,14 @@ fn ten_thousand_mixed_flows_search_and_filter_fast() {
     }
     assert_eq!(time(q("source:sdk")).1, 3333);
 }
+
+#[test]
+fn analysis_is_persisted_searchable_and_announced() {
+    #[derive(Default)] struct Sink(std::sync::Mutex<Vec<flow::FlowSummary>>);
+    impl flow::FlowSink for Sink { fn publish(&self,event:flow::FlowEvent){if let flow::FlowEvent::Finished(r)=event{self.0.lock().unwrap().push(r.summary());}} }
+    let dir=tempfile::tempdir().unwrap();let store=Store::open(dir.path()).unwrap();let sink=Arc::new(Sink::default());store.set_analysis_sink(sink.clone());
+    store.enqueue(rec(77,"api.test","/users/1",200,2000,"{\"password\":\"captured-secret\"}"));store.flush();
+    let r=store.get(77).unwrap().unwrap();assert_ne!(r.flags&flags::SENSITIVE,0);assert_ne!(r.flags&flags::SLOW,0);
+    assert_eq!(store.search(&Query{text:"is:sensitive".into(),..Default::default()},0,10).unwrap().total,1);
+    let summaries=sink.0.lock().unwrap();assert_eq!(summaries.len(),1);assert_eq!(summaries[0].flags,r.flags);
+}
