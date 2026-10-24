@@ -10,12 +10,14 @@
 	let loaded = $state(false);
 	let os = $state('');
 	let arch = $state('x86_64');
+	let oneLine = $state('mac');
 
 	onMount(async () => {
 		const [r, p] = await Promise.all([latestRelease(), detectPlatform()]);
 		rel = r;
 		os = p.os;
 		arch = p.arch;
+		if (p.os === 'linux') oneLine = 'linux';
 		loaded = true;
 	});
 
@@ -75,6 +77,7 @@ target/release/nekod export --har -o session.har`
 						<summary>If macOS says it can’t verify Neko</summary>
 						<p>Neko isn’t notarized by Apple yet, so macOS asks once. Click <b>Done</b>, open <b>System Settings › Privacy &amp; Security</b>, scroll to <i>“Neko” was blocked</i> and click <b>Open Anyway</b>. Or run:</p>
 						<code>xattr -dr com.apple.quarantine /Applications/Neko.app</code>
+						<p>Or skip the prompt entirely with the one-line Terminal install below.</p>
 					</details>
 				{:else}
 					<a class="btn lg secondary" href={releases}>{loaded ? 'First release soon' : 'See releases'}</a>
@@ -114,13 +117,25 @@ target/release/nekod export --har -o session.har`
 			</article>
 		</div>
 
-		{#if rel?.tar.x86_64 || rel?.tar.aarch64}
+		{#if rel?.mac || rel?.tar.x86_64 || rel?.tar.aarch64}
 		<div class="install">
 			<div>
-				<h3>One line, no root.</h3>
-				<p>Installs the latest Linux release into <code>~/.local</code>, checking it against the release’s SHA256SUMS first.</p>
+				<h3>One line in Terminal.</h3>
+				{#if oneLine === 'mac'}
+					<p>Downloads the latest release, checks it against SHA256SUMS and puts Neko in Applications. Installed this way, macOS opens it straight away, without the “can’t verify” prompt.</p>
+				{:else}
+					<p>Installs the latest Linux release into <code>~/.local</code> with no root, checking it against SHA256SUMS first.</p>
+				{/if}
+				<div class="seg" role="tablist" aria-label="Terminal install">
+					<button type="button" role="tab" aria-selected={oneLine === 'mac'} onclick={() => (oneLine = 'mac')}>macOS</button>
+					<button type="button" role="tab" aria-selected={oneLine === 'linux'} onclick={() => (oneLine = 'linux')}>Linux</button>
+				</div>
 			</div>
-			<Code label="Linux" code={'curl -fsSL https://raw.githubusercontent.com/bharath914/neko-proxy/main/packaging/install.sh | sh'} />
+			{#key oneLine}
+				<div class="code-in">
+					<Code label={oneLine === 'mac' ? 'macOS' : 'Linux'} code={`curl -fsSL https://raw.githubusercontent.com/bharath914/neko-proxy/main/packaging/${oneLine === 'mac' ? 'install-mac.sh' : 'install.sh'} | sh`} />
+				</div>
+			{/key}
 		</div>
 		{/if}
 

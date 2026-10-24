@@ -65,7 +65,15 @@ chmod +x Neko-<ver>-x86_64.AppImage            # any distro, needs libfuse2 or -
 sh packaging/install.sh                         # any distro, into ~/.local, no root; --uninstall removes it
 ```
 
-Every release lists `SHA256SUMS`; `install.sh` verifies the tarball against it.
+macOS 13+ (Apple silicon and Intel): open `Neko-<ver>-macos-universal.dmg` and drag Neko to Applications, or install from Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bharath914/neko-proxy/main/packaging/install-mac.sh | sh
+```
+
+The app is not notarized yet, so a `.dmg` downloaded in a browser needs System Settings > Privacy & Security > Open Anyway on first launch; the Terminal install doesn't. Signing setup: `docs/macos-signing.md`.
+
+Every release lists `SHA256SUMS`; `install.sh` and `install-mac.sh` verify against it.
 
 ## Package and release
 
