@@ -77,8 +77,30 @@ jobs:
             dist/*.rpm
             dist/*.AppImage
 
+  macos:
+    needs: test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust targets for a universal build
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      # Ad-hoc signed: the first launch on another Mac needs right-click > Open
+      # (or System Settings > Privacy & Security > Open Anyway). Set SIGN_IDENTITY
+      # and NOTARY_PROFILE secrets here once there is a Developer ID.
+      - name: Build Neko.app and the disk image
+        env:
+          UNIVERSAL: "1"
+        run: packaging/macos/build.sh
+      - name: Smoke test
+        run: dist/Neko.app/Contents/MacOS/nekod --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-macos
+          if-no-files-found: error
+          path: dist/*.dmg
+
   release:
-    needs: package
+    needs: [package, macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     permissions:

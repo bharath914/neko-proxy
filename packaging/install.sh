@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install Neko Proxy for the current user from a GitHub release, no root needed.
 #
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/packaging/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/bharath914/neko-proxy/main/packaging/install.sh | sh
 #   sh install.sh --version v0.1.0
 #   sh install.sh --tarball neko-0.1.0-linux-x86_64.tar.gz     (offline, skips download)
 #   sh install.sh --uninstall
@@ -59,7 +59,7 @@ if [ -z "$TARBALL" ]; then
     VERSION=${VERSION##*/}
     case $VERSION in v*) ;; *) echo "could not find a release of $REPO" >&2; exit 1 ;; esac
   fi
-  NAME=proxy-${VERSION#v}-linux-$ARCH.tar.gz
+  NAME=neko-${VERSION#v}-linux-$ARCH.tar.gz
   BASE=https://github.com/$REPO/releases/download/$VERSION
   echo "Downloading $NAME"
   curl -fSL --progress-bar -o "$TMP/$NAME" "$BASE/$NAME"
@@ -73,18 +73,18 @@ else
 fi
 
 tar -xzf "$TARBALL" -C "$TMP"
-SRC=$(find "$TMP" -maxdepth 1 -type d -name 'proxy-*-linux-*' | head -1)
+SRC=$(find "$TMP" -maxdepth 1 -type d -name 'neko-*-linux-*' | head -1)
 [ -x "$SRC/bin/neko" ] || { echo "unexpected tarball layout" >&2; exit 1; }
 
 mkdir -p "$PREFIX/bin" "$APPS" "$ICONS"
 # Install over a running copy safely: write a new file, then rename.
-for b in proxy nekod; do
+for b in neko nekod; do
   install -m 0755 "$SRC/bin/$b" "$PREFIX/bin/.$b.new"
   mv -f "$PREFIX/bin/.$b.new" "$PREFIX/bin/$b"
 done
 install -m 0644 "$SRC/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png" "$ICONS/"
 # Absolute Exec so the launcher works even when ~/.local/bin is not on PATH.
-sed "s|^Exec=proxy\$|Exec=$PREFIX/bin/neko|" "$SRC/share/applications/dev.nekoproxy.Neko.desktop" \
+sed "s|^Exec=neko\$|Exec=$PREFIX/bin/neko|" "$SRC/share/applications/dev.nekoproxy.Neko.desktop" \
   > "$APPS/dev.nekoproxy.Neko.desktop"
 refresh
 
