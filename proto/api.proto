@@ -299,6 +299,7 @@ message BodyView {
   string html_title = 14;
   repeated SourceLine source = 15;  // highlighted markup lines for HTML
   repeated SseEvent events = 16;
+  ProtocolView protocol = 17;
 }
 
 // parts bit mask for GetFlowRequest.
@@ -892,3 +893,6 @@ message FetchBodyRequest {
 
 message ImportHarRequest { bytes data = 1; }
 message ImportHarResponse { repeated uint64 ids = 1; uint32 count = 2; }
+
+message DecodedField { uint32 depth = 1; string label = 2; string value = 3; }
+message ProtocolView { string title = 1; repeated DecodedField fields = 2; string note = 3; }

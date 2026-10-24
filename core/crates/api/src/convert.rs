@@ -161,6 +161,9 @@ pub fn body(v: BodyView) -> pb::BodyView {
             events: v.events.into_iter().map(|e| pb::SseEvent {
                 event: e.event, id: e.id, data: e.data, retry_ms: e.retry_ms,
             }).collect(),
+            protocol: Some(pb::ProtocolView { title: v.protocol.title, note: v.protocol.note,
+                fields: v.protocol.fields.into_iter().map(|f| pb::DecodedField { depth: f.depth, label: f.label, value: f.value }).collect(),
+            }),
             image: v.image,
             note: v.note,
         }

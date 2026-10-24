@@ -20,3 +20,6 @@ pub use html::{
 pub use json::{json_outline, JsonLine, JsonToken, JsonTokenKind};
 pub use kind::{classify, parse_form, sniff_image, Kind};
 pub use view::{build_view, BodyView, ViewOptions};
+
+mod protocol;
+pub use protocol::{protocol_view, DecodedField, ProtocolView};

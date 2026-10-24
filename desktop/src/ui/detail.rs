@@ -936,10 +936,12 @@ impl App {
             format!("{short} · {} on the wire", fmt::size(v.wire_size))
         };
 
+        let decoded = v.protocol.as_ref().filter(|p| !p.title.is_empty());
+        let show_decoded = decoded.is_some() && !self.raw_view;
         let show_events = !v.events.is_empty() && !self.raw_view;
         let is_json = kind == pb::BodyKind::Json && !v.json.is_empty();
         let is_html = kind == pb::BodyKind::Html && !v.html.is_empty();
-        let show_tree = is_json && !self.raw_view;
+        let show_tree = is_json && !self.raw_view && !show_decoded;
         let show_preview = is_html && !self.html_source;
         let show_source = kind == pb::BodyKind::Html && !show_preview && !v.source.is_empty();
 
@@ -957,7 +959,7 @@ impl App {
             Vec::new()
         };
         let rows_h = |n: usize| n as f32 * viewer::ROW_H + 16.0;
-        let content_h = if show_events {
+        let content_h = if show_decoded || show_events {
             fill_h
         } else if show_tree {
             rows_h(visible.len())
@@ -1123,6 +1125,20 @@ impl App {
                 ui.ctx().copy_text(href);
                 self.toast(ui.ctx(), "Link copied", true);
             }
+        } else if show_decoded {
+            let decoded = decoded.unwrap();
+            let mut sub = ui.new_child(UiBuilder::new().max_rect(view.shrink(14.0)));
+            sub.set_opacity(fade);
+            egui::ScrollArea::vertical().id_salt(("protocol", salt)).show(&mut sub, |ui| {
+                ui.strong(&decoded.title);
+                if !decoded.note.is_empty() { ui.label(&decoded.note); }
+                for (i, field) in decoded.fields.iter().enumerate() {
+                    ui.push_id(i, |ui| { ui.indent(field.depth, |ui| {
+                        ui.label(&field.label);
+                        ui.add(egui::Label::new(egui::RichText::new(&field.value).monospace()).selectable(true));
+                    }); });
+                }
+            });
         } else if show_events {
             let mut sub = ui.new_child(UiBuilder::new().max_rect(view.shrink(14.0)));
             sub.set_opacity(fade);

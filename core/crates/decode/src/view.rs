@@ -42,6 +42,7 @@ pub struct BodyView {
     pub image: Vec<u8>,
     pub note: String,
     pub events: Vec<crate::SseEvent>,
+    pub protocol: crate::ProtocolView,
 }
 
 impl BodyView {
@@ -63,6 +64,7 @@ impl BodyView {
             image: Vec::new(),
             note: String::new(),
             events: Vec::new(),
+            protocol: crate::ProtocolView::default(),
         }
     }
 }
@@ -143,7 +145,10 @@ pub fn build_view(
         image: Vec::new(),
         note: String::new(),
             events: Vec::new(),
+            protocol: crate::ProtocolView::default(),
     };
+
+    view.protocol = crate::protocol_view(content_type, &body);
 
     match view.kind {
         Kind::Empty => {}

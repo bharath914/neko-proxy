@@ -1043,3 +1043,16 @@ async fn har_import_get_and_export_roundtrip() {
     let har: serde_json::Value = serde_json::from_slice(&export.data).unwrap();
     assert_eq!(har["log"]["entries"][0]["response"]["content"]["text"], "{\"ok\":true}");
 }
+
+#[tokio::test]
+async fn grpc_and_graphql_views_are_prepared_in_core() {
+    let (mut c, ctx, _d) = setup().await;
+    let mut rec = (*record(80, "grpc.example.com", 200, "")).clone();
+    rec.res_headers = vec![("content-type".into(), "application/grpc+proto".into())];
+    rec.res_body = Bytes::from_static(&[0,0,0,0,2,8,42]); rec.res_size = 7;
+    ctx.store.enqueue(Arc::new(rec)); ctx.store.flush();
+    let Res::Flow(d) = c.call(Req::GetFlow(pb::GetFlowRequest { id: 80, parts: 4 })).await else { panic!() };
+    let p = d.response_body.unwrap().protocol.unwrap();
+    assert!(p.title.starts_with("gRPC")); assert_eq!(p.fields[1].label, "Field 1");
+    assert!(p.fields[1].value.starts_with("42"));
+}

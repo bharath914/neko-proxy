@@ -141,6 +141,28 @@ fn sse_event_viewer() {
 }
 
 #[test]
+fn protocol_viewer() {
+    let mut h = harness(false, (1320.0, 820.0), 60);
+    settle(&mut h);
+    app(&mut h).select(Some(3));
+    app(&mut h).set_tab(Tab::Response);
+    settle(&mut h);
+    let detail = app(&mut h).details.get_mut(&3).unwrap();
+    detail.detail.response_body = Some(pb::BodyView {
+        kind: pb::BodyKind::Binary as i32,
+        protocol: Some(pb::ProtocolView { title: "gRPC messages (schema unknown)".into(), fields: vec![
+            pb::DecodedField { depth: 0, label: "Message 1".into(), value: "7 bytes".into() },
+            pb::DecodedField { depth: 1, label: "Field 1".into(), value: "150 (varint)".into() },
+            pb::DecodedField { depth: 1, label: "Field 2".into(), value: "Hello".into() },
+        ], note: String::new() }),
+        ..Default::default()
+    });
+    app(&mut h).headers_open = false;
+    settle(&mut h);
+    save(&mut h, "grpc-fields");
+}
+
+#[test]
 fn settings_screen() {
     let mut h = harness(false, (1100.0, 900.0), 20);
     settle(&mut h);
