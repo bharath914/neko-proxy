@@ -71,7 +71,11 @@ target/release/nekod export --har -o session.har`
 				{#if rel?.mac}
 					<a class="btn lg" href={rel.mac.url}>Download .dmg</a>
 					<p class="meta">{rel.mac.name} · {mb(rel.mac.size)}</p>
-					<p class="hint">Not yet notarized: the first time, right-click Neko in Applications and choose <b>Open</b>, or allow it under System Settings › Privacy &amp; Security.</p>
+					<details class="hint">
+						<summary>If macOS says it can’t verify Neko</summary>
+						<p>Neko isn’t notarized by Apple yet, so macOS asks once. Click <b>Done</b>, open <b>System Settings › Privacy &amp; Security</b>, scroll to <i>“Neko” was blocked</i> and click <b>Open Anyway</b>. Or run:</p>
+						<code>xattr -dr com.apple.quarantine /Applications/Neko.app</code>
+					</details>
 				{:else}
 					<a class="btn lg secondary" href={releases}>{loaded ? 'First release soon' : 'See releases'}</a>
 					<p class="meta">Or build it from source below. Takes about a minute.</p>
@@ -151,7 +155,10 @@ target/release/nekod export --har -o session.har`
 	.plat h3 { font-size: 1.8rem; letter-spacing: -0.026em; }
 	.req { color: var(--ink-2); font-size: 0.9rem; margin-bottom: 8px; }
 	.meta { font-size: 0.84rem; color: var(--ink-3); }
-	.hint { font-size: 0.84rem; color: var(--ink-2); max-width: 22rem; }
+	.hint { font-size: 0.84rem; color: var(--ink-2); max-width: 24rem; text-align: left; }
+	.hint summary { cursor: pointer; text-align: center; color: var(--blue); }
+	.hint p { margin: 10px 0 8px; }
+	.hint code { display: block; font-size: 0.74rem; padding: 8px 10px; user-select: all; }
 	.soon { opacity: 0.85; }
 	.more { width: 100%; display: grid; gap: 8px; margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 	.arch { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 6px 14px; font-size: 0.86rem; }

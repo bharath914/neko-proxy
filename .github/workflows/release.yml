@@ -84,8 +84,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Rust targets for a universal build
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      # Ad-hoc signed: the first launch on another Mac needs right-click > Open
-      # (or System Settings > Privacy & Security > Open Anyway). Set SIGN_IDENTITY
+      # Ad-hoc signed: the first launch on another Mac needs System Settings >
+      # Privacy & Security > Open Anyway. Set SIGN_IDENTITY
       # and NOTARY_PROFILE secrets here once there is a Developer ID.
       - name: Build Neko.app and the disk image
         env:
