@@ -1214,3 +1214,45 @@ async fn live_sse_snapshot_is_persisted_and_remains_inflight() {
     ctx.store.flush();
     assert!(ctx.hub.inflight(96).is_none());
 }
+
+#[tokio::test]
+async fn existing_socket_parent_permissions_are_preserved() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_client, ctx, _dir) = setup().await;
+    let directory = tempfile::Builder::new()
+        .prefix("neko-api-mode-")
+        .tempdir_in("/tmp")
+        .unwrap();
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let socket = directory.path().join("api.sock");
+    let path = socket.clone();
+    let (stop, wait) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        neko_api::serve(ctx, &path, async {
+            let _ = wait.await;
+        })
+        .await
+        .unwrap()
+    });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !socket.exists() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        std::fs::metadata(directory.path())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o755
+    );
+    assert_eq!(
+        std::fs::metadata(&socket).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    stop.send(()).unwrap();
+    server.await.unwrap();
+}

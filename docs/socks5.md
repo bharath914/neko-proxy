@@ -22,3 +22,9 @@ No proto changes. Performance targets have not been re-benchmarked.
 
 Shared-checkout note: the implementation was included by the concurrent
 macOS commit 1ea37b3; the subsequent SOCKS5 commit carries tests and this note.
+
+Final integration correction: the portable desktop test now uses its own short
+socket directory. API creation uses private permissions for newly created
+directories and preserves existing parent permissions, avoiding chmod on shared
+runtime directories. A regression test checks existing 0755 parents remain
+0755 while the socket is 0600. This host's /tmp remained 1777 throughout.

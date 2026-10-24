@@ -1768,7 +1768,7 @@ mod e2e {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         // Keep the Unix socket short and writable on both Linux and macOS.
-        let socket = PathBuf::from(format!("/tmp/neko-e2e-{}.sock", std::process::id()));
+        let socket = PathBuf::from(format!("/tmp/neko-e2e-{}/api.sock", std::process::id()));
         std::env::set_var("NEKO_DATA_DIR", &dir);
 
         // A tiny origin.
@@ -1858,5 +1858,6 @@ mod e2e {
 
         drop(be);
         let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(socket.parent().unwrap());
     }
 }

@@ -45,8 +45,14 @@ pub async fn serve(
         source,
     };
     if let Some(dir) = socket.parent() {
-        std::fs::create_dir_all(dir).map_err(sock_err)?;
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        use std::os::unix::fs::DirBuilderExt;
+        // Restrict directories we create without changing a caller's existing
+        // directory (which may be a shared runtime or temporary directory).
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+            .map_err(sock_err)?;
     }
     if socket.exists() {
         // A live socket means another core owns it; a dead one is stale.

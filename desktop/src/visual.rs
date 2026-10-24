@@ -125,6 +125,7 @@ fn body_viewers() {
 fn sse_event_viewer() {
     let mut h = harness(false, (1320.0, 820.0), 60);
     settle(&mut h);
+    app(&mut h).approvals.clear();
     app(&mut h).select(Some(3));
     app(&mut h).set_tab(Tab::Response);
     settle(&mut h);
@@ -149,6 +150,7 @@ fn sse_event_viewer() {
 fn protocol_viewer() {
     let mut h = harness(false, (1320.0, 820.0), 60);
     settle(&mut h);
+    app(&mut h).approvals.clear();
     app(&mut h).select(Some(3));
     app(&mut h).set_tab(Tab::Response);
     settle(&mut h);
