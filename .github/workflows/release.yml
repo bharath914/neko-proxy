@@ -80,19 +80,56 @@ jobs:
   macos:
     needs: test
     runs-on: macos-15
+    # Signed with a Developer ID and notarized when these secrets are set (see
+    # docs/macos-signing.md); otherwise ad-hoc signed, and the first launch needs
+    # System Settings > Privacy & Security > Open Anyway.
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
     steps:
       - uses: actions/checkout@v4
       - name: Rust targets for a universal build
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      # Ad-hoc signed: the first launch on another Mac needs System Settings >
-      # Privacy & Security > Open Anyway. Set SIGN_IDENTITY
-      # and NOTARY_PROFILE secrets here once there is a Developer ID.
+      - name: Developer ID certificate and notary credentials
+        if: env.MACOS_CERT_P12 != ''
+        env:
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          KC=$RUNNER_TEMP/signing.keychain-db
+          KC_PASS=$(openssl rand -hex 24)
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -f pkcs12 -k "$KC" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PASS" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          ID=$(security find-identity -v -p codesigning "$KC" | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)
+          [ -n "$ID" ] || { echo "no Developer ID Application identity in MACOS_CERT_P12" >&2; exit 1; }
+          xcrun notarytool store-credentials neko-notary --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --keychain "$KC"
+          {
+            echo "SIGN_IDENTITY=$ID"
+            echo "NOTARY_PROFILE=neko-notary"
+            echo "NOTARY_KEYCHAIN=$KC"
+          } >> "$GITHUB_ENV"
       - name: Build Neko.app and the disk image
         env:
           UNIVERSAL: "1"
         run: packaging/macos/build.sh
       - name: Smoke test
-        run: dist/Neko.app/Contents/MacOS/nekod --help
+        run: |
+          dist/Neko.app/Contents/MacOS/nekod --help
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            spctl --assess --type execute -v dist/Neko.app
+            xcrun stapler validate dist/*.dmg
+          fi
+      - name: Remove the signing keychain
+        if: always() && env.NOTARY_KEYCHAIN != ''
+        run: security delete-keychain "$NOTARY_KEYCHAIN"
       - uses: actions/upload-artifact@v4
         with:
           name: packages-macos

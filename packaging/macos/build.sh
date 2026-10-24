@@ -11,7 +11,8 @@
 # Signing, in order of preference:
 #   SIGN_IDENTITY="Developer ID Application: Name (TEAMID)"   sign with your certificate and the hardened runtime
 #   (unset)                                                    ad-hoc signature; first launch needs System Settings > Privacy & Security > Open Anyway
-# Notarization (needs SIGN_IDENTITY): NOTARY_PROFILE=<name from `xcrun notarytool store-credentials`>
+# Notarization (needs SIGN_IDENTITY): NOTARY_PROFILE=<name from `xcrun notarytool store-credentials`>,
+#   NOTARY_KEYCHAIN=<keychain holding that profile> if it is not the login keychain
 #
 # Env: NEKO_SKIP_BUILD=1 reuses the existing release builds. UNIVERSAL=1 builds a fat app and nekod.
 set -euo pipefail
@@ -97,7 +98,18 @@ rm -rf "$STAGE"
 if [ -n "${NOTARY_PROFILE:-}" ]; then
   [ -n "${SIGN_IDENTITY:-}" ] || { echo "notarization needs SIGN_IDENTITY" >&2; exit 1; }
   echo "==> notarizing (this waits for Apple)"
-  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+  # NOTARY_KEYCHAIN: where the profile lives, if not the login keychain (CI uses a temporary one).
+  KC_ARGS=()
+  [ -n "${NOTARY_KEYCHAIN:-}" ] && KC_ARGS=(--keychain "$NOTARY_KEYCHAIN")
+  RESULT=$(xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" ${KC_ARGS[@]+"${KC_ARGS[@]}"} --wait)
+  echo "$RESULT"
+  # notarytool exits 0 even when Apple rejects the upload; the log says why.
+  if ! echo "$RESULT" | grep -q "status: Accepted"; then
+    ID=$(echo "$RESULT" | sed -n 's/^ *id: //p' | head -1)
+    [ -n "$ID" ] && xcrun notarytool log "$ID" --keychain-profile "$NOTARY_PROFILE" ${KC_ARGS[@]+"${KC_ARGS[@]}"} >&2
+    echo "notarization was not accepted" >&2
+    exit 1
+  fi
   xcrun stapler staple "$DMG"
   xcrun stapler validate "$DMG"
   spctl --assess --type open --context context:primary-signature -v "$DMG"
