@@ -1014,9 +1014,9 @@ async fn export(ctx: Arc<ApiContext>, id: u64, r: pb::ExportRequest) -> pb::Serv
         let mut recs = Vec::with_capacity(ids.len());
         for id in ids {
             if let Some(rec) = ctx2.store.get(id).map_err(|e| e.to_string())? {
-                total += rec.req_body.len() + rec.res_body.len();
+                total += store::export_weight(&rec);
                 if total > 32 * 1024 * 1024 {
-                    return Err("export source bodies exceed 32 MiB".into());
+                    return Err("export source data exceeds 32 MiB".into());
                 }
                 recs.push(rec);
             }

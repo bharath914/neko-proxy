@@ -649,3 +649,30 @@ async fn rule_reads_redact_short_credentials_and_bad_arguments_fail() {
     );
     assert!(tool(&env, "list_flows", json!([])).await.0);
 }
+
+#[tokio::test]
+async fn malformed_json_and_sse_bodies_redact_short_credentials() {
+    let env = setup(rules::McpWrites::Ask).await;
+    for (id, ct, body) in [
+        (4, "application/json", "{\"password\":\"tiny-secret"),
+        (
+            5,
+            "text/event-stream",
+            "data: {\"api_key\":\"tiny-secret\"}\n\n",
+        ),
+        (6, "text/plain", "Cookie: a=tiny-secret; b=another-secret"),
+    ] {
+        let mut rec = (*record(id)).clone();
+        rec.res_headers = vec![("content-type".into(), ct.into())];
+        rec.res_body = Bytes::from(body.to_string());
+        rec.res_size = body.len() as u64;
+        env.ctx.store.enqueue(Arc::new(rec));
+    }
+    env.ctx.store.flush();
+    for id in [4, 5, 6] {
+        let (err, text) = tool(&env, "get_flow", json!({"id":id})).await;
+        assert!(!err, "{text}");
+        assert!(!text.contains("tiny-secret"), "{text}");
+        assert!(!text.contains("another-secret"), "{text}");
+    }
+}

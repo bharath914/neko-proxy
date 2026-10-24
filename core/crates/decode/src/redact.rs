@@ -147,7 +147,7 @@ pub fn redact_pairs(s: &str) -> String {
                 let name = k.replace('+', " ");
                 let name = percent_encoding::percent_decode_str(&name).decode_utf8_lossy();
                 let value = percent_encoding::percent_decode_str(v).decode_utf8_lossy();
-                if is_sensitive_key(&name)
+                if is_sensitive_header(&name)
                     || looks_like_secret(&value)
                     || redact_text(&value) != value
                 {
@@ -181,6 +181,16 @@ fn redact_value(v: &mut Value, depth: usize) {
                 map.insert("value".into(), Value::String(MASK.into()));
             }
             for (k, item) in map.iter_mut() {
+                if k.eq_ignore_ascii_case("cookies") && item.is_array() {
+                    for cookie in item.as_array_mut().unwrap() {
+                        if let Some(fields) = cookie.as_object_mut() {
+                            fields.insert("value".into(), Value::String(MASK.into()));
+                        } else {
+                            *cookie = Value::String(MASK.into());
+                        }
+                    }
+                    continue;
+                }
                 if is_sensitive_header(k) && !item.is_null() {
                     *item = Value::String(MASK.into());
                 } else if matches!(k.as_str(), "body" | "text" | "raw") && item.is_string() {
@@ -189,7 +199,7 @@ fn redact_value(v: &mut Value, depth: usize) {
                         redact_value(&mut embedded, depth + 1);
                         embedded.to_string()
                     } else {
-                        redact_text(&redact_pairs(text))
+                        redact_body_text(text)
                     };
                     *item = Value::String(redacted);
                 } else if k == "query" && item.is_string() {
@@ -223,15 +233,50 @@ fn redact_value(v: &mut Value, depth: usize) {
     }
 }
 
+/// Redact captured text, including malformed JSON and event-stream data.
+/// This is separate from metadata/code strings so generated schemas stay valid.
+pub fn redact_body_text(text: &str) -> String {
+    let trimmed = text.trim_start();
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        return redact_json_text(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let newline = if line.ends_with('\n') { "\n" } else { "" };
+        if let Some((key, value)) = line.trim_end_matches(['\r', '\n']).split_once(':') {
+            if is_sensitive_header(key.trim().trim_matches(['\"', '\''])) {
+                out.push_str(&format!("{key}: {MASK}{newline}"));
+                continue;
+            }
+            if key.trim() == "data" {
+                let data = value.trim_start();
+                if data.starts_with('{') || data.starts_with('[') {
+                    out.push_str(&format!("{key}: {}{newline}", redact_json_text(data)));
+                    continue;
+                }
+                if let Some((field, _)) = data.split_once(':').or_else(|| data.split_once('=')) {
+                    if is_sensitive_header(field.trim().trim_matches(['\"', '\''])) {
+                        out.push_str(&format!("{key}: {MASK}{newline}"));
+                        continue;
+                    }
+                }
+            }
+        }
+        out.push_str(line);
+    }
+    redact_text(&redact_pairs(&out))
+}
+
 /// Redact a JSON document, keeping its shape. Non-JSON text falls back to
-/// token scrubbing.
+/// conservative body redaction.
 pub fn redact_json_text(text: &str) -> String {
     match serde_json::from_str::<Value>(text) {
         Ok(mut v) => {
             redact_json_value(&mut v);
             serde_json::to_string(&v).unwrap_or_else(|_| redact_text(text))
         }
-        Err(_) => redact_text(text),
+        Err(_) if text.trim_start().starts_with(['{', '[']) => MASK.into(),
+        Err(_) => redact_body_text(text),
     }
 }
 
@@ -315,5 +360,37 @@ mod structured_tests {
         ] {
             assert!(!text.contains(secret), "{text}");
         }
+    }
+}
+
+#[cfg(test)]
+mod partial_body_tests {
+    use super::*;
+    #[test]
+    fn malformed_json_and_sse_do_not_expose_short_secrets() {
+        for body in [
+            "{\"password\":\"tiny-secret",
+            "api_key=tiny-secret",
+            "Cookie: a=tiny-secret; b=also-secret",
+            "data: {\"api_key\":\"tiny-secret\"}\n\n",
+        ] {
+            let result = redact_body_text(body);
+            assert!(!result.contains("tiny-secret"), "{result}");
+            assert!(!result.contains("also-secret"), "{result}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod cookie_body_tests {
+    use super::*;
+    #[test]
+    fn cookie_representations_keep_structure_without_values() {
+        assert!(!redact_pairs("Cookie=short-cookie").contains("short-cookie"));
+        assert!(!redact_body_text("data: Cookie=short-cookie\n\n").contains("short-cookie"));
+        let mut value = serde_json::json!({"cookies":[{"name":"sid","value":"short-cookie"}]});
+        redact_json_value(&mut value);
+        assert!(value["cookies"].is_array());
+        assert_eq!(value["cookies"][0]["value"], MASK);
     }
 }

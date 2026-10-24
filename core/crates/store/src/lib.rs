@@ -806,4 +806,4 @@ pub use import::{from_har, HAR_IMPORT_LIMIT};
 
 mod export;
 mod models;
-pub use export::{export, Artifact, EXPORT_KINDS};
+pub use export::{export, export_weight, Artifact, EXPORT_KINDS};

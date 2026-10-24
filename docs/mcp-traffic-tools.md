@@ -37,3 +37,8 @@ removed helper functions; restored them. A redaction regression then failed:
 The emitted summary contained `api.test/*?%61pi_key=short-query` (fixture data).
 Summary redaction was corrected; the final full run passes. No performance
 re-benchmark or new desktop UI changes for this task.
+
+Final body-redaction tests also cover truncated JSON, SSE JSON payloads,
+plaintext Cookie headers and cookie-array values. Export loading budgets include
+metadata, and decompression is bounded before creating any artifact. No further
+proto changes.

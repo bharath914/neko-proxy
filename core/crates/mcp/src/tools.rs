@@ -388,7 +388,7 @@ fn body_json(rec: &FlowRecord, request: bool, max_chars: usize) -> Value {
                 .collect::<Vec<_>>()
                 .join("&"),
         ),
-        decode::Kind::Text | decode::Kind::Html => redact::redact_text(&view.text),
+        decode::Kind::Text | decode::Kind::Html => redact::redact_body_text(&view.text),
         decode::Kind::Image => String::new(),
         _ => String::new(),
     };
@@ -753,7 +753,7 @@ fn list_breakpoints(ctx: &ApiContext) -> Out {
             } else if ct.contains("json") {
                 json!(clip(&redact::redact_json_text(&body_text), 8000))
             } else if std::str::from_utf8(&p.held.body).is_ok() {
-                json!(clip(&redact::redact_text(&body_text), 8000))
+                json!(clip(&redact::redact_body_text(&body_text), 8000))
             } else {
                 json!(format!("binary, {} bytes", p.held.body.len()))
             };
@@ -1148,7 +1148,7 @@ async fn artifact(ctx: &ApiContext, a: &Value, save: bool, tool_name: &str) -> O
         store.flush();let ids=if selected.is_empty(){store.ids(&query,10001).map_err(|e|e.to_string())?}else{selected};
         if ids.len()>10000{return Err("select at most 10000 flows".into());}
         let mut records=Vec::with_capacity(ids.len());let mut total=0;
-        for id in ids{if let Some(r)=store.get(id).map_err(|e|e.to_string())?{total+=r.req_body.len()+r.res_body.len();if total>32*1024*1024{return Err("source bodies exceed 32 MiB".into());}records.push(r);}}
+        for id in ids{if let Some(r)=store.get(id).map_err(|e|e.to_string())?{total+=store::export_weight(&r);if total>32*1024*1024{return Err("source data exceeds 32 MiB".into());}records.push(r);}}
         let artifact=store::export(&kind,&records,&version)?;
         if save {
             use std::{io::Write,os::unix::fs::OpenOptionsExt};

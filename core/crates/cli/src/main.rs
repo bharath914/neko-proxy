@@ -377,10 +377,10 @@ fn export(a: ExportArgs) -> Result<()> {
     let mut recs = Vec::with_capacity(ids.len());
     for id in ids {
         if let Some(r) = store.get(id)? {
-            total += r.req_body.len() + r.res_body.len();
+            total += store::export_weight(&r);
             anyhow::ensure!(
                 total <= 32 * 1024 * 1024,
-                "export source bodies exceed 32 MiB"
+                "export source data exceeds 32 MiB"
             );
             recs.push(r);
         }

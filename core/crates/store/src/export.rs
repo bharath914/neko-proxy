@@ -17,6 +17,7 @@ pub const EXPORT_KINDS: &[&str] = &[
     "typescript",
     "dio",
 ];
+#[derive(Debug)]
 pub struct Artifact {
     pub data: Vec<u8>,
     pub extension: &'static str,
@@ -67,6 +68,37 @@ fn schema(v: &Value, depth: usize) -> Value {
         _ => json!({"type":"string"}),
     }
 }
+/// Conservative source weight, including metadata allocations, for export loaders.
+pub fn export_weight(record: &FlowRecord) -> usize {
+    let strings = [
+        &record.scheme,
+        &record.host,
+        &record.method,
+        &record.path,
+        &record.query,
+        &record.app,
+        &record.error,
+        &record.protocol,
+        &record.client_ip,
+    ];
+    let metadata = strings.iter().map(|s| s.len()).sum::<usize>()
+        + record
+            .req_headers
+            .iter()
+            .chain(&record.res_headers)
+            .map(|(k, v)| k.len() + v.len() + 64)
+            .sum::<usize>()
+        + record
+            .sdk
+            .as_ref()
+            .map(|sdk| crate::sdk_to_json(sdk).len())
+            .unwrap_or(0)
+        + 1024;
+    metadata
+        .saturating_add(record.req_body.len())
+        .saturating_add(record.res_body.len())
+}
+
 pub fn export(kind: &str, records: &[Arc<FlowRecord>], version: &str) -> Result<Artifact, String> {
     let kind = if kind.is_empty() { "har" } else { kind };
     if !EXPORT_KINDS.contains(&kind) {
@@ -77,15 +109,49 @@ pub fn export(kind: &str, records: &[Arc<FlowRecord>], version: &str) -> Result<
     }
     let total = records
         .iter()
-        .try_fold(0usize, |sum, r| {
-            sum.checked_add(r.req_body.len())?
-                .checked_add(r.res_body.len())
-        })
+        .try_fold(0usize, |sum, r| sum.checked_add(export_weight(r)))
         .ok_or("export size overflow")?;
     if total > LIMIT / 2 {
-        return Err("export source bodies exceed 32 MiB; select fewer flows".into());
+        return Err("export source data exceeds 32 MiB; select fewer flows".into());
     }
-    let mut har = crate::to_har(records, true, version);
+    // Bound decoded aggregate size before constructing HAR or generated output.
+    // A small compressed wire capture can otherwise expand once per flow.
+    let metadata = total.saturating_sub(
+        records
+            .iter()
+            .map(|r| r.req_body.len() + r.res_body.len())
+            .sum::<usize>(),
+    );
+    let mut remaining = (LIMIT / 2).saturating_sub(metadata);
+    let mut prepared = Vec::with_capacity(records.len());
+    for record in records {
+        let mut record = (**record).clone();
+        for (body, headers) in [
+            (&mut record.req_body, &mut record.req_headers),
+            (&mut record.res_body, &mut record.res_headers),
+        ] {
+            let encoding = headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("content-encoding"))
+                .map(|(_, v)| v.as_str())
+                .unwrap_or("");
+            if !body.is_empty() {
+                let decoded =
+                    decode::decode_content(encoding, body, remaining.min(8 * 1024 * 1024));
+                if decoded.problem.is_some()
+                    || decoded.bytes.len() > 8 * 1024 * 1024
+                    || decoded.bytes.len() > remaining
+                {
+                    return Err("export requires valid bodies within 8 MiB per direction and 32 MiB decoded aggregate".into());
+                }
+                remaining -= decoded.bytes.len();
+                *body = decoded.bytes.into();
+            }
+            headers.retain(|(name, _)| !name.eq_ignore_ascii_case("content-encoding"));
+        }
+        prepared.push(Arc::new(record));
+    }
+    let mut har = crate::to_har(&prepared, true, version);
     // Redact token-shaped URL/path/header values too, not only query/body secrets.
     har = serde_json::from_str(&decode::redact::redact_json_text(&har.to_string()))
         .map_err(|e| e.to_string())?;
@@ -296,5 +362,53 @@ mod tests {
                 std::fs::write(format!("{dir}/{kind}.{}", a.extension), a.data).unwrap();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod compressed_budget_tests {
+    use super::*;
+    #[test]
+    fn compressed_bodies_are_bounded_before_har_construction() {
+        let payload = vec![b'x'; 8 * 1024 * 1024 + 1];
+        let compressed = zstd::stream::encode_all(payload.as_slice(), 1).unwrap();
+        let record = Arc::new(FlowRecord {
+            scheme: "http".into(),
+            host: "test".into(),
+            port: 80,
+            path: "/".into(),
+            method: "GET".into(),
+            res_headers: vec![("content-encoding".into(), "zstd".into())],
+            res_body: compressed.into(),
+            ..Default::default()
+        });
+        assert!(export("har", &[record], "test")
+            .unwrap_err()
+            .contains("8 MiB"));
+    }
+}
+
+#[cfg(test)]
+mod aggregate_budget_tests {
+    use super::*;
+    #[test]
+    fn metadata_and_decoded_aggregate_are_bounded() {
+        let metadata = Arc::new(FlowRecord {
+            res_headers: vec![("x-padding".into(), "x".repeat(512 * 1024))],
+            ..Default::default()
+        });
+        assert!(export("har", &vec![metadata; 70], "test")
+            .unwrap_err()
+            .contains("32 MiB"));
+        let compressed =
+            zstd::stream::encode_all(vec![b'x'; 5 * 1024 * 1024].as_slice(), 1).unwrap();
+        let body = Arc::new(FlowRecord {
+            res_headers: vec![("content-encoding".into(), "zstd".into())],
+            res_body: compressed.into(),
+            ..Default::default()
+        });
+        assert!(export("har", &vec![body; 7], "test")
+            .unwrap_err()
+            .contains("32 MiB"));
     }
 }

@@ -50,3 +50,15 @@ References checked through read-docs:
 - https://github.com/mockoon/mockoon/tree/main/packages/commons/src/models
 - https://spec.openapis.org/oas/v3.0.3.html
 - https://pub.dev/documentation/dio/latest/dio/Dio/request.html
+
+Final safety review: the 32 MiB source limit includes headers/metadata as well
+as bodies, enforced while loading in CLI/API/MCP. Bodies are decoded before
+HAR construction, capped at 8 MiB per direction and 32 MiB aggregate including
+metadata. Invalid/unsupported compressed bodies fail export instead of being
+forwarded as opaque credentials. Malformed JSON, SSE data, plaintext credential
+headers and cookie arrays receive conservative body redaction. Cookie arrays
+retain their schema. Binary omission uses a plain-text marker.
+A regression initially failed with `test result: FAILED. 11 passed; 1 failed`
+(`binary_is_omitted_and_unknown_kind_rejected`): conservative malformed-JSON
+redaction also hid the bracketed omission marker. The marker was corrected;
+final workspace tests pass. Added tests cover decompression and metadata limits.
