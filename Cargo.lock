@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "flow"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "http",
@@ -2045,7 +2045,7 @@ dependencies = [
 
 [[package]]
 name = "neko-api"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "flow",
@@ -2067,7 +2067,7 @@ dependencies = [
 
 [[package]]
 name = "neko-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2094,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "neko-decode"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "brotli",
  "bytes",
@@ -2107,7 +2107,7 @@ dependencies = [
 
 [[package]]
 name = "neko-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "eframe",
@@ -2125,7 +2125,7 @@ dependencies = [
 
 [[package]]
 name = "neko-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "flow",
@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "neko-net"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "bytes",
@@ -2170,7 +2170,7 @@ dependencies = [
 
 [[package]]
 name = "neko-proto"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "prost",
  "prost-build",
@@ -2179,7 +2179,7 @@ dependencies = [
 
 [[package]]
 name = "neko-rules"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "flow",
@@ -2193,7 +2193,7 @@ dependencies = [
 
 [[package]]
 name = "neko-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "blake3",
@@ -2211,7 +2211,7 @@ dependencies = [
 
 [[package]]
 name = "neko-tls"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "rcgen",
@@ -3363,7 +3363,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "sdk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "blake3",
