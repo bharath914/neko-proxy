@@ -10,7 +10,7 @@
 #
 # Signing, in order of preference:
 #   SIGN_IDENTITY="Developer ID Application: Name (TEAMID)"   sign with your certificate and the hardened runtime
-#   (unset)                                                    ad-hoc signature; first launch needs right-click > Open
+#   (unset)                                                    ad-hoc signature; first launch needs System Settings > Privacy & Security > Open Anyway
 # Notarization (needs SIGN_IDENTITY): NOTARY_PROFILE=<name from `xcrun notarytool store-credentials`>
 #
 # Env: NEKO_SKIP_BUILD=1 reuses the existing release builds. UNIVERSAL=1 builds a fat app and nekod.
@@ -106,5 +106,5 @@ fi
 (cd "$OUT" && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
 echo
 echo "built $DMG"
-[ -z "${SIGN_IDENTITY:-}" ] && echo "ad-hoc signed: on another Mac, right-click Neko.app > Open the first time (or run: xattr -dr com.apple.quarantine /Applications/Neko.app)"
+[ -z "${SIGN_IDENTITY:-}" ] && echo "ad-hoc signed: on another Mac, the first launch needs System Settings > Privacy & Security > Open Anyway (or run: xattr -dr com.apple.quarantine /Applications/Neko.app)"
 exit 0
