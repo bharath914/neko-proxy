@@ -2137,6 +2137,7 @@ dependencies = [
  "neko-decode",
  "neko-rules",
  "neko-store",
+ "sdk",
  "serde_json",
  "tempfile",
  "tokio",

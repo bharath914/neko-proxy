@@ -257,7 +257,7 @@ async fn rpc(state: &State, msg: Value) -> Option<Value> {
                     return Some(rpc_error(id, -32602, &format!("unknown tool {name}")))
                 }
                 Err(tools::ToolError::Failed(msg)) => {
-                    json!({"content":[{"type":"text","text":msg}],"isError":true})
+                    json!({"content":[{"type":"text","text":decode::redact::redact_text(&msg)}],"isError":true})
                 }
             }
         }
