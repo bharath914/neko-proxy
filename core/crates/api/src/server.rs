@@ -425,6 +425,25 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             }
         }
         Req::Export(r) => export(ctx, id, r).await,
+        Req::ImportHar(r) => {
+            let result = tokio::task::spawn_blocking(move || -> Result<Vec<u64>, String> {
+                let records = store::from_har(&r.data, &ctx.ids)?;
+                let ids = records.iter().map(|r| r.id).collect();
+                for chunk in records.chunks(32) {
+                    for record in chunk {
+                        ctx.store.enqueue(record.clone());
+                        flow::FlowSink::publish(&ctx.hub, flow::FlowEvent::Finished(record.clone()));
+                    }
+                    ctx.store.flush();
+                }
+                Ok(ids)
+            }).await;
+            match result {
+                Ok(Ok(ids)) => pb::ServerMessage { id, body: Some(Res::ImportedHar(pb::ImportHarResponse { count: ids.len() as u32, ids })) },
+                Ok(Err(e)) => error(id, "import_har", e),
+                Err(e) => error(id, "internal", e.to_string()),
+            }
+        },
         Req::Clear(_) => {
             let ctx2 = ctx.clone();
             match tokio::task::spawn_blocking(move || ctx2.store.clear()).await {

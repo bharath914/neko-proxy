@@ -1481,6 +1481,7 @@ impl Backend for DemoBackend {
                 key_storage: "keyring".into(),
                 spki_sha256: "qYb1x1vQ0n6y1p2x0cV3m3o1f9wq3b3m1k1F5pQ0v9k=".into(),
             }),
+            Req::ImportHar(_) => Res::Error(pb::ErrorResponse { code: "demo".into(), message: "Import requires a running core".into() }),
             Req::Export(_) => Res::Export(pb::ExportResponse {
                 data: b"{\"log\":{\"version\":\"1.2\",\"entries\":[]}}".to_vec(),
                 filename: "neko-demo.har".into(),

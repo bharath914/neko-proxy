@@ -55,6 +55,7 @@ message ClientMessage {
     FetchBodyRequest fetch_body = 41;
     RegenerateSdkCertRequest regenerate_sdk_cert = 42;
     SdkSetSettingsRequest sdk_set_settings = 43;
+    ImportHarRequest import_har = 44;
   }
 }
 
@@ -80,6 +81,7 @@ message ServerMessage {
     SdkStatus sdk_status = 25;
     DevicesSnapshot devices = 26;
     OkResponse ok = 27;
+    ImportHarResponse imported_har = 28;
     FlowBatch batch = 30;
     Resync resync = 31;
     PauseNotice pause_notice = 32;
@@ -887,3 +889,6 @@ message FetchBodyRequest {
   uint64 flow_id = 1;
   bool response = 2;  // false = request body
 }
+
+message ImportHarRequest { bytes data = 1; }
+message ImportHarResponse { repeated uint64 ids = 1; uint32 count = 2; }

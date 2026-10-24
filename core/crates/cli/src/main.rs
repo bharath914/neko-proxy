@@ -25,6 +25,8 @@ enum Command {
     Flows(FlowsArgs),
     /// Export captured flows.
     Export(ExportArgs),
+    /// Import a HAR file into the running core.
+    ImportHar { file: PathBuf, #[arg(long)] socket: Option<PathBuf> },
     /// Show how to connect a local AI client (Claude Code) to the MCP server.
     Mcp(McpArgs),
     /// Turn SDK connections on or off, and see their state (needs a running core).
@@ -196,6 +198,16 @@ fn main() -> Result<()> {
         }
         Command::Flows(a) => flows(a),
         Command::Export(a) => export(a),
+        Command::ImportHar { file, socket } => tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async {
+            use std::io::Read;
+            let mut data = Vec::new();
+            std::fs::File::open(file)?.take(store::HAR_IMPORT_LIMIT as u64 + 1).read_to_end(&mut data)?;
+            anyhow::ensure!(data.len() <= store::HAR_IMPORT_LIMIT, "HAR exceeds 64 MiB");
+            let mut c = client::Client::connect(&socket.unwrap_or_else(paths::socket_path)).await?;
+            let result = c.call(api::pb::client_message::Body::ImportHar(api::pb::ImportHarRequest { data })).await?;
+            if let api::pb::server_message::Body::ImportedHar(r) = result { println!("Imported {} flows", r.count); }
+            Ok(())
+        }),
         Command::Ca { action } => ca(action),
         Command::Sdk { action } => tokio::runtime::Builder::new_current_thread()
             .enable_all()

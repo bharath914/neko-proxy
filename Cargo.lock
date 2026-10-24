@@ -2199,6 +2199,7 @@ dependencies = [
  "blake3",
  "bytes",
  "flow",
+ "http",
  "neko-decode",
  "rusqlite",
  "serde_json",

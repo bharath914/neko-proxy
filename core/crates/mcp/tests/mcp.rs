@@ -83,6 +83,7 @@ async fn setup(writes: rules::McpWrites) -> Env {
     let rules = Arc::new(rules::RuleSet::in_memory());
     rules.set_mcp_writes(writes).unwrap();
     let ctx = Arc::new(ApiContext {
+        ids: Arc::new(flow::IdGen::starting_after(1000)),
         store,
         hub: Hub::new(),
         control: Arc::new(FakeControl(AtomicBool::new(true))),

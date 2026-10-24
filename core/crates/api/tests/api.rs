@@ -140,6 +140,7 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
         )
     });
     let ctx = Arc::new(ApiContext {
+        ids: Arc::new(flow::IdGen::starting_after(1000)),
         store,
         hub,
         control: Arc::new(FakeControl {
@@ -1027,4 +1028,18 @@ async fn stored_sse_events_are_decoded_over_api() {
     assert_eq!(body.events[0].data, "first\nsecond");
     assert_eq!(body.events[0].id, "2");
     assert_eq!(body.events[0].event, "update");
+}
+
+#[tokio::test]
+async fn har_import_get_and_export_roundtrip() {
+    let (mut c, ctx, _d) = setup().await;
+    let input = store::to_har(&[record(12, "import.example.com", 200, "{\"ok\":true}")], false, "test");
+    let Res::ImportedHar(imported) = c.call(Req::ImportHar(pb::ImportHarRequest { data: serde_json::to_vec(&input).unwrap() })).await else { panic!() };
+    assert_eq!(imported.count, 1);
+    let id = imported.ids[0];
+    assert!(id > 1000);
+    assert_eq!(ctx.store.get(id).unwrap().unwrap().host, "import.example.com");
+    let Res::Export(export) = c.call(Req::Export(pb::ExportRequest { ids: vec![id], kind: "har".into(), redact: true, ..Default::default() })).await else { panic!() };
+    let har: serde_json::Value = serde_json::from_slice(&export.data).unwrap();
+    assert_eq!(har["log"]["entries"][0]["response"]["content"]["text"], "{\"ok\":true}");
 }

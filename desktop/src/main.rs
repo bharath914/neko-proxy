@@ -57,6 +57,14 @@ fn parse_args() -> Args {
 }
 
 fn main() -> eframe::Result {
+    // CLI verbs are implemented by the core executable, including all parsing.
+    if std::env::args().nth(1).as_deref() == Some("import-har") {
+        let status = platform::find_nekod().and_then(|path| {
+            std::process::Command::new(path).args(std::env::args_os().skip(1)).status().ok()
+        });
+        if status.is_none() { eprintln!("Could not launch nekod; build or install neko-cli first"); }
+        std::process::exit(status.and_then(|s| s.code()).unwrap_or(1));
+    }
     let args = parse_args();
     if args.help {
         println!(

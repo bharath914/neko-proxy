@@ -186,7 +186,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     let mut chain = InterceptorChain::empty();
     chain.push_request(rules.clone());
     chain.push_response(rules.clone());
-    let proxy = net::Proxy::new(cfg, ca.clone(), sink, ids, chain);
+    let proxy = net::Proxy::new(cfg, ca.clone(), sink, ids.clone(), chain);
     proxy.set_connect_policy(rules.clone());
     proxy.set_gate(rules.clone());
     proxy.set_recording(!args.no_record);
@@ -220,6 +220,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     }
 
     let ctx = Arc::new(api::ApiContext {
+        ids: ids.clone(),
         store: store.clone(),
         hub,
         control: Arc::new(ProxyControl(proxy.clone())),
