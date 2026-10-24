@@ -164,12 +164,12 @@ pub fn system_plan(family: Family, ca_path: &str) -> TrustPlan {
     let ca = sh_quote(ca_path);
     let (display, run) = match family {
         Family::Debian => (
-            format!("sudo cp {ca} /usr/local/share/ca-certificates/proxy-ca.crt && sudo update-ca-certificates"),
-            format!("cp {ca} /usr/local/share/ca-certificates/proxy-ca.crt && update-ca-certificates"),
+            format!("sudo cp {ca} /usr/local/share/ca-certificates/neko-ca.crt && sudo update-ca-certificates"),
+            format!("cp {ca} /usr/local/share/ca-certificates/neko-ca.crt && update-ca-certificates"),
         ),
         Family::Fedora => (
-            format!("sudo cp {ca} /etc/pki/ca-trust/source/anchors/proxy-ca.pem && sudo update-ca-trust"),
-            format!("cp {ca} /etc/pki/ca-trust/source/anchors/proxy-ca.pem && update-ca-trust"),
+            format!("sudo cp {ca} /etc/pki/ca-trust/source/anchors/neko-ca.pem && sudo update-ca-trust"),
+            format!("cp {ca} /etc/pki/ca-trust/source/anchors/neko-ca.pem && update-ca-trust"),
         ),
         Family::Arch => (
             format!("sudo trust anchor --store {ca}"),
@@ -199,7 +199,7 @@ pub fn nss_plan(ca_path: &str) -> TrustPlan {
     TrustPlan {
         title: "Chrome, Chromium and Edge",
         detail: "These browsers read your personal NSS database. No administrator rights needed.",
-        display: format!("certutil -d {db} -A -t \"C,,\" -n proxy-ca -i {ca}"),
+        display: format!("certutil -d {db} -A -t \"C,,\" -n neko-ca -i {ca}"),
         run: None,
     }
 }
@@ -250,7 +250,7 @@ pub fn installed_in_nss() -> Option<bool> {
         .stderr(Stdio::null())
         .output()
         .ok()?;
-    Some(String::from_utf8_lossy(&out.stdout).contains("proxy-ca"))
+    Some(String::from_utf8_lossy(&out.stdout).contains("neko-ca"))
 }
 
 #[derive(Debug, Clone)]
@@ -351,7 +351,7 @@ pub fn launch(browser: &Browser, o: &LaunchOptions) -> Result<String, String> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    let dir = std::env::temp_dir().join(format!("proxy-browser-{stamp}"));
+    let dir = std::env::temp_dir().join(format!("neko-browser-{stamp}"));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut cmd = Command::new(&browser.exe);
     let mut note = String::new();
@@ -379,7 +379,7 @@ pub fn launch(browser: &Browser, o: &LaunchOptions) -> Result<String, String> {
             if init.map(|s| s.success()).unwrap_or(false) {
                 let _ = Command::new(&certutil)
                     .args([
-                        "-A", "-d", &db, "-t", "CT,,", "-n", "proxy-ca", "-i", o.ca_path,
+                        "-A", "-d", &db, "-t", "CT,,", "-n", "neko-ca", "-i", o.ca_path,
                     ])
                     .stderr(Stdio::null())
                     .status();
@@ -438,34 +438,34 @@ pub fn open_path(path: &str) {
 
 // ------------------------------------------------------------ core location
 
-/// Find `proxyd`: explicit env, next to this executable, or the workspace
+/// Find `nekod`: explicit env, next to this executable, or the workspace
 /// build output when running from a checkout.
-pub fn find_proxyd() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("PROXYD_PATH").map(PathBuf::from) {
+pub fn find_nekod() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("NEKOD_PATH").map(PathBuf::from) {
         if p.is_file() {
             return Some(p);
         }
     }
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    let mut candidates = vec![dir.join("proxyd")];
+    let mut candidates = vec![dir.join("nekod")];
     for up in dir.ancestors().take(5) {
-        candidates.push(up.join("target/release/proxyd"));
-        candidates.push(up.join("target/debug/proxyd"));
+        candidates.push(up.join("target/release/nekod"));
+        candidates.push(up.join("target/debug/nekod"));
     }
     candidates
         .into_iter()
         .find(|p| p.is_file())
-        .or_else(|| which("proxyd"))
+        .or_else(|| which("nekod"))
 }
 
 pub fn default_socket() -> PathBuf {
-    if let Some(p) = std::env::var_os("PROXY_SOCKET") {
+    if let Some(p) = std::env::var_os("NEKO_SOCKET") {
         return PathBuf::from(p);
     }
     match std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) {
-        Some(d) if d.is_absolute() => d.join("proxy").join("api.sock"),
-        _ => PathBuf::from(format!("/tmp/proxy-{}/api.sock", unsafe { libc::getuid() })),
+        Some(d) if d.is_absolute() => d.join("neko").join("api.sock"),
+        _ => PathBuf::from(format!("/tmp/neko-{}/api.sock", unsafe { libc::getuid() })),
     }
 }
 
@@ -497,7 +497,7 @@ fn prefs_path() -> PathBuf {
         .unwrap_or_else(|| {
             PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config")
         });
-    base.join("proxy").join("desktop.conf")
+    base.join("neko").join("desktop.conf")
 }
 
 impl Prefs {
@@ -555,7 +555,7 @@ mod tests {
 
     #[test]
     fn plans_use_the_documented_commands() {
-        let p = system_plan(Family::Fedora, "/home/u/.local/share/proxy/ca.pem");
+        let p = system_plan(Family::Fedora, "/home/u/.local/share/neko/ca.pem");
         assert!(p.display.contains("update-ca-trust"));
         assert!(p.display.starts_with("sudo cp"));
         assert!(!p.run.unwrap().contains("sudo"));

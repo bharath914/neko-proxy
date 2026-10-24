@@ -97,7 +97,7 @@ Ktor can run on several engines. Support the OkHttp and CIO engines first, and t
 
 ## Gradle plugin (gradle-plugin module)
 
-Plugin id is a placeholder (`dev.proxy.inspector`).
+Plugin id is a placeholder (`dev.nekoproxy.inspector`).
 
 What it does:
 1. Adds dependencies by variant: the real SDK for enabled build types (default: debuggable ones, `debug`), the `noop` artifact for the rest. Extension: `inspector { enabledBuildTypes = setOf("debug", "staging") }`.

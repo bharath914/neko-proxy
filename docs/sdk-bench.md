@@ -1,7 +1,7 @@
 # SDK benchmarks
 
 Run: `cargo build --release -p sdk --bins` then `./gradlew :okhttp:bench -PsdkTestCore=target/release/sdk-test-core` in `sdk/android`.
-Harness: `sdk/android/okhttp/src/test/kotlin/dev/proxy/inspector/Bench.kt`, the local server `sdk/test-server/server.py`, and `sdk-test-core` as the desktop.
+Harness: `sdk/android/okhttp/src/test/kotlin/dev/nekoproxy/inspector/Bench.kt`, the local server `sdk/test-server/server.py`, and `sdk-test-core` as the desktop.
 
 **What this is, and is not.** These are **JVM numbers from the Linux development machine** (OkHttp 5.5.0, JDK 21, loopback, a release build of the Rust ingest server), run while other builds were also using the machine.
 They measure the SDK's work on the calling thread and its CPU and memory cost relative to a baseline. They are not device numbers: no Android device or timing-faithful emulator was available (see `docs/sdk/docs/e2e.md`), and iOS was not built. CPU is process CPU time divided by wall time (all cores, so 100% is one core). Heap delta is noisy because it is read after a `System.gc()` before and none after.

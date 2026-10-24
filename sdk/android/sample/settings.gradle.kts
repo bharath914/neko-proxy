@@ -5,7 +5,7 @@ val localRepo = file("../build/local-repo")
 pluginManagement {
     plugins {
         val sdkVersion = providers.gradleProperty("sdkVersion").getOrElse("0.1.0")
-        id("dev.proxy.inspector") version sdkVersion
+        id("dev.nekoproxy.inspector") version sdkVersion
     }
     repositories {
         maven(url = file("../build/local-repo"))

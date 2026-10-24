@@ -92,9 +92,9 @@ impl CaStore {
         let mut dn = DistinguishedName::new();
         dn.push(
             DnType::CommonName,
-            format!("Proxy Local CA ({})", host_label()),
+            format!("Neko Local CA ({})", host_label()),
         );
-        dn.push(DnType::OrganizationName, "Proxy");
+        dn.push(DnType::OrganizationName, "Neko");
         params.distinguished_name = dn;
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         params.key_usages = vec![
@@ -332,7 +332,7 @@ mod tests {
         let b = CaStore::load_or_create(dir.path(), KeyStorage::File).unwrap();
         assert_eq!(a.sha256(), b.sha256());
         assert_eq!(a.key_storage(), KeyStorageKind::File);
-        assert!(a.subject().starts_with("Proxy Local CA"));
+        assert!(a.subject().starts_with("Neko Local CA"));
         assert!(a.not_after().starts_with("20"));
         assert_eq!(a.spki_sha256().len(), 44);
         // Leaves minted by the reloaded CA chain to the same root.

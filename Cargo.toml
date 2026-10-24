@@ -71,15 +71,15 @@ sha2 = "0.10"
 time = { version = "0.3", features = ["formatting"] }
 
 flow = { path = "core/crates/flow" }
-tls = { path = "core/crates/tls", package = "proxy-tls" }
-net = { path = "core/crates/net", package = "proxy-net" }
-store = { path = "core/crates/store", package = "proxy-store" }
-decode = { path = "core/crates/decode", package = "proxy-decode" }
-rules = { path = "core/crates/rules", package = "proxy-rules" }
-api = { path = "core/crates/api", package = "proxy-api" }
-mcp = { path = "core/crates/mcp", package = "proxy-mcp" }
+tls = { path = "core/crates/tls", package = "neko-tls" }
+net = { path = "core/crates/net", package = "neko-net" }
+store = { path = "core/crates/store", package = "neko-store" }
+decode = { path = "core/crates/decode", package = "neko-decode" }
+rules = { path = "core/crates/rules", package = "neko-rules" }
+api = { path = "core/crates/api", package = "neko-api" }
+mcp = { path = "core/crates/mcp", package = "neko-mcp" }
 sdk = { path = "core/crates/sdk" }
-proto = { path = "core/crates/proto", package = "proxy-proto" }
+proto = { path = "core/crates/proto", package = "neko-proto" }
 
 [profile.release]
 opt-level = 3

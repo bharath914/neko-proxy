@@ -1,5 +1,5 @@
 //! Opt-in scripting for demos and visual checks. Enabled only when
-//! `PROXY_AUTOMATION=<dir>` is set. The app watches `<dir>/cmd`; each line is
+//! `NEKO_AUTOMATION=<dir>` is set. The app watches `<dir>/cmd`; each line is
 //! one command, and `shot <name>` writes `<dir>/<name>.png` of the window.
 //!
 //!     select last | select <id> | tab overview|request|response|timing
@@ -19,7 +19,7 @@ pub struct Automation {
 
 impl Automation {
     pub fn from_env() -> Option<Automation> {
-        let dir = PathBuf::from(std::env::var_os("PROXY_AUTOMATION")?);
+        let dir = PathBuf::from(std::env::var_os("NEKO_AUTOMATION")?);
         std::fs::create_dir_all(&dir).ok()?;
         Some(Automation { dir, shot: None })
     }
@@ -53,12 +53,12 @@ impl App {
                         }
                     }
                     ["tab", t] => {
-                        self.tab = match *t {
+                        self.set_tab(match *t {
                             "request" => Tab::Request,
                             "response" => Tab::Response,
                             "timing" => Tab::Timing,
                             _ => Tab::Overview,
-                        }
+                        })
                     }
                     ["section", s] => {
                         self.section = if *s == "settings" { Section::Settings } else { Section::Inspector }

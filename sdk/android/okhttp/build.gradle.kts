@@ -37,7 +37,7 @@ publishing {
 tasks.register<JavaExec>("bench") {
     group = "verification"
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("dev.proxy.inspector.BenchKt")
+    mainClass.set("dev.nekoproxy.inspector.BenchKt")
     systemProperty("repo.root", rootProject.layout.projectDirectory.dir("../..").asFile.absolutePath)
     systemProperty("bench.out", rootProject.layout.buildDirectory.file("sdk-bench-android.md").get().asFile.absolutePath)
     val defaultCore = rootProject.layout.projectDirectory.file("../../target/debug/sdk-test-core").asFile.absolutePath
@@ -48,6 +48,6 @@ tasks.register<JavaExec>("bench") {
 tasks.register<JavaExec>("e2e") {
     group = "verification"
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("dev.proxy.inspector.E2eKt")
+    mainClass.set("dev.nekoproxy.inspector.E2eKt")
     args = (providers.gradleProperty("args").orNull ?: "8897 http://127.0.0.1:18080/ 8899").split(" ")
 }

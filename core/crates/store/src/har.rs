@@ -256,7 +256,7 @@ pub fn to_har(records: &[std::sync::Arc<FlowRecord>], redact_on: bool, version: 
     json!({
         "log": {
             "version": "1.2",
-            "creator": {"name": "Proxy", "version": version},
+            "creator": {"name": "Neko Proxy", "version": version},
             "entries": entries,
         }
     })

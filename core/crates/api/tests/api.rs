@@ -2,8 +2,8 @@ use bytes::Bytes;
 use flow::{FlowEvent, FlowRecord, FlowSink, FlowState, Timings};
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as _;
-use proxy_api::pb::{self, client_message::Body as Req, server_message::Body as Res};
-use proxy_api::{ApiContext, Control, CoreInfo, Hub};
+use neko_api::pb::{self, client_message::Body as Req, server_message::Body as Res};
+use neko_api::{ApiContext, Control, CoreInfo, Hub};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -31,7 +31,7 @@ impl Control for FakeControl {
     }
     fn replay(
         &self,
-        call: proxy_api::ReplayCall,
+        call: neko_api::ReplayCall,
     ) -> flow::BoxFuture<'_, Result<(u64, u16), String>> {
         Box::pin(async move {
             if call.url.contains("fail") {
@@ -146,7 +146,7 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
             recording: AtomicBool::new(true),
         }),
         rules: Arc::new(rules::RuleSet::in_memory()),
-        approvals: Arc::new(proxy_api::Approvals::default()),
+        approvals: Arc::new(neko_api::Approvals::default()),
         mcp: None,
         sdk,
         info: CoreInfo {
@@ -156,7 +156,7 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
             insecure_upstream: false,
             ca_path: "/x/ca.pem".into(),
             ca_sha256: "abc".into(),
-            ca_subject: "Proxy Local CA".into(),
+            ca_subject: "Neko Local CA".into(),
             ca_not_after: "2036-01-01T00:00:00Z".into(),
             ca_pem: "PEM".into(),
             ca_spki_sha256: "spki".into(),
@@ -168,7 +168,7 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
     let c2 = ctx.clone();
     let s2 = sock.clone();
     tokio::spawn(async move {
-        proxy_api::serve(c2, &s2, std::future::pending())
+        neko_api::serve(c2, &s2, std::future::pending())
             .await
             .unwrap();
     });
@@ -783,7 +783,7 @@ async fn approvals_are_pushed_and_decided() {
         allow: true,
     }))
     .await;
-    assert_eq!(asker.await.unwrap(), proxy_api::Decision::Allowed);
+    assert_eq!(asker.await.unwrap(), neko_api::Decision::Allowed);
 }
 
 #[tokio::test]
@@ -1012,4 +1012,19 @@ async fn sdk_settings_round_trip_and_show_in_the_checks() {
         Res::SdkStatus(s) => assert_eq!(s.health, "off"),
         other => panic!("{other:?}"),
     }
+}
+
+#[tokio::test]
+async fn stored_sse_events_are_decoded_over_api() {
+    let (mut c, ctx, _d) = setup().await;
+    let mut rec = (*record(77, "events.example.com", 200, "id: 2\nevent: update\ndata: first\ndata: second\n\ndata: incomplete")).clone();
+    rec.res_headers = vec![("content-type".into(), "text/event-stream; charset=utf-8".into())];
+    ctx.store.enqueue(Arc::new(rec));
+    ctx.store.flush();
+    let Res::Flow(d) = c.call(Req::GetFlow(pb::GetFlowRequest { id: 77, parts: 4 })).await else { panic!() };
+    let body = d.response_body.unwrap();
+    assert_eq!(body.events.len(), 1);
+    assert_eq!(body.events[0].data, "first\nsecond");
+    assert_eq!(body.events[0].id, "2");
+    assert_eq!(body.events[0].event, "update");
 }

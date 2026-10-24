@@ -27,8 +27,8 @@ Release builds get a no-op artifact: the dependency can ship in the manifest and
 ## Core changes it needs
 
 - Pairing payload `{ host, port, token, ca_sha256 }` from `pair.begin()` (already in the design), plus LAN binding while pairing.
-- The cert page (`http://proxy.local`) already serves the CA as PEM, DER and an Apple profile, and answers `/status.json` and an HTTPS `/trust-check`. The SDK can reuse both for fetching the CA and confirming trust.
-- A way to attach tags to flows. Open: a request header the core strips (`X-Proxy-Tag`), or a small side channel on the client API.
+- The cert page (`http://neko.local`) already serves the CA as PEM, DER and an Apple profile, and answers `/status.json` and an HTTPS `/trust-check`. The SDK can reuse both for fetching the CA and confirming trust.
+- A way to attach tags to flows. Open: a request header the core strips (`X-Neko-Tag`), or a small side channel on the client API.
 
 ## Order
 

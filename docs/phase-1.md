@@ -4,19 +4,19 @@ Target: Linux only (x86_64 and aarch64, glibc distros such as Ubuntu 22.04+, Fed
 
 ## Ships
 
-### 1. `proxyd` core (Rust)
+### 1. `nekod` core (Rust)
 - HTTP/1.1 and HTTP/2 forward proxy with CONNECT
 - HTTPS interception with a per-install CA and cached leaf certs
 - Pinning detection: when the client rejects the minted cert (unknown_ca or bad_certificate alert), tunnel the connection from then on for that host and flag the flow as pinned
 - WebSocket upgrades pass through (frame capture is deferred)
 - Store: SQLite in WAL mode, zstd blobs for bodies, full-text index
 - API over a Unix domain socket, WebSocket + protobuf: `subscribe(filter)`, `get_flow(id, parts)`, `search(query, range)`, `capture.start/stop/status`, `export(har, ids)`, `clear`
-- CLI: `proxyd run`, `proxyd flows`, `proxyd export --har`, `proxyd ca path|print`
+- CLI: `nekod run`, `nekod flows`, `nekod export --har`, `nekod ca path|print`
 
 ### 2. Linux desktop app (native Rust, egui)
 - Inspector screen from `docs/desktop-prototype.html`: filter bar with All / Errors / Slow chips, virtualized flow table, detail pane with Overview, Request, Response and Timing tabs, JSON viewer, copy as curl, record/pause, clear
 - Settings screen: CA install helper, launch-browser-through-proxy
-- Starts and supervises `proxyd` as a child process and talks to it over the socket
+- Starts and supervises `nekod` as a child process and talks to it over the socket
 - Only the Inspector and Settings screens are built. Rules, Breakpoints and Devices in the prototype are out of scope
 
 ### 3. Packaging
@@ -33,13 +33,13 @@ Keep the seams so these slot in later without touching the data path:
 
 ## Linux specifics
 
-- Listen on `127.0.0.1:8899` by default. API socket at `$XDG_RUNTIME_DIR/proxy/api.sock`, mode 0600. Data in `$XDG_DATA_HOME/proxy` (default `~/.local/share/proxy`)
+- Listen on `127.0.0.1:8899` by default. API socket at `$XDG_RUNTIME_DIR/neko/api.sock`, mode 0600. Data in `$XDG_DATA_HOME/neko` (default `~/.local/share/neko`)
 - CA: `ca.pem` and `ca.key` in the data dir. Store the key in libsecret when available, otherwise a file with mode 0600
 - Trust helpers. Never run sudo silently: show the command, let the user confirm, then run it
-  - Debian/Ubuntu: `sudo cp ca.pem /usr/local/share/ca-certificates/proxy-ca.crt && sudo update-ca-certificates`
-  - Fedora: `sudo cp ca.pem /etc/pki/ca-trust/source/anchors/proxy-ca.pem && sudo update-ca-trust`
+  - Debian/Ubuntu: `sudo cp ca.pem /usr/local/share/ca-certificates/neko-ca.crt && sudo update-ca-certificates`
+  - Fedora: `sudo cp ca.pem /etc/pki/ca-trust/source/anchors/neko-ca.pem && sudo update-ca-trust`
   - Arch: `sudo trust anchor --store ca.pem`
-  - Chrome, Chromium, Edge (NSS): `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n proxy-ca -i ca.pem`
+  - Chrome, Chromium, Edge (NSS): `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n neko-ca -i ca.pem`
   - Firefox: per-profile NSS database, or enable `security.enterprise_roots.enabled`
 - Launch helpers
   - Chromium family: `--proxy-server=127.0.0.1:8899` with a throwaway `--user-data-dir`
@@ -70,7 +70,7 @@ proxy/
 8. `decode`: gzip, br, zstd, JSON, form bodies, image detection
 9. `api`: Unix socket WebSocket server, subscriptions with 16 ms batching, the calls listed above
 10. `cli`: `run`, `flows`, `export --har`, `ca`
-11. App shell: start and supervise `proxyd`, API client, view state
+11. App shell: start and supervise `nekod`, API client, view state
 12. Flow table (virtualized, paged), filter bar and chips, search
 13. Detail pane: tabs, JSON viewer, timing waterfall, copy as curl
 14. Settings: CA install helper, browser launch helpers, env snippet

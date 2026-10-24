@@ -1,4 +1,4 @@
-//! proxyd: the headless capture core.
+//! nekod: the headless capture core.
 
 mod client;
 mod paths;
@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Parser)]
-#[command(name = "proxyd", version, about = "HTTP/HTTPS debugging proxy core")]
+#[command(name = "nekod", version, about = "HTTP/HTTPS debugging proxy core")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -62,7 +62,7 @@ enum SdkAction {
     Disable(SocketArg),
     /// Port, certificate fingerprint, adb and discovery state, drop counters.
     Status(SocketArg),
-    /// Change a remembered setting: `proxyd sdk set lan off`, `proxyd sdk set auto-accept-local on`.
+    /// Change a remembered setting: `nekod sdk set lan off`, `nekod sdk set auto-accept-local on`.
     Set {
         #[arg(value_parser = ["lan", "auto-accept-local"])]
         key: String,
@@ -225,14 +225,14 @@ fn mcp_info(a: McpArgs) -> Result<()> {
         "  claude mcp add --transport http proxy {url} --header \"Authorization: Bearer {token}\""
     );
     println!();
-    println!("Start `proxyd run` (or the desktop app) first. Reads are always allowed;");
+    println!("Start `nekod run` (or the desktop app) first. Reads are always allowed;");
     println!("changes wait for approval in the app unless you choose otherwise in Settings.");
     Ok(())
 }
 
 fn init_tracing() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("proxyd=info,warn"));
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("nekod=info,warn"));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
@@ -244,7 +244,7 @@ fn open_store(dir: Option<PathBuf>) -> Result<store::Store> {
     let dir = dir.unwrap_or_else(paths::data_dir);
     if !dir.join("flows.db").exists() {
         bail!(
-            "no capture data in {} (run `proxyd run` first)",
+            "no capture data in {} (run `nekod run` first)",
             dir.display()
         );
     }
@@ -520,7 +520,7 @@ async fn devices_cmd(action: DevicesAction) -> Result<()> {
                 return Ok(());
             }
             if !d.enabled {
-                println!("SDK connections are off. Run `proxyd sdk enable`.");
+                println!("SDK connections are off. Run `nekod sdk enable`.");
             }
             for p in &d.pending {
                 println!(
@@ -532,7 +532,7 @@ async fn devices_cmd(action: DevicesAction) -> Result<()> {
                     &p.code[..p.code.len().min(3)],
                     p.code.get(3..).unwrap_or("")
                 );
-                println!("             Check the same code is in the app's log, then `proxyd devices allow {}`.", p.id);
+                println!("             Check the same code is in the app's log, then `nekod devices allow {}`.", p.id);
             }
             for x in &d.devices {
                 let status = match api::pb::DeviceStatus::try_from(x.status).unwrap_or_default() {

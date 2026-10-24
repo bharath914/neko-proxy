@@ -1,4 +1,4 @@
-//! In-app SDK ingest. Runs inside `proxyd`, next to the proxy listener.
+//! In-app SDK ingest. Runs inside `nekod`, next to the proxy listener.
 //!
 //! Devices connect over TLS to the ingest port, pair once with a person
 //! comparing a six-digit code, then push the calls their app makes. See

@@ -1,4 +1,4 @@
-<title>Open Proxy Design</title>
+<title>Neko Proxy Design</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -137,7 +137,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--app);outline-offset
     </div>
     <div class="wire"><span>WebSocket + protobuf · Unix socket on desktop · LAN with token for pairing</span></div>
     <div class="layer core">
-      <span class="layer-label">Rust core · proxyd (also the headless CLI)</span>
+      <span class="layer-label">Rust core · nekod (also the headless CLI)</span>
       <div class="nodes">
         <div class="node core"><b>Listener</b><small>HTTP proxy, CONNECT, SOCKS5, transparent</small></div>
         <div class="node core"><b>TLS &amp; CA</b><small>Per-install CA, cached leaf certs</small></div>
@@ -239,7 +239,7 @@ flow_fts(host, path, req_headers, res_headers, body_text)</pre>
 
 <section>
   <h2>Phone pairing, SDK and certificate setup</h2>
-  <p>The QR payload carries everything the phone needs: <code>{ host, port, token, ca_sha256 }</code>. The SDK checks the CA fingerprint it downloads against that value. For anything outside your own app, the core serves a certificate page at <code>http://proxy.local</code> with per-platform steps, PEM, DER and Apple profile downloads, and a live trust check. See <code>docs/sdk.md</code>.</p>
+  <p>The QR payload carries everything the phone needs: <code>{ host, port, token, ca_sha256 }</code>. The SDK checks the CA fingerprint it downloads against that value. For anything outside your own app, the core serves a certificate page at <code>http://neko.local</code> with per-platform steps, PEM, DER and Apple profile downloads, and a live trust check. See <code>docs/sdk.md</code>.</p>
   <div class="cols">
     <div class="card">
       <h3>Android</h3>
@@ -265,7 +265,7 @@ flow_fts(host, path, req_headers, res_headers, body_text)</pre>
 
 <section>
   <h2>MCP server</h2>
-  <p>Runs inside <code>proxyd</code>. Local only, token authenticated, read-only by default. Anything that changes state needs approval in the desktop app.</p>
+  <p>Runs inside <code>nekod</code>. Local only, token authenticated, read-only by default. Anything that changes state needs approval in the desktop app.</p>
   <div class="tablewrap">
     <table>
       <thead><tr><th>Tool</th><th>Tier</th><th>Returns or does</th></tr></thead>

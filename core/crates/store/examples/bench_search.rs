@@ -1,9 +1,9 @@
 //! Search latency over 100k stored flows.
-//! `cargo run --release -p proxy-store --example bench_search`
+//! `cargo run --release -p neko-store --example bench_search`
 
 use bytes::Bytes;
 use flow::{FlowRecord, FlowState, Timings};
-use proxy_store::{Kind, Query, Store};
+use neko_store::{Kind, Query, Store};
 use std::sync::Arc;
 use std::time::Instant;
 

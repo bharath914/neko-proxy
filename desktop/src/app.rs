@@ -135,6 +135,14 @@ pub struct App {
     pub focus_search: bool,
     pub selected: Option<u64>,
     pub tab: Tab,
+    /// Tab of the response pane (Response or Timing); `tab` belongs to the request pane.
+    pub tab_res: Tab,
+    /// Top section shows the sequence instead of the flow table.
+    pub traffic_seq: bool,
+    /// Height of the traffic section, 0 until the person drags it.
+    pub split_top: f32,
+    /// Request pane share of the bottom section width.
+    pub split_mid: f32,
     pub details: HashMap<u64, DetailEntry>,
     pub detail_fetched_state: HashMap<u64, i32>,
     pub raw_view: bool,
@@ -258,7 +266,11 @@ impl App {
             search: String::new(),
             focus_search: false,
             selected: None,
-            tab: Tab::Overview,
+            tab: Tab::Request,
+            tab_res: Tab::Response,
+            traffic_seq: false,
+            split_top: 0.0,
+            split_mid: 0.5,
             details: HashMap::new(),
             detail_fetched_state: HashMap::new(),
             raw_view: false,
@@ -619,7 +631,7 @@ impl App {
             Req::Resume(pb::ResumeRequest {
                 flow_id,
                 abort: true,
-                abort_reason: "stopped in the Proxy app".into(),
+                abort_reason: "stopped in the Neko Proxy app".into(),
                 ..Default::default()
             }),
             Pending::Resume,
@@ -749,6 +761,14 @@ impl App {
             Req::GetFlow(pb::GetFlowRequest { id, parts: 7 }),
             Pending::Detail(id),
         );
+    }
+
+    /// Request and Overview live in the request pane, Response and Timing in the response pane.
+    pub fn set_tab(&mut self, t: Tab) {
+        match t {
+            Tab::Request | Tab::Overview => self.tab = t,
+            Tab::Response | Tab::Timing => self.tab_res = t,
+        }
     }
 
     pub fn select(&mut self, id: Option<u64>) {

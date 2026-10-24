@@ -1,15 +1,15 @@
 #!/bin/sh
-# Install Proxy for the current user from a GitHub release, no root needed.
+# Install Neko Proxy for the current user from a GitHub release, no root needed.
 #
 #   curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/packaging/install.sh | sh
 #   sh install.sh --version v0.1.0
-#   sh install.sh --tarball proxy-0.1.0-linux-x86_64.tar.gz     (offline, skips download)
+#   sh install.sh --tarball neko-0.1.0-linux-x86_64.tar.gz     (offline, skips download)
 #   sh install.sh --uninstall
 #
-# Env: PROXY_REPO (default bharath914/proxy), PREFIX (default ~/.local)
+# Env: NEKO_REPO (default bharath914/neko-proxy), PREFIX (default ~/.local)
 set -eu
 
-REPO=${PROXY_REPO:-bharath914/proxy}
+REPO=${NEKO_REPO:-bharath914/neko-proxy}
 PREFIX=${PREFIX:-$HOME/.local}
 VERSION=latest
 TARBALL=
@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
 done
 
 APPS=$PREFIX/share/applications
-ICONS=$PREFIX/share/icons/hicolor/scalable/apps
+ICONS=$PREFIX/share/icons/hicolor/512x512/apps
 
 refresh() {
   command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" 2>/dev/null || true
@@ -35,9 +35,9 @@ refresh() {
 }
 
 if [ -n "$UNINSTALL" ]; then
-  rm -f "$PREFIX/bin/proxy" "$PREFIX/bin/proxyd" "$APPS/dev.proxy.Proxy.desktop" "$ICONS/dev.proxy.Proxy.svg"
+  rm -f "$PREFIX/bin/neko" "$PREFIX/bin/nekod" "$APPS/dev.nekoproxy.Neko.desktop" "$ICONS/dev.nekoproxy.Neko.png"
   refresh
-  echo "Removed Proxy from $PREFIX. Captures and the CA stay in ~/.local/share/proxy."
+  echo "Removed Neko Proxy from $PREFIX. Captures and the CA stay in ~/.local/share/neko."
   exit 0
 fi
 
@@ -46,7 +46,7 @@ case $(uname -m) in
   aarch64|arm64) ARCH=aarch64 ;;
   *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
 esac
-[ "$(uname -s)" = Linux ] || { echo "Proxy runs on Linux only" >&2; exit 1; }
+[ "$(uname -s)" = Linux ] || { echo "Neko Proxy runs on Linux only" >&2; exit 1; }
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM
@@ -74,20 +74,20 @@ fi
 
 tar -xzf "$TARBALL" -C "$TMP"
 SRC=$(find "$TMP" -maxdepth 1 -type d -name 'proxy-*-linux-*' | head -1)
-[ -x "$SRC/bin/proxy" ] || { echo "unexpected tarball layout" >&2; exit 1; }
+[ -x "$SRC/bin/neko" ] || { echo "unexpected tarball layout" >&2; exit 1; }
 
 mkdir -p "$PREFIX/bin" "$APPS" "$ICONS"
 # Install over a running copy safely: write a new file, then rename.
-for b in proxy proxyd; do
+for b in proxy nekod; do
   install -m 0755 "$SRC/bin/$b" "$PREFIX/bin/.$b.new"
   mv -f "$PREFIX/bin/.$b.new" "$PREFIX/bin/$b"
 done
-install -m 0644 "$SRC/share/icons/hicolor/scalable/apps/dev.proxy.Proxy.svg" "$ICONS/"
+install -m 0644 "$SRC/share/icons/hicolor/512x512/apps/dev.nekoproxy.Neko.png" "$ICONS/"
 # Absolute Exec so the launcher works even when ~/.local/bin is not on PATH.
-sed "s|^Exec=proxy\$|Exec=$PREFIX/bin/proxy|" "$SRC/share/applications/dev.proxy.Proxy.desktop" \
-  > "$APPS/dev.proxy.Proxy.desktop"
+sed "s|^Exec=proxy\$|Exec=$PREFIX/bin/neko|" "$SRC/share/applications/dev.nekoproxy.Neko.desktop" \
+  > "$APPS/dev.nekoproxy.Neko.desktop"
 refresh
 
-echo "Installed to $PREFIX. Start it from your app menu or run: $PREFIX/bin/proxy"
+echo "Installed to $PREFIX. Start it from your app menu or run: $PREFIX/bin/neko"
 case ":$PATH:" in *":$PREFIX/bin:"*) ;; *) echo "Note: $PREFIX/bin is not on your PATH." ;; esac
 echo "First launch: Settings > Certificate to trust the proxy CA."

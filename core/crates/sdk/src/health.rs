@@ -83,7 +83,7 @@ pub fn explain_bind_error(port: u16, e: &std::io::Error) -> (String, String) {
     match e.kind() {
         AddrInUse => (
             format!("Port {port} is already in use by another program."),
-            "Close that program, or start proxyd with another --sdk-port and use the same port in the app.".into(),
+            "Close that program, or start nekod with another --sdk-port and use the same port in the app.".into(),
         ),
         PermissionDenied => (
             format!("The system does not allow listening on port {port}."),

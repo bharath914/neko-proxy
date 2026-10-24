@@ -184,7 +184,7 @@ Rules:
 Candidate order tried by the SDK:
 1. Last known good host for a paired server
 2. Emulator and simulator: `10.0.2.2:8898` on Android, `localhost:8898` on iOS simulator
-3. mDNS service `_proxyinspect._tcp`, advertised by the core while ingest is enabled. TXT records: `v=1`, `fp=<first 16 hex chars of the cert fingerprint>`, `name=<desktop name>`
+3. mDNS service `_nekoinspect._tcp`, advertised by the core while ingest is enabled. TXT records: `v=1`, `fp=<first 16 hex chars of the cert fingerprint>`, `name=<desktop name>`
 4. Manual `host:port` from configuration (Gradle plugin extension on Android, `Inspector.start(host:)` on iOS)
 
 When several desktops are discoverable (an office network):

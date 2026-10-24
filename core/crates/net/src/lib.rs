@@ -12,6 +12,7 @@ mod handler;
 mod mitm;
 pub mod parse;
 mod procinfo;
+mod socks;
 
 use body::BoxError;
 use bytes::Bytes;

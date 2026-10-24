@@ -1,5 +1,5 @@
 [package]
-name = "proxy-proto"
+name = "neko-proto"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

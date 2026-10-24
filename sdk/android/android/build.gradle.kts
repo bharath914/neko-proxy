@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.proxy.inspector.android"
+    namespace = "dev.nekoproxy.inspector.android"
     compileSdk = 35
     defaultConfig {
         minSdk = 23

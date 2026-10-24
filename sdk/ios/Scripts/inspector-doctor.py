@@ -9,7 +9,7 @@ import plistlib, sys
 
 KEY_USAGE = "NSLocalNetworkUsageDescription"
 KEY_SERVICES = "NSBonjourServices"
-SERVICE = "_proxyinspect._tcp"
+SERVICE = "_nekoinspect._tcp"
 
 def main() -> int:
     if len(sys.argv) != 2:
@@ -18,7 +18,7 @@ def main() -> int:
         plist = plistlib.load(f)
     problems = []
     if not str(plist.get(KEY_USAGE, "")).strip():
-        problems.append(f"missing {KEY_USAGE}: add a short reason, for example <string>Connects to the Proxy desktop app to show this app's network calls.</string>")
+        problems.append(f"missing {KEY_USAGE}: add a short reason, for example <string>Connects to the Neko Proxy desktop app to show this app's network calls.</string>")
     if SERVICE not in (plist.get(KEY_SERVICES) or []):
         problems.append(f"{KEY_SERVICES} does not contain {SERVICE}: add <array><string>{SERVICE}</string></array>")
     if not problems:

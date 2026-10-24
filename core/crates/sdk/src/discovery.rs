@@ -1,11 +1,11 @@
-//! Advertise the ingest service on the LAN as `_proxyinspect._tcp` while it
+//! Advertise the ingest service on the LAN as `_nekoinspect._tcp` while it
 //! is enabled. TXT records: `v=1`, `fp=<first 16 hex of the fingerprint>`,
 //! `name=<desktop name>`.
 
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use std::sync::Mutex;
 
-pub const SERVICE_TYPE: &str = "_proxyinspect._tcp.local.";
+pub const SERVICE_TYPE: &str = "_nekoinspect._tcp.local.";
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum DiscoveryStatus {
@@ -86,7 +86,7 @@ fn sanitize(name: &str) -> String {
         .collect();
     let s = s.trim_matches('-');
     if s.is_empty() {
-        "proxy-desktop".into()
+        "neko-desktop".into()
     } else {
         s.chars().take(40).collect()
     }
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn instance_names_are_safe() {
         assert_eq!(sanitize("Asha's Laptop"), "Asha-s-Laptop");
-        assert_eq!(sanitize("  "), "proxy-desktop");
+        assert_eq!(sanitize("  "), "neko-desktop");
         assert_eq!(sanitize(&"x".repeat(100)).len(), 40);
     }
 }

@@ -1010,7 +1010,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "263a3f48f01e7309e857138bd47f785585b4a005e8e56c6d2824ce91195999c3"
 
 [[package]]
-name = "proxy-decode"
+name = "neko-decode"
 version = "0.1.0"
 dependencies = [
  "brotli",
@@ -1022,14 +1022,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "proxy-store"
+name = "neko-store"
 version = "0.1.0"
 dependencies = [
  "base64",
  "blake3",
  "bytes",
  "flow",
- "proxy-decode",
+ "neko-decode",
  "rusqlite",
  "serde_json",
  "thiserror",
@@ -1227,7 +1227,7 @@ dependencies = [
  "prost",
  "prost-build",
  "protoc-bin-vendored",
- "proxy-store",
+ "neko-store",
  "rcgen",
  "rusqlite",
  "rustls",
@@ -1249,7 +1249,7 @@ dependencies = [
  "flow",
  "libfuzzer-sys",
  "prost",
- "proxy-store",
+ "neko-store",
  "sdk",
  "tokio",
 ]

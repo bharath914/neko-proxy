@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 /// Apple's San Francisco, when the person has installed it. It cannot ship
 /// with the app (Apple's license limits it to Apple platforms), so it is
-/// picked up from the usual font folders, or from `PROXY_FONT_DIR`.
+/// picked up from the usual font folders, or from `NEKO_FONT_DIR`.
 struct SystemFonts {
     text: [Vec<u8>; 3],
     mono: Option<[Vec<u8>; 2]>,
@@ -16,7 +16,7 @@ struct SystemFonts {
 
 fn font_dirs() -> Vec<std::path::PathBuf> {
     let mut dirs = Vec::new();
-    if let Some(d) = std::env::var_os("PROXY_FONT_DIR") {
+    if let Some(d) = std::env::var_os("NEKO_FONT_DIR") {
         dirs.push(d.into());
     }
     if let Some(home) = std::env::var_os("HOME") {

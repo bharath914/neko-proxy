@@ -293,7 +293,7 @@ impl App {
                         let tx = self.job_tx.clone();
                         let ctx = ui.ctx().clone();
                         let cmd = format!(
-                            "mkdir -p \"$HOME/.pki/nssdb\" && ([ -f \"$HOME/.pki/nssdb/cert9.db\" ] || certutil -d \"sql:$HOME/.pki/nssdb\" -N --empty-password) && certutil -d \"sql:$HOME/.pki/nssdb\" -A -t \"C,,\" -n proxy-ca -i '{}'",
+                            "mkdir -p \"$HOME/.pki/nssdb\" && ([ -f \"$HOME/.pki/nssdb/cert9.db\" ] || certutil -d \"sql:$HOME/.pki/nssdb\" -N --empty-password) && certutil -d \"sql:$HOME/.pki/nssdb\" -A -t \"C,,\" -n neko-ca -i '{}'",
                             path.replace('\'', "'\\''")
                         );
                         self.busy = Some("nss");
@@ -695,7 +695,7 @@ impl App {
                 ui,
                 st,
                 "Core",
-                &format!("proxyd {version}  ·  pid {pid}  ·  up {up} s"),
+                &format!("nekod {version}  ·  pid {pid}  ·  up {up} s"),
             );
             divider(ui, st);
             row(ui, st, "Proxy address", &self.proxy_addr(), |ui| {

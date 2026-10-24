@@ -5,7 +5,7 @@ plugins {
 
 // Every artifact shares one group and version. Change both in one place.
 allprojects {
-    group = "dev.proxy.inspector"
+    group = "dev.nekoproxy.inspector"
     // CI passes -PsdkVersion=X.Y.Z from the sdk-vX.Y.Z tag.
     version = providers.gradleProperty("sdkVersion").getOrElse("0.1.0")
 }
@@ -33,16 +33,16 @@ subprojects {
             publications.withType<MavenPublication>().configureEach {
                 pom {
                     name.set(artifactId)
-                    description.set("In-app network inspector for debug builds: streams calls to the Proxy desktop app.")
-                    url.set("https://github.com/bharath914/proxy")
+                    description.set("In-app network inspector for debug builds: streams calls to the Neko Proxy desktop app.")
+                    url.set("https://github.com/bharath914/neko-proxy")
                     licenses {
                         license { name.set("MIT License"); url.set("https://opensource.org/license/mit") }
                         license { name.set("Apache License 2.0"); url.set("https://www.apache.org/licenses/LICENSE-2.0") }
                     }
                     developers { developer { id.set("bharath914"); name.set("Bharath Prakash"); url.set("https://github.com/bharath914") } }
                     scm {
-                        url.set("https://github.com/bharath914/proxy")
-                        connection.set("scm:git:https://github.com/bharath914/proxy.git")
+                        url.set("https://github.com/bharath914/neko-proxy")
+                        connection.set("scm:git:https://github.com/bharath914/neko-proxy.git")
                     }
                 }
             }

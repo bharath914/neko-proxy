@@ -105,13 +105,13 @@ async fn setup(writes: rules::McpWrites) -> Env {
             started: Instant::now(),
         },
     });
-    let listener = proxy_mcp::bind("127.0.0.1:0".parse().unwrap())
+    let listener = neko_mcp::bind("127.0.0.1:0".parse().unwrap())
         .await
         .unwrap();
     let addr = listener.local_addr().unwrap();
     let c2 = ctx.clone();
     tokio::spawn(async move {
-        proxy_mcp::serve(c2, listener, TOKEN.into(), std::future::pending())
+        neko_mcp::serve(c2, listener, TOKEN.into(), std::future::pending())
             .await
             .unwrap();
     });
@@ -220,7 +220,7 @@ async fn initialize_and_list_tools() {
     let env = setup(rules::McpWrites::Ask).await;
     let r = rpc(&env, "initialize", json!({"protocolVersion":"2025-06-18"})).await;
     assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
-    assert_eq!(r["result"]["serverInfo"]["name"], "proxy");
+    assert_eq!(r["result"]["serverInfo"]["name"], "neko");
     assert!(r["result"]["instructions"]
         .as_str()
         .unwrap()

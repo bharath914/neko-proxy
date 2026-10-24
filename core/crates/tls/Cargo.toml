@@ -1,5 +1,5 @@
 [package]
-name = "proxy-tls"
+name = "neko-tls"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,6 +14,9 @@ sha2.workspace = true
 time.workspace = true
 x509-parser = "0.18"
 base64.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -158,6 +158,9 @@ pub fn body(v: BodyView) -> pb::BodyView {
                 .into_iter()
                 .map(|(name, value)| pb::FormField { name, value })
                 .collect(),
+            events: v.events.into_iter().map(|e| pb::SseEvent {
+                event: e.event, id: e.id, data: e.data, retry_ms: e.retry_ms,
+            }).collect(),
             image: v.image,
             note: v.note,
         }

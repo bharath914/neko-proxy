@@ -29,7 +29,7 @@ Android, zero code:
 
 ```kotlin
 // app/build.gradle.kts
-plugins { id("dev.proxy.inspector") }   // placeholder id, name TBD
+plugins { id("dev.nekoproxy.inspector") }   // placeholder id, name TBD
 ```
 
 Android, one line (OkHttp or Retrofit):
@@ -57,7 +57,7 @@ interface CartApi {
 iOS, one line:
 
 ```swift
-import ProxyInspector
+import NekoInspector
 
 @main struct MyApp: App {
     init() { Inspector.start() }
@@ -72,7 +72,7 @@ let session = Session(eventMonitors: [InspectorMonitor()])
 AF.request(url).inspect("Apply coupon", owner: "payments", template: "/cart/{id}/coupon")
 ```
 
-iOS, zero code: link the `ProxyInspectorAutoStart` product and it starts itself.
+iOS, zero code: link the `NekoInspectorAutoStart` product and it starts itself.
 
 Names above are placeholders. The final product name, Maven group, Gradle plugin id and Swift package name are open (see the end of this file).
 

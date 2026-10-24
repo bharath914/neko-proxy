@@ -1,6 +1,6 @@
-# Proxy Inspector for Android
+# Neko Inspector for Android
 
-Streams your debug app's network calls to the Proxy desktop app. No proxy, no certificate, no Wi-Fi settings.
+Streams your debug app's network calls to the Neko Proxy desktop app. No proxy, no certificate, no Wi-Fi settings.
 Debug builds only: release builds get a no-op with the same API.
 
 ## Quick start
@@ -9,7 +9,7 @@ Debug builds only: release builds get a no-op with the same API.
 // app/build.gradle.kts
 plugins {
     id("com.android.application")
-    id("dev.proxy.inspector")      // placeholder id, the final name is open
+    id("dev.nekoproxy.inspector")      // placeholder id, the final name is open
 }
 ```
 
@@ -22,9 +22,9 @@ That is all. The plugin adds the SDK to debug builds, the no-op to release build
 ### Without the plugin
 
 ```kotlin
-debugImplementation("dev.proxy.inspector:inspector-android:0.1.0")
-releaseImplementation("dev.proxy.inspector:inspector-noop:0.1.0")
-implementation("dev.proxy.inspector:inspector-annotations:0.1.0")
+debugImplementation("dev.nekoproxy.inspector:inspector-android:0.1.0")
+releaseImplementation("dev.nekoproxy.inspector:inspector-noop:0.1.0")
+implementation("dev.nekoproxy.inspector:inspector-annotations:0.1.0")
 
 OkHttpClient.Builder().addInterceptor(InspectorInterceptor()).build()   // OkHttp and Retrofit
 HttpClient(CIO) { install(InspectorPlugin) }                            // Ktor
@@ -83,7 +83,7 @@ before the SDK starts. The proxy covers those. Images, video, audio and large bi
 |---|---|---|
 | Android emulator | No | `10.0.2.2:8897` |
 | Phone over USB | No | the desktop runs `adb reverse`, the app uses `localhost:8897` |
-| Phone on the same Wi-Fi | Yes | mDNS `_proxyinspect._tcp` |
+| Phone on the same Wi-Fi | Yes | mDNS `_nekoinspect._tcp` |
 | Network that isolates devices | fails | use USB, or another network |
 | Remote device, cellular | not supported | needs a relay |
 
@@ -113,7 +113,7 @@ Run `./gradlew inspectorDoctor`. It prints, per variant, whether the real SDK or
 ./gradlew verifyNoInspectorInRelease
 ```
 
-(Also covered by the plugin's own tests: the release APK's dex contains no `dev/proxy/inspector/internal` classes and no `_proxyinspect` string.)
+(Also covered by the plugin's own tests: the release APK's dex contains no `dev/nekoproxy/inspector/internal` classes and no `_nekoinspect` string.)
 
 ## Build and test this repository
 

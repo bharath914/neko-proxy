@@ -1,4 +1,4 @@
-# Proxy Inspector for iOS
+# Neko Inspector for iOS
 
 **Status: partly built, not verified on Apple platforms.** This was written on Linux, with no Mac or Xcode. The platform-neutral core
 (wire codec, pairing math, redaction, queue, ring buffer, the connection engine) builds and its tests pass with `swift test` on Linux.
@@ -16,8 +16,8 @@ Treat the Apple-only files as a first draft that needs a first build on a Mac, a
 | TLS transport with fingerprint pinning (`NWConnection`) | `ApplePlatform.swift` | No |
 | Keychain storage, Bonjour discovery, debug banner, screen tracking | `ApplePlatform.swift` | No |
 | `Inspector.session(...)` URLSession capture (approach C) | `InspectedSession.swift` | No |
-| Alamofire monitor and `.inspect(...)` | `ProxyInspectorAlamofire` | Compiles on Linux; no tests |
-| `ProxyInspectorAutoStart` (`+load`) | `ProxyInspectorAutoStart` | No. A static library's `+load` may need `-ObjC`. |
+| Alamofire monitor and `.inspect(...)` | `NekoInspectorAlamofire` | Compiles on Linux; no tests |
+| `NekoInspectorAutoStart` (`+load`) | `NekoInspectorAutoStart` | No. A static library's `+load` may need `-ObjC`. |
 
 ## What does not exist yet
 
@@ -30,7 +30,7 @@ Treat the Apple-only files as a first draft that needs a first build on a Mac, a
 ## Intended use
 
 ```swift
-import ProxyInspector
+import NekoInspector
 
 @main struct MyApp: App {
     init() { Inspector.start() }
@@ -38,15 +38,15 @@ import ProxyInspector
 }
 
 let session = Inspector.session()                       // URLSession already wired for capture
-let af = Session(eventMonitors: [InspectorMonitor()])   // Alamofire, product ProxyInspectorAlamofire
+let af = Session(eventMonitors: [InspectorMonitor()])   // Alamofire, product NekoInspectorAlamofire
 AF.request(url).inspect("Apply coupon", owner: "payments", template: "/cart/{id}/coupon")
 ```
 
-Linking the `ProxyInspectorAutoStart` product starts the SDK with no code.
+Linking the `NekoInspectorAutoStart` product starts the SDK with no code.
 
 ## Info.plist (debug only)
 
-On a physical device, Wi-Fi discovery needs `NSLocalNetworkUsageDescription` and `NSBonjourServices` containing `_proxyinspect._tcp`. The Simulator needs neither.
+On a physical device, Wi-Fi discovery needs `NSLocalNetworkUsageDescription` and `NSBonjourServices` containing `_nekoinspect._tcp`. The Simulator needs neither.
 Put them in a debug-only plist or xcconfig so Release does not carry them. `python3 Scripts/inspector-doctor.py path/to/Info.plist` checks and prints the fix.
 
 ## Test it here

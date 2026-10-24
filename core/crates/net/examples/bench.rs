@@ -1,11 +1,11 @@
 //! Proxy overhead and throughput against a local origin.
-//! `cargo run --release -p proxy-net --example bench`
+//! `cargo run --release -p neko-net --example bench`
 
 use flow::{IdGen, InterceptorChain, NullSink};
 use http_body_util::Full;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-use proxy_net::{Proxy, ProxyConfig};
+use neko_net::{Proxy, ProxyConfig};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;

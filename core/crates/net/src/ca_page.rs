@@ -1,8 +1,8 @@
 //! The pages the proxy serves about itself: certificate downloads in every
 //! format a device wants, a status endpoint and a TLS trust probe.
 //!
-//! Reached at `http://proxy.local` (or the listen address) through the proxy,
-//! and at `https://proxy.local` inside a decrypted tunnel. The HTTPS side is
+//! Reached at `http://neko.local` (or the listen address) through the proxy,
+//! and at `https://neko.local` inside a decrypted tunnel. The HTTPS side is
 //! how the page learns whether the device already trusts the CA: the request
 //! only succeeds when the handshake does.
 
@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use tls::CaStore;
 
 /// The made-up host that always means "the proxy itself".
-pub(crate) const LOCAL_HOST: &str = "proxy.local";
+pub(crate) const LOCAL_HOST: &str = "neko.local";
 
 const PAGE: &str = include_str!("pages/ca.html");
 
@@ -26,17 +26,17 @@ pub(crate) fn serve(ca: &CaStore, listen: SocketAddr, t: &Target) -> Response<Pr
         "/ca.pem" | "/ca.crt" => download(
             ca.cert_pem().as_bytes().to_vec(),
             "application/x-pem-file",
-            "proxy-ca.pem",
+            "neko-ca.pem",
         ),
         "/ca.cer" | "/ca.der" => download(
             ca.cert_der().as_ref().to_vec(),
             "application/x-x509-ca-cert",
-            "proxy-ca.cer",
+            "neko-ca.cer",
         ),
         "/ca.mobileconfig" => download(
             mobileconfig(ca).into_bytes(),
             "application/x-apple-aspen-config",
-            "proxy-ca.mobileconfig",
+            "neko-ca.mobileconfig",
         ),
         "/status.json" | "/trust-check" => probe(ca),
         _ => text_response(
@@ -60,7 +60,7 @@ fn download(body: Vec<u8>, mime: &str, filename: &str) -> Response<ProxyBody> {
 }
 
 /// JSON the page polls. Open to any origin so a page loaded by IP address can
-/// ask `proxy.local` (which only resolves when the device uses the proxy), and
+/// ask `neko.local` (which only resolves when the device uses the proxy), and
 /// so the HTTP page can read the HTTPS answer.
 fn probe(ca: &CaStore) -> Response<ProxyBody> {
     let mut res = Response::new(full(format!(
@@ -140,19 +140,19 @@ fn mobileconfig(ca: &CaStore) -> String {
 <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
 <plist version=\"1.0\">\n<dict>\n\
 \t<key>PayloadContent</key>\n\t<array>\n\t\t<dict>\n\
-\t\t\t<key>PayloadCertificateFileName</key>\n\t\t\t<string>proxy-ca.cer</string>\n\
+\t\t\t<key>PayloadCertificateFileName</key>\n\t\t\t<string>neko-ca.cer</string>\n\
 \t\t\t<key>PayloadContent</key>\n\t\t\t<data>{cert}</data>\n\
-\t\t\t<key>PayloadDescription</key>\n\t\t\t<string>Lets the Proxy debugging tool read HTTPS traffic from this device.</string>\n\
+\t\t\t<key>PayloadDescription</key>\n\t\t\t<string>Lets the Neko Proxy debugging tool read HTTPS traffic from this device.</string>\n\
 \t\t\t<key>PayloadDisplayName</key>\n\t\t\t<string>{subject}</string>\n\
-\t\t\t<key>PayloadIdentifier</key>\n\t\t\t<string>local.proxy.ca.cert.{id}</string>\n\
+\t\t\t<key>PayloadIdentifier</key>\n\t\t\t<string>local.neko.ca.cert.{id}</string>\n\
 \t\t\t<key>PayloadType</key>\n\t\t\t<string>com.apple.security.root</string>\n\
 \t\t\t<key>PayloadUUID</key>\n\t\t\t<string>{u1}</string>\n\
 \t\t\t<key>PayloadVersion</key>\n\t\t\t<integer>1</integer>\n\
 \t\t</dict>\n\t</array>\n\
-\t<key>PayloadDescription</key>\n\t<string>Trusts the certificate authority of a Proxy debugging session. Remove it when you are done.</string>\n\
-\t<key>PayloadDisplayName</key>\n\t<string>Proxy debugging CA</string>\n\
-\t<key>PayloadIdentifier</key>\n\t<string>local.proxy.ca.{id}</string>\n\
-\t<key>PayloadOrganization</key>\n\t<string>Proxy</string>\n\
+\t<key>PayloadDescription</key>\n\t<string>Trusts the certificate authority of a Neko Proxy debugging session. Remove it when you are done.</string>\n\
+\t<key>PayloadDisplayName</key>\n\t<string>Neko Proxy debugging CA</string>\n\
+\t<key>PayloadIdentifier</key>\n\t<string>local.neko.ca.{id}</string>\n\
+\t<key>PayloadOrganization</key>\n\t<string>Neko</string>\n\
 \t<key>PayloadRemovalDisallowed</key>\n\t<false/>\n\
 \t<key>PayloadType</key>\n\t<string>Configuration</string>\n\
 \t<key>PayloadUUID</key>\n\t<string>{u2}</string>\n\

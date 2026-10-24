@@ -24,7 +24,7 @@ const MAX_PAGE: u32 = 1000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
-    #[error("another proxyd is already serving {0}")]
+    #[error("another nekod is already serving {0}")]
     AlreadyRunning(String),
     #[error("socket error on {path}: {source}")]
     Socket {

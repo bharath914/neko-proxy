@@ -13,7 +13,7 @@ sdk = { path = ".." }
 tokio = { version = "1", features = ["rt", "io-util", "time"] }
 prost = "0.14"
 flow = { path = "../../flow" }
-store = { path = "../../store", package = "proxy-store" }
+store = { path = "../../store", package = "neko-store" }
 
 [workspace]
 

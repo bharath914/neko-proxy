@@ -1,5 +1,5 @@
 //! A minimal client for the running core's API socket, for the CLI commands
-//! that change live state (`proxyd sdk`, `proxyd devices`).
+//! that change live state (`nekod sdk`, `nekod devices`).
 
 use anyhow::{anyhow, bail, Context, Result};
 use api::pb::{self, client_message::Body as Req, server_message::Body as Res};
@@ -19,7 +19,7 @@ impl Client {
     pub async fn connect(socket: &Path) -> Result<Client> {
         let stream = UnixStream::connect(socket).await.with_context(|| {
             format!(
-                "could not reach the core at {}. Is `proxyd run` (or the desktop app) running?",
+                "could not reach the core at {}. Is `nekod run` (or the desktop app) running?",
                 socket.display()
             )
         })?;

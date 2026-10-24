@@ -53,7 +53,7 @@ Milestones refer to the build order in `CLAUDE.md` (M1 capture core, M2 desktop 
 - Basic checks: insecure headers, cleartext HTTP (M5)
 
 ## Mobile SDK (see `docs/sdk.md`)
-- Certificate page at `http://proxy.local`: per-platform steps, PEM, DER and Apple profile downloads, live trust check (done)
+- Certificate page at `http://neko.local`: per-platform steps, PEM, DER and Apple profile downloads, live trust check (done)
 - QR pairing (M4)
 - Android SDK: route the app's traffic, trust the CA at runtime in debug builds (M4)
 - iOS SDK, same for URLSession (M4)

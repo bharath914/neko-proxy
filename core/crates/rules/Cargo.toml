@@ -1,5 +1,5 @@
 [package]
-name = "proxy-rules"
+name = "neko-rules"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -10,14 +10,14 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
 
-fn proxy() -> &'static proxy_net::Proxy {
-    static PROXY: OnceLock<proxy_net::Proxy> = OnceLock::new();
+fn proxy() -> &'static neko_net::Proxy {
+    static PROXY: OnceLock<neko_net::Proxy> = OnceLock::new();
     PROXY.get_or_init(|| {
         let dir = tempfile::tempdir().unwrap().keep();
-        let ca = Arc::new(proxy_tls::CaStore::load_or_create(&dir, proxy_tls::KeyStorage::File).unwrap());
-        let mut cfg = proxy_net::ProxyConfig::new("127.0.0.1:8899".parse().unwrap());
+        let ca = Arc::new(neko_tls::CaStore::load_or_create(&dir, neko_tls::KeyStorage::File).unwrap());
+        let mut cfg = neko_net::ProxyConfig::new("127.0.0.1:8899".parse().unwrap());
         cfg.offline = true;
-        proxy_net::Proxy::new(
+        neko_net::Proxy::new(
             cfg,
             ca,
             Arc::new(flow::NullSink),

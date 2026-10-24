@@ -154,7 +154,7 @@ pub(crate) fn text_response(status: StatusCode, title: &str, detail: &str) -> Re
     res.headers_mut()
         .insert(CONTENT_TYPE, "text/html; charset=utf-8".parse().unwrap());
     res.headers_mut()
-        .insert("x-proxy-error", "1".parse().unwrap());
+        .insert("x-neko-error", "1".parse().unwrap());
     res
 }
 
@@ -341,7 +341,7 @@ impl Inner {
                 flags: flags::REPLAYED,
                 protocol: "HTTP/1.1",
             },
-            AppSlot::named("proxy"),
+            AppSlot::named("neko"),
             self.cfg.body_cap,
         );
         flow.req_cap.push(&r.body);

@@ -1,13 +1,13 @@
 plugins {
     id("com.android.application")
-    id("dev.proxy.inspector")
+    id("dev.nekoproxy.inspector")
 }
 
 android {
-    namespace = "dev.proxy.sample"
+    namespace = "dev.nekoproxy.sample"
     compileSdk { version = release(37) { minorApiLevel = 1 } }
     defaultConfig {
-        applicationId = "dev.proxy.sample"
+        applicationId = "dev.nekoproxy.sample"
         minSdk = 23
         targetSdk = 36
         versionCode = 1

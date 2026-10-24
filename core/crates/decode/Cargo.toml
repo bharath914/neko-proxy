@@ -1,5 +1,5 @@
 [package]
-name = "proxy-decode"
+name = "neko-decode"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

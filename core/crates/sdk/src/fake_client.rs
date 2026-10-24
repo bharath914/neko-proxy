@@ -85,7 +85,7 @@ impl Client {
             .with_no_client_auth();
         let tcp = TcpStream::connect((host, port)).await?;
         let tls = tokio_rustls::TlsConnector::from(Arc::new(cfg))
-            .connect(ServerName::try_from("proxy-ingest.local").unwrap(), tcp)
+            .connect(ServerName::try_from("neko-ingest.local").unwrap(), tcp)
             .await?;
         let fingerprint = seen.lock().unwrap().unwrap();
         let (r, w) = tokio::io::split(tls);

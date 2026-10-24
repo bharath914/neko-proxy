@@ -522,7 +522,7 @@ impl RequestInterceptor for RuleSet {
                             b = b.header(http::header::CONTENT_TYPE, mock_content_type(body));
                         }
                         mock = b
-                            .header("x-proxy-mock", r.id.as_str())
+                            .header("x-neko-mock", r.id.as_str())
                             .body(Bytes::from(body.clone()))
                             .ok();
                     }
@@ -569,7 +569,7 @@ impl RequestInterceptor for RuleSet {
             .header(http::header::CONTENT_TYPE, ct)
             .header(http::header::CONTENT_LENGTH, body.len())
             .header(http::header::CACHE_CONTROL, "no-store")
-            .header("x-proxy-map-local", rule.id.as_str())
+            .header("x-neko-map-local", rule.id.as_str())
             .body(Bytes::from(body))
             .unwrap_or_else(|_| http::Response::new(Bytes::new()));
         Intercept::Respond(res)
@@ -683,7 +683,7 @@ fn failure(rule: &MapLocalRule, why: &str) -> Intercept {
     let res = http::Response::builder()
         .status(502)
         .header(http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
-        .header("x-proxy-map-local", rule.id.as_str())
+        .header("x-neko-map-local", rule.id.as_str())
         .body(Bytes::from(msg))
         .unwrap_or_else(|_| http::Response::new(Bytes::new()));
     Intercept::Respond(res)
@@ -948,7 +948,7 @@ mod tests {
         };
         assert_eq!(res.status(), 503);
         assert_eq!(res.headers()["content-type"], "application/json");
-        assert!(res.headers().contains_key("x-proxy-mock"));
+        assert!(res.headers().contains_key("x-neko-mock"));
         let d = p.extensions.get::<Delay>().expect("mock delay");
         assert_eq!(d.0.as_millis(), 250);
 

@@ -64,7 +64,7 @@ pub fn definitions() -> Vec<Value> {
         "name":{"type":"string"},
         "value":{"type":"string"}},"required":["op","name"]}});
     vec![
-        tool("status", "Proxy state: version, recording, flow count, held messages, pending approvals, and whether changes are allowed.", schema(json!({}), &[]), true),
+        tool("status", "Neko state: version, recording, flow count, held messages, pending approvals, and whether changes are allowed.", schema(json!({}), &[]), true),
         tool("list_flows", "Newest captured flows first. Compact rows; use get_flow for details.",
             schema(json!({
                 "kind":{"type":"string","enum":["all","errors","slow","pinned"]},
@@ -444,9 +444,9 @@ async fn authorize(ctx: &ApiContext, tool: &str, title: String, args: &Value) ->
             let detail = serde_json::to_string_pretty(args).unwrap_or_default();
             match ctx.approvals.ask(tool, title, detail, APPROVAL_WAIT).await {
                 Decision::Allowed => Ok(()),
-                Decision::Denied => fail("The person declined this change in the Proxy app."),
+                Decision::Denied => fail("The person declined this change in the Neko Proxy app."),
                 Decision::TimedOut => fail(
-                    "Nobody approved this within 2 minutes. Ask the person to open the Proxy app \
+                    "Nobody approved this within 2 minutes. Ask the person to open the Neko Proxy app \
                      and try again.",
                 ),
             }

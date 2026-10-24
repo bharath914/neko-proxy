@@ -690,7 +690,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "proxy-decode"
+name = "neko-decode"
 version = "0.1.0"
 dependencies = [
  "brotli",
@@ -702,20 +702,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "proxy-fuzz"
+name = "neko-fuzz"
 version = "0.0.0"
 dependencies = [
  "flow",
  "libfuzzer-sys",
- "proxy-decode",
- "proxy-net",
- "proxy-tls",
+ "neko-decode",
+ "neko-net",
+ "neko-tls",
  "tempfile",
  "tokio",
 ]
 
 [[package]]
-name = "proxy-net"
+name = "neko-net"
 version = "0.1.0"
 dependencies = [
  "bytes",
@@ -724,7 +724,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "proxy-tls",
+ "neko-tls",
  "rustls",
  "rustls-native-certs",
  "tokio",
@@ -735,7 +735,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "proxy-tls"
+name = "neko-tls"
 version = "0.1.0"
 dependencies = [
  "base64",
