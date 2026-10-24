@@ -758,6 +758,9 @@ impl Inner {
                 claimed.map(|i| &**i),
                 ws | extra,
             );
+            if parts.headers.get(CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|ct|ct.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("text/event-stream")) {
+                f.start_event_snapshots();
+            }
         }
         strip_hop_by_hop(&mut parts.headers, false);
         let body: ProxyBody = match (held_body, body, flow) {

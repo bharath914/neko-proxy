@@ -265,7 +265,7 @@ impl Store {
 /// Plug the store into the data path.
 impl FlowSink for Store {
     fn publish(&self, event: FlowEvent) {
-        if let FlowEvent::Finished(rec) = event {
+        if let FlowEvent::Finished(rec) | FlowEvent::Snapshot(rec) = event {
             self.enqueue(rec);
         }
     }
@@ -565,7 +565,7 @@ fn sort_msg(m: Msg, flows: &mut Vec<Arc<FlowRecord>>, control: &mut Vec<Msg>, sh
 fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]) -> Result<()> {
     let analyzed: Vec<_> = {
         let mut audit = shared.audit.lock().unwrap();
-        flows.iter().map(|f| { let mut rec = (**f).clone(); rec.flags |= audit.inspect(&rec); Arc::new(rec) }).collect()
+        flows.iter().map(|f| { let mut rec = (**f).clone(); rec.flags |= if rec.state == FlowState::Receiving { decode::static_flags(&rec) } else { audit.inspect(&rec) }; Arc::new(rec) }).collect()
     };
     let flows = &analyzed;
     // Blobs first, outside the transaction.
@@ -692,7 +692,7 @@ fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]
         for rec in flows { pending.remove(&rec.id); }
     }
     let sink = shared.analysis_sink.lock().unwrap().clone();
-    if let Some(sink) = sink { for rec in flows { sink.publish(FlowEvent::Finished(rec.clone())); } }
+    if let Some(sink) = sink { for rec in flows { sink.publish(if rec.state == FlowState::Receiving { FlowEvent::Snapshot(rec.clone()) } else { FlowEvent::Finished(rec.clone()) }); } }
     Ok(())
 }
 

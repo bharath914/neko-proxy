@@ -1,6 +1,6 @@
 //! Bookkeeping for one flow while it is on the wire.
 
-use crate::body::{BodyEnd, Capture};
+use crate::body::{BodyEnd, Capture, Captured};
 use crate::connector::ConnInfo;
 use crate::procinfo::AppResolver;
 use flow::{flags, FlowEvent, FlowId, FlowRecord, FlowSink, FlowState, Timings};
@@ -207,6 +207,45 @@ impl FlowCtx {
         self.sink.publish(FlowEvent::Updated(summary));
     }
 
+    /// SSE previews are copied on a blocking worker, at most twice a second.
+    /// Once the live preview cap is reached the final capture still continues.
+    pub fn start_event_snapshots(self: &Arc<Self>) {
+        const PREVIEW_CAP: usize = 256 * 1024;
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            let mut previous = 0;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let Some(ctx) = weak.upgrade() else { break; };
+                if ctx.finalized.load(Ordering::Acquire) { break; }
+                let retained = ctx.res_cap.retained_len();
+                if retained == previous { continue; }
+                previous = retained;
+                let _ = tokio::task::spawn_blocking(move || ctx.publish_snapshot(PREVIEW_CAP)).await;
+                if retained >= PREVIEW_CAP { break; }
+            }
+        });
+    }
+
+    fn publish_snapshot(&self, limit: usize) {
+        // Serialize publication with finalization, so a preview never follows
+        // the final record. Capture locks are released before finalize locks state.
+        let s = self.state.lock().unwrap();
+        if self.finalized.load(Ordering::Acquire) { return; }
+        let request = self.req_cap.snapshot(limit);
+        let response = self.res_cap.snapshot(limit);
+        if self.finalized.load(Ordering::Acquire) { return; }
+        let timings = self.capture_timings(&s, &request, Instant::now());
+        let mut rec = s.rec.clone();
+        rec.req_body = request.bytes; rec.res_body = response.bytes;
+        rec.req_size = request.size; rec.res_size = response.size;
+        if request.truncated { rec.flags |= flags::REQ_TRUNCATED; }
+        if response.truncated || rec.res_body.len() >= limit { rec.flags |= flags::RES_TRUNCATED; }
+        rec.timings = timings;
+        rec.state = FlowState::Receiving;
+        self.sink.publish(FlowEvent::Snapshot(Arc::new(rec)));
+    }
+
     /// Called when the response body ends, fails or is dropped.
     pub fn finish_body(&self, end: BodyEnd) {
         match end {
@@ -234,23 +273,12 @@ impl FlowCtx {
         self.finalize_inner(error, true);
     }
 
-    fn finalize(&self, error: Option<String>) {
-        self.finalize_inner(error, false);
-    }
-
-    fn finalize_inner(&self, error: Option<String>, stream: bool) {
-        if self.finalized.swap(true, Ordering::AcqRel) {
-            return;
-        }
-        let now = Instant::now();
-        let req = self.req_cap.take();
-        let res = self.res_cap.take();
-        let mut s = self.state.lock().unwrap();
+    fn capture_timings(&self, s: &State, request: &Captured, now: Instant) -> Timings {
         let total = now.saturating_duration_since(self.started).as_micros() as u64;
 
         let dispatched = s.dispatched_at.unwrap_or(self.started);
         let ready = dispatched + std::time::Duration::from_micros(s.setup_us);
-        let req_end = req.ended_at.filter(|_| req.size > 0);
+        let req_end = request.ended_at.filter(|_| request.size > 0);
         let send_us = req_end
             .map(|e| e.saturating_duration_since(ready).as_micros() as u64)
             .unwrap_or(0);
@@ -264,7 +292,7 @@ impl FlowCtx {
             }
             None => (0, 0),
         };
-        s.rec.timings = Timings {
+        Timings {
             dns_us: s.dns_us,
             connect_us: s.connect_us,
             tls_us: s.tls_us,
@@ -273,7 +301,22 @@ impl FlowCtx {
             receive_us,
             total_us: total,
             reused: s.reused,
-        };
+        }
+    }
+
+    fn finalize(&self, error: Option<String>) {
+        self.finalize_inner(error, false);
+    }
+
+    fn finalize_inner(&self, error: Option<String>, stream: bool) {
+        if self.finalized.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let now = Instant::now();
+        let req = self.req_cap.take();
+        let res = self.res_cap.take();
+        let mut s = self.state.lock().unwrap();
+        s.rec.timings = self.capture_timings(&s, &req, now);
         if !stream {
             s.rec.req_size = req.size;
             s.rec.res_size = res.size;

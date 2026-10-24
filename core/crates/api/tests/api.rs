@@ -1079,3 +1079,19 @@ async fn issue_labels_are_core_generated_without_captured_values() {
     assert!(!d.issues.join(" ").contains("never-report-this-value"));
     assert!(!d.summary.unwrap().issue_labels.is_empty());
 }
+
+#[tokio::test]
+async fn live_sse_snapshot_is_persisted_and_remains_inflight() {
+    let (mut c,ctx,_d)=setup().await;
+    ctx.store.set_analysis_sink(Arc::new(ctx.hub.clone()));
+    let mut rec=(*record(96,"events.example.com",200,"data: live\n\n")).clone();rec.state=FlowState::Receiving;
+    rec.res_headers=vec![("content-type".into(),"text/event-stream".into())];
+    flow::FlowSink::publish(&ctx.store,FlowEvent::Snapshot(Arc::new(rec.clone())));ctx.store.flush();
+    assert!(ctx.hub.inflight(96).is_some());
+    let Res::Flow(detail)=c.call(Req::GetFlow(pb::GetFlowRequest{id:96,parts:7})).await else{panic!()};
+    assert_eq!(detail.summary.unwrap().state,pb::FlowState::Receiving as i32);
+    assert_eq!(detail.response_body.unwrap().events[0].data,"live");
+    rec.state=FlowState::Complete;
+    flow::FlowSink::publish(&ctx.store,FlowEvent::Finished(Arc::new(rec)));ctx.store.flush();
+    assert!(ctx.hub.inflight(96).is_none());
+}

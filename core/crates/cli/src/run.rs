@@ -73,6 +73,9 @@ struct Fanout {
 
 impl FlowSink for Fanout {
     fn publish(&self, event: FlowEvent) {
+        // Live previews are announced by the store after persistence so the
+        // subscriber can immediately fetch their bodies.
+        if matches!(event, FlowEvent::Snapshot(_)) { self.store.publish(event); return; }
         self.hub.publish(event.clone());
         if matches!(event, FlowEvent::Finished(_)) { self.store.publish(event); }
     }

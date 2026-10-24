@@ -71,6 +71,12 @@ impl FlowSink for Hub {
                 self.inflight.lock().unwrap().insert(s.id, s.clone());
                 s
             }
+            FlowEvent::Snapshot(rec) => {
+                if hidden.contains(&rec.id) { return; }
+                let summary = rec.summary();
+                self.inflight.lock().unwrap().insert(rec.id, summary.clone());
+                summary
+            }
             FlowEvent::Finished(rec) => {
                 if hidden.contains(&rec.id) { return; }
                 self.inflight.lock().unwrap().remove(&rec.id);

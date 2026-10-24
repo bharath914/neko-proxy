@@ -1132,3 +1132,37 @@ async fn socks5_rejects_auth_and_udp() {
     assert_eq!(reply[1], 7);
     assert_eq!(h.sink.count(), 0);
 }
+
+#[tokio::test]
+async fn sse_events_are_visible_before_the_response_closes() {
+    let h=start_proxy().await;
+    let origin=TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr=origin.local_addr().unwrap();
+    let (release,wait)=tokio::sync::oneshot::channel();
+    let server=tokio::spawn(async move {
+        let (mut socket,_)=origin.accept().await.unwrap();let mut request=[0;4096];socket.read(&mut request).await.unwrap();
+        let event=b"id: 1\nevent: update\ndata: first\n\n";
+        socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n{:x}\r\n",event.len()).as_bytes()).await.unwrap();
+        socket.write_all(event).await.unwrap();socket.write_all(b"\r\n").await.unwrap();
+        wait.await.unwrap();
+        socket.write_all(b"0\r\n\r\n").await.unwrap();
+    });
+    let socket=TcpStream::connect(h.addr).await.unwrap();
+    let client=tokio::spawn(async move {get_over(socket,false,"GET",&format!("http://{addr}/events"),b"").await});
+    let snapshot=tokio::time::timeout(Duration::from_secs(3),async {
+        loop {
+            let got=h.sink.0.lock().unwrap().iter().find_map(|event|match event {FlowEvent::Snapshot(r)=>Some(r.clone()),_=>None});
+            if let Some(record)=got {break record;}
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }).await.expect("live snapshot before response closes");
+    assert_eq!(snapshot.state,FlowState::Receiving);
+    assert!(!client.is_finished());
+    let view=decode::build_view("text/event-stream","",&snapshot.res_body,snapshot.res_size,false,&decode::ViewOptions::default());
+    assert_eq!(view.events.len(),1);assert_eq!(view.events[0].data,"first");
+    release.send(()).unwrap();server.await.unwrap();
+    assert_eq!(client.await.unwrap().0,200);
+    let final_record=h.sink.finished(1).await.pop().unwrap();
+    assert_eq!(final_record.res_body,snapshot.res_body);
+    assert_eq!(final_record.state,FlowState::Complete);
+}

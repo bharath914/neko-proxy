@@ -1038,7 +1038,10 @@ impl App {
         {
             copy = true;
         }
-        if is_json {
+        if decoded.is_some() || !v.events.is_empty() {
+            let labels = [if decoded.is_some() { "Decoded" } else { "Events" }, "Raw"];
+            if let Some(i) = widgets::segmented(&mut right, st, self.id("decoded-mode"), &labels, self.raw_view as usize) { self.raw_view = i == 1; }
+        } else if is_json {
             let sel = self.raw_view as usize;
             if let Some(i) =
                 widgets::segmented(&mut right, st, self.id("body-mode"), &["Tree", "Raw"], sel)
@@ -1154,12 +1157,19 @@ impl App {
         } else if show_events {
             let mut sub = ui.new_child(UiBuilder::new().max_rect(view.shrink(14.0)));
             sub.set_opacity(fade);
-            egui::ScrollArea::vertical().id_salt(("sse", salt)).show(&mut sub, |ui| {
-                for (index, event) in v.events.iter().enumerate() {
-                    ui.label(format!("#{} · {} · id {}", index + 1, event.event, event.id));
-                    if let Some(ms) = event.retry_ms { ui.small(format!("Retry: {ms} ms")); }
-                    ui.add(egui::Label::new(egui::RichText::new(&event.data).monospace()).selectable(true));
-                    ui.separator();
+            egui::ScrollArea::vertical().id_salt(("sse", salt)).show_rows(&mut sub, 90.0, v.events.len(), |ui, rows| {
+                for index in rows {
+                    let event = &v.events[index];
+                    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 90.0), Sense::hover());
+                    let mut row = ui.new_child(UiBuilder::new().max_rect(rect));
+                    row.set_clip_rect(rect.intersect(ui.clip_rect()));
+                    row.horizontal(|ui| {
+                        ui.label(format!("#{} · {} · id {}", index + 1, event.event, event.id));
+                        if ui.small_button("Copy event").clicked() { ui.ctx().copy_text(event.data.clone()); }
+                    });
+                    if let Some(ms) = event.retry_ms { row.small(format!("Retry: {ms} ms")); }
+                    row.add(egui::Label::new(egui::RichText::new(&event.data).monospace()).truncate().selectable(true));
+                    row.separator();
                 }
             });
         } else if show_source {

@@ -909,7 +909,7 @@ impl App {
                     // A flow we are looking at moved on: refresh its detail.
                     if let Some(sel) = self.selected {
                         if let Some(u) = b.upserts.iter().find(|u| u.id == sel) {
-                            if self.detail_fetched_state.get(&sel) != Some(&u.state) || self.details.get(&sel).is_some_and(|e| e.detail.summary.as_ref().is_some_and(|s| s.flags != u.flags)) {
+                            if self.detail_fetched_state.get(&sel) != Some(&u.state) || self.details.get(&sel).is_some_and(|e| e.detail.summary.as_ref().is_some_and(|s| s.flags != u.flags || s.res_size != u.res_size)) {
                                 self.fetch_detail(sel);
                             }
                         }

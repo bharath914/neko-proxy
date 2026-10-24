@@ -171,7 +171,9 @@ pub fn build_view(
             } else {
                 &body[..]
             };
-            let text = to_text(slice, content_type);
+            let text = if content_type.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("text/event-stream") {
+                String::from_utf8_lossy(slice).into_owned()
+            } else { to_text(slice, content_type) };
             if cut {
                 view.preview_truncated = true;
                 notes.push(format!(
@@ -308,5 +310,13 @@ mod tests {
         assert_eq!(human_size(512), "512 B");
         assert_eq!(human_size(1536), "1.5 KB");
         assert_eq!(human_size(94210), "92 KB");
+    }
+}
+
+#[cfg(test)] mod sse_charset_tests {
+    #[test] fn event_stream_is_always_utf8() {
+        let body="data: café\n\n".as_bytes();
+        let view=super::build_view("text/event-stream; charset=latin1","",body,body.len() as u64,false,&super::ViewOptions::default());
+        assert_eq!(view.events[0].data,"café");
     }
 }

@@ -10,6 +10,8 @@ pub enum FlowEvent {
     Updated(FlowSummary),
     /// Flow is complete or failed. Carries everything captured.
     Finished(Arc<FlowRecord>),
+    /// Bounded preview of a response that is still streaming.
+    Snapshot(Arc<FlowRecord>),
     /// A row stopped being a row of its own: the wire half of a merged
     /// SDK and proxy pair. The record stays stored.
     Removed(crate::FlowId),

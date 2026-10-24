@@ -54,6 +54,14 @@ impl Capture {
         g.ended_at.get_or_insert_with(Instant::now);
     }
 
+    pub(crate) fn retained_len(&self) -> usize { self.inner.lock().unwrap().buf.len() }
+
+    pub(crate) fn snapshot(&self, limit: usize) -> Captured {
+        let g = self.inner.lock().unwrap();
+        Captured { bytes: Bytes::copy_from_slice(&g.buf[..g.buf.len().min(limit)]),
+            size: g.size, truncated: g.truncated || g.buf.len() > limit, ended_at: g.ended_at }
+    }
+
     /// Move the captured bytes out.
     pub fn take(&self) -> Captured {
         let mut g = self.inner.lock().unwrap();
@@ -222,5 +230,14 @@ mod tests {
         });
         drop(tee);
         assert_eq!(got.lock().unwrap().clone(), Some(BodyEnd::Complete));
+    }
+}
+
+#[cfg(test)] mod snapshot_tests {
+    use super::*;
+    #[test] fn preview_does_not_consume_final_capture() {
+        let capture=Capture::new(1024);capture.push(&[42;512]);
+        let preview=capture.snapshot(32);assert_eq!(preview.bytes.len(),32);assert!(preview.truncated);
+        let final_capture=capture.take();assert_eq!(final_capture.bytes.len(),512);assert!(!final_capture.truncated);
     }
 }
