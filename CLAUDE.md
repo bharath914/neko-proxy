@@ -130,3 +130,4 @@ Decided Oct 2026: **Neko Proxy**. CLI `neko`, daemon `nekod`, crates `neko-*`, a
 - Keep UI free of logic: all parsing, decoding, search and redaction live in the core.
 - Build and test: `cargo test --workspace`. SDK: `swift test` in `sdk/ios`; in `sdk/android`: `cargo build -p sdk --bins` first, then `./gradlew test :gradle-plugin:test`. Run the app: `cargo run --release -p neko-desktop`. Package: `packaging/build.sh`.
 - Visual check without a window: `NEKO_SHOT_DIR=/some/dir cargo test -p neko-desktop` writes PNGs of every screen.
+- Website: `website/` is a SvelteKit 3 static site (Svelte 5, `#lib` imports, config in `vite.config.js`), deployed to GitHub Pages by `.github/workflows/website.yml` on pushes to main. Run: `cd website && npm install && npm run dev`. Screenshots in `website/static/shots/` come from the real macOS app via `NEKO_LIVE_CTL`, with live traffic through an isolated `nekod --data-dir`.
