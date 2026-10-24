@@ -116,15 +116,17 @@ pub enum RuleKind {
     MapRemote,
     Rewrite,
     Throttle,
+    Scenario,
     Breakpoint,
 }
 
 impl RuleKind {
-    pub const ALL: [RuleKind; 5] = [
+    pub const ALL: [RuleKind; 6] = [
         RuleKind::Mock,
         RuleKind::MapRemote,
         RuleKind::Rewrite,
         RuleKind::Throttle,
+        RuleKind::Scenario,
         RuleKind::Breakpoint,
     ];
 
@@ -134,6 +136,7 @@ impl RuleKind {
             RuleKind::MapRemote => "Map remote",
             RuleKind::Rewrite => "Rewrite",
             RuleKind::Throttle => "Throttle",
+            RuleKind::Scenario => "Scenario",
             RuleKind::Breakpoint => "Breakpoint",
         }
     }
@@ -144,6 +147,7 @@ impl RuleKind {
             RuleKind::MapRemote => "Send the request to another host, port or scheme.",
             RuleKind::Rewrite => "Add, set or remove headers on the way out or back.",
             RuleKind::Throttle => "Delay the request before it goes upstream.",
+            RuleKind::Scenario => "Fail every Nth request, add jitter, or simulate flaky upstream failures.",
             RuleKind::Breakpoint => "Hold the request or response until you resume it.",
         }
     }
@@ -155,6 +159,7 @@ impl RuleKind {
             A::MapRemote(_) => RuleKind::MapRemote,
             A::Rewrite(_) => RuleKind::Rewrite,
             A::Throttle(_) => RuleKind::Throttle,
+            A::Scenario(_) => RuleKind::Scenario,
             A::Breakpoint(_) => RuleKind::Breakpoint,
         })
     }
@@ -178,6 +183,9 @@ pub struct RuleForm {
     pub headers: String,
     pub body: String,
     pub delay_ms: String,
+    pub fail_one_in: String,
+    pub jitter_ms: String,
+    pub flaky_one_in: String,
     // map remote
     pub to_scheme: String,
     pub to_host: String,
@@ -207,6 +215,9 @@ impl RuleForm {
             headers: "content-type: application/json".into(),
             body: String::new(),
             delay_ms: String::new(),
+            fail_one_in: "0".into(),
+            jitter_ms: "0".into(),
+            flaky_one_in: "0".into(),
             to_scheme: String::new(),
             to_host: String::new(),
             to_port: String::new(),
@@ -274,6 +285,7 @@ impl RuleForm {
                 f.request_edits = edits_to_text(&a.request_headers);
                 f.response_edits = edits_to_text(&a.response_headers);
             }
+            Some(A::Scenario(a)) => { f.delay_ms = a.delay_ms.to_string(); f.fail_one_in = a.fail_one_in.to_string(); f.jitter_ms = a.jitter_ms.to_string(); f.flaky_one_in = a.flaky_one_in.to_string(); }
             Some(A::Throttle(a)) => f.delay_ms = a.delay_ms.to_string(),
             Some(A::Breakpoint(a)) => {
                 f.phase = a.phase.clamp(0, 2) as usize;
@@ -316,6 +328,12 @@ impl RuleForm {
             RuleKind::Rewrite => A::Rewrite(pb::RewriteAction {
                 request_headers: text_to_edits(&self.request_edits)?,
                 response_headers: text_to_edits(&self.response_edits)?,
+            }),
+            RuleKind::Scenario => A::Scenario(pb::ScenarioAction {
+                fail_one_in: self.fail_one_in.parse().map_err(|_| "Invalid failure interval")?,
+                delay_ms: self.delay_ms.parse().unwrap_or(0),
+                jitter_ms: self.jitter_ms.parse().map_err(|_| "Invalid jitter")?,
+                flaky_one_in: self.flaky_one_in.parse().map_err(|_| "Invalid flaky interval")?,
             }),
             RuleKind::Throttle => A::Throttle(pb::ThrottleAction {
                 delay_ms: num(&self.delay_ms, "Delay")?,
@@ -449,6 +467,7 @@ pub fn describe_action(r: &pb::Rule) -> String {
             let n = a.request_headers.len() + a.response_headers.len();
             format!("Edit {n} header{}", if n == 1 { "" } else { "s" })
         }
+        Some(A::Scenario(a)) => format!("Fail 1 in {}, delay {} + 0–{} ms, flaky 1 in {}", a.fail_one_in, a.delay_ms, a.jitter_ms, a.flaky_one_in),
         Some(A::Throttle(a)) => format!("Delay {} ms", a.delay_ms),
         Some(A::Breakpoint(a)) => match pb::breakpoint_action::Phase::try_from(a.phase)
             .unwrap_or(pb::breakpoint_action::Phase::Both)

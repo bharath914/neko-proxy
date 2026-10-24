@@ -109,6 +109,7 @@ pub fn definitions() -> Vec<Value> {
                 "to_port":{"type":"integer"}})), &["host"]), false),
         tool("create_rewrite", "Add, set or remove headers on matching requests and/or responses. Needs approval.",
             schema(with_match(json!({"request_headers":edit,"response_headers":edit})), &["host"]), false),
+        tool("create_scenario", "Create every-N failures, delay/jitter and simulated flaky upstream 502s. Needs approval.", schema(with_match(json!({"fail_one_in":{"type":"integer"},"delay_ms":{"type":"integer"},"jitter_ms":{"type":"integer"},"flaky_one_in":{"type":"integer"}})), &["host"]), false),
         tool("create_throttle", "Delay matching requests before they go upstream. Needs approval.",
             schema(with_match(json!({"delay_ms":{"type":"integer"}})), &["host","delay_ms"]), false),
         tool("add_breakpoint", "Hold matching requests and/or responses until resumed. Needs approval.",
@@ -420,6 +421,7 @@ pub async fn call(ctx: &ApiContext, name: &str, args: Value) -> Out {
         "create_map_local" => create_map_local(ctx, &args).await,
         "create_map_remote" => create_map_remote(ctx, &args).await,
         "create_rewrite" => create_rewrite(ctx, &args).await,
+        "create_scenario" => create_scenario(ctx, &args).await,
         "create_throttle" => create_throttle(ctx, &args).await,
         "add_breakpoint" => add_breakpoint(ctx, &args).await,
         "set_rule_enabled" => set_rule_enabled(ctx, &args).await,
@@ -1051,4 +1053,11 @@ async fn capture(ctx: &ApiContext, on: bool) -> Out {
     }
     ctx.control.set_recording(on);
     to_text(json!({"recording": ctx.control.recording()}))
+}
+
+async fn create_scenario(ctx: &ApiContext, a: &Value) -> Out {
+    let get = |key| n(a, key).unwrap_or(0).min(u32::MAX as u64) as u32;
+    let r = rule(a, rules::Action::Scenario { fail_one_in: get("fail_one_in"), delay_ms: get("delay_ms"), jitter_ms: get("jitter_ms"), flaky_one_in: get("flaky_one_in") })?;
+    authorize(ctx, "create_scenario", format!("Simulate failures for {}", describe_match(&r.matcher)), a).await?;
+    put(ctx, r)
 }

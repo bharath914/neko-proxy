@@ -607,6 +607,7 @@ message Rule {
     RewriteAction rewrite = 12;
     ThrottleAction throttle = 13;
     BreakpointAction breakpoint = 14;
+    ScenarioAction scenario = 15;
   }
 }
 
@@ -896,3 +897,5 @@ message ImportHarResponse { repeated uint64 ids = 1; uint32 count = 2; }
 
 message DecodedField { uint32 depth = 1; string label = 2; string value = 3; }
 message ProtocolView { string title = 1; repeated DecodedField fields = 2; string note = 3; }
+
+message ScenarioAction { uint32 fail_one_in = 1; uint32 delay_ms = 2; uint32 jitter_ms = 3; uint32 flaky_one_in = 4; }

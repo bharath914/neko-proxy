@@ -467,3 +467,19 @@ async fn replay_and_capture_tools() {
     let (_, text) = tool(&env, "status", json!({})).await;
     assert!(text.contains("\"recording\":false"), "{text}");
 }
+
+#[tokio::test]
+async fn scenarios_wait_for_approval_and_obey_readonly() {
+    let env = Arc::new(setup(rules::McpWrites::Ask).await);
+    let e = env.clone();
+    let call = tokio::spawn(async move { tool(&e, "create_scenario", json!({"host":"api.test","fail_one_in":3,"jitter_ms":20})).await });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while env.ctx.approvals.list().is_empty() { tokio::time::sleep(Duration::from_millis(5)).await; }
+    }).await.unwrap();
+    assert!(env.ctx.rules.rules().is_empty());
+    env.ctx.approvals.decide(&env.ctx.approvals.list()[0].id, true);
+    let (err, text) = call.await.unwrap(); assert!(!err, "{text}");
+    assert_eq!(env.ctx.rules.rules()[0].kind(), "scenario");
+    env.ctx.rules.set_mcp_writes(rules::McpWrites::Off).unwrap();
+    assert!(tool(&env, "create_scenario", json!({"host":"*","fail_one_in":2})).await.0);
+}

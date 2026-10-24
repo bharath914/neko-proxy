@@ -213,6 +213,9 @@ fn breakpoints_rules_and_ai_screens() {
         app(&mut h).rule_form = Some(crate::edit::RuleForm::new(crate::edit::RuleKind::Mock));
         settle(&mut h);
         save(&mut h, &format!("rules-editor-{tag}"));
+        app(&mut h).rule_form = Some(crate::edit::RuleForm::new(crate::edit::RuleKind::Scenario));
+        settle(&mut h);
+        save(&mut h, &format!("scenario-editor-{tag}"));
     }
     // The AI group sits below the fold of a normal window; render it tall.
     let mut h = harness(false, (1100.0, 2100.0), 10);

@@ -47,7 +47,7 @@ fn kind_color(st: &Style, k: Option<RuleKind>) -> Color32 {
         Some(RuleKind::Mock) => st.p.purple,
         Some(RuleKind::MapRemote) => st.p.teal,
         Some(RuleKind::Rewrite) => st.p.indigo,
-        Some(RuleKind::Throttle) => st.p.orange,
+        Some(RuleKind::Throttle | RuleKind::Scenario) => st.p.orange,
         Some(RuleKind::Breakpoint) => st.p.red,
         None => st.p.green,
     }
@@ -181,6 +181,14 @@ impl App {
                         multi(ui, &mut form.request_edits, 3, "set X-Env: staging\nremove Cookie");
                         caption(ui, st, "Response headers");
                         multi(ui, &mut form.response_edits, 3, "set Cache-Control: no-store");
+                    }
+                    RuleKind::Scenario => {
+                        caption(ui, st, "Fail every Nth matching request (503; 0 disables)");
+                        single(ui, &mut form.fail_one_in, 110.0, "3");
+                        caption(ui, st, "Delay plus random jitter (ms; total at most 60000)");
+                        ui.horizontal(|ui| { single(ui, &mut form.delay_ms, 110.0, "200"); single(ui, &mut form.jitter_ms, 110.0, "100"); });
+                        caption(ui, st, "Random flaky upstream failures: 1 in N (502; 0 disables)");
+                        single(ui, &mut form.flaky_one_in, 110.0, "5");
                     }
                     RuleKind::Throttle => {
                         caption(ui, st, "Delay each request by (ms)");

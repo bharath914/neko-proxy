@@ -183,6 +183,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     // change requests through the interceptor seam, breakpoints hold them at
     // the gate, and the SSL list decides which CONNECTs are decrypted.
     let rules = Arc::new(rules::RuleSet::load(&data_dir));
+    rules.watch();
     let mut chain = InterceptorChain::empty();
     chain.push_request(rules.clone());
     chain.push_response(rules.clone());

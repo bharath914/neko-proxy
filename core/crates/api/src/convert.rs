@@ -213,6 +213,7 @@ pub fn rule_to_pb(r: &rules::Rule) -> pb::Rule {
             request_headers: request_headers.iter().map(hdr).collect(),
             response_headers: response_headers.iter().map(hdr).collect(),
         }),
+        rules::Action::Scenario { fail_one_in, delay_ms, jitter_ms, flaky_one_in } => A::Scenario(pb::ScenarioAction { fail_one_in: *fail_one_in, delay_ms: *delay_ms, jitter_ms: *jitter_ms, flaky_one_in: *flaky_one_in }),
         rules::Action::Throttle { delay_ms } => A::Throttle(pb::ThrottleAction {
             delay_ms: *delay_ms,
         }),
@@ -272,6 +273,7 @@ pub fn rule_from_pb(r: pb::Rule) -> Result<rules::Rule, String> {
             request_headers: a.request_headers.into_iter().map(hdr).collect(),
             response_headers: a.response_headers.into_iter().map(hdr).collect(),
         },
+        A::Scenario(a) => rules::Action::Scenario { fail_one_in: a.fail_one_in, delay_ms: a.delay_ms, jitter_ms: a.jitter_ms, flaky_one_in: a.flaky_one_in },
         A::Throttle(a) => rules::Action::Throttle {
             delay_ms: a.delay_ms,
         },
