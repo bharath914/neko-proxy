@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	* { box-sizing: border-box; margin: 0; }
+	html, body { width: 1080px; height: 1080px; overflow: hidden; background: #000; }
+	body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; color: #f5f5f7; -webkit-font-smoothing: antialiased; }
+	.abs { position: absolute; }
+	#glow { inset: 0; background: radial-gradient(50% 40% at 50% 38%, rgb(59 139 255 / 0.28), transparent 70%), radial-gradient(40% 30% at 70% 80%, rgb(255 111 156 / 0.14), transparent 70%); }
+	.head { left: 0; right: 0; top: 64px; text-align: center; font-size: 80px; line-height: 1.02; font-weight: 700; letter-spacing: -0.045em; }
+	.grad { background: linear-gradient(95deg, #3b8bff, #8b6bff 50%, #ff6f9c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+	#stage { left: 60px; top: 270px; width: 960px; height: 600px; border-radius: 22px; overflow: hidden; background: #111; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 40px 120px rgb(0 0 0 / 0.8), 0 0 90px rgb(59 139 255 / 0.18); }
+	#stage img { position: absolute; left: 0; top: 0; width: 960px; height: 600px; transform-origin: 0 0; }
+	#pill { left: 0; right: 0; top: 916px; text-align: center; }
+	#pill span { display: inline-block; padding: 14px 30px; border-radius: 999px; background: rgb(28 28 30 / 0.92); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 14px 40px rgb(0 0 0 / 0.5); font-size: 30px; font-weight: 600; letter-spacing: -0.015em; white-space: nowrap; }
+	#fade { inset: 0; background: #000; }
+</style>
+</head>
+<body>
+<div id="glow" class="abs"></div>
+<div id="h1" class="abs head">A Postman-style client<br><span class="grad">inside a native proxy.</span></div>
+<div id="h2" class="abs head">The workflow you know,<br><span class="grad">in a native Mac app.</span></div>
+<div id="stage" class="abs"><img id="a" src="shots/composer.png"><img id="b" src="shots/composer-tests.png"></div>
+<div id="pill" class="abs"><span id="pt"></span></div>
+<div id="fade" class="abs"></div>
+<script>
+window.DURATION = 8;
+function spring(t, response = 0.45, damping = 1) {
+	if (t <= 0) return 0;
+	const w = (2 * Math.PI) / response;
+	if (damping >= 1) return 1 - (1 + w * t) * Math.exp(-w * t);
+	const wd = w * Math.sqrt(1 - damping * damping);
+	return 1 - Math.exp(-damping * w * t) * (Math.cos(wd * t) + ((damping * w) / wd) * Math.sin(wd * t));
+}
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const fade = (t, a, b) => clamp((t - a) / (b - a));
+const $ = (id) => document.getElementById(id);
+function set(el, o, tf = '') { el.style.opacity = o.toFixed(3); el.style.transform = tf; el.style.visibility = o < 0.002 ? 'hidden' : 'visible'; }
+
+// Camera keyframes over the 1440x900 screenshot: [time, focus x, focus y, zoom, shot, label].
+const K = [
+	[0.0, 720, 450, 1.0, 'a', ''],
+	[2.0, 720, 450, 1.0, 'a', ''],
+	[2.5, 700, 150, 1.6, 'a', '{{variables}} and environments'],
+	[3.9, 800, 330, 1.5, 'b', 'Tests that run on every send'],
+	[5.3, 720, 650, 1.5, 'a', 'Pretty JSON, cookies, timing'],
+	[6.6, 160, 260, 1.7, 'a', 'Collections, folders, history'],
+	[7.4, 720, 450, 1.0, 'a', '']
+];
+const SC = 960 / 1440;
+window.render = function (t) {
+	// Camera: spring from the previous keyframe to the next.
+	let i = 0;
+	while (i < K.length - 1 && t >= K[i + 1][0]) i++;
+	const p = K[i], q = K[Math.min(i + 1, K.length - 1)];
+	const k = i < K.length - 1 ? spring(t - Math.max(p[0], q[0] - 0.9), 0.6, 0.92) : 1;
+	const fx = lerp(p[1], q[1], k), fy = lerp(p[2], q[2], k), z = lerp(p[3], q[3], k);
+	// Shot: tests screenshot while the tests keyframe holds.
+	const shotB = t >= 3.75 && t < 5.2 ? 1 : 0;
+	const tx = clamp(480 - fx * SC * z, 960 - 960 * z, 0), ty = clamp(300 - fy * SC * z, 600 - 600 * z, 0);
+	const tf = `translate(${tx}px, ${ty}px) scale(${z})`;
+	$('a').style.transform = tf; $('b').style.transform = tf;
+	$('b').style.opacity = lerp(0, 1, fade(t, 3.75, 3.95)) * (1 - fade(t, 5.1, 5.3));
+	$('b').style.visibility = $('b').style.opacity < 0.002 ? 'hidden' : 'visible';
+
+	// Stage enters from below, then rests.
+	const sk = spring(t - 0.15, 0.6, 0.85);
+	set($('stage'), clamp(sk * 1.4), `translateY(${lerp(70, 0, sk)}px) scale(${lerp(0.94, 1, sk)})`);
+
+	// Headlines.
+	const h1 = spring(t - 0.1, 0.5);
+	set($('h1'), clamp(h1 * 1.3) * (1 - fade(t, 2.2, 2.5)), `translateY(${lerp(30, 0, h1) - fade(t, 2.2, 2.5) * 30}px)`);
+	const h2 = spring(t - 2.6, 0.5);
+	set($('h2'), clamp(h2 * 1.3) * (1 - fade(t, 7.1, 7.4)), `translateY(${lerp(30, 0, h2) - fade(t, 7.1, 7.4) * 30}px)`);
+
+	// Pills follow the keyframes.
+	let pi = -1;
+	for (let j = 1; j < K.length - 1; j++) if (t >= K[j][0] && K[j][5]) pi = j;
+	if (pi > 0) {
+		const a = K[pi][0], o = pi + 1 < K.length - 1 ? K[pi + 1][0] : 7.2;
+		const kk = spring(t - a, 0.4, 0.8), out = fade(t, o - 0.05, o + 0.15);
+		$('pt').textContent = K[pi][5];
+		set($('pill'), clamp(kk * 1.4) * (1 - out), `translateY(${lerp(24, 0, kk)}px)`);
+	} else set($('pill'), 0);
+
+	// In and out of black.
+	$('fade').style.opacity = (1 - fade(t, 0, 0.25) + fade(t, 7.6, 7.95)).toFixed(3);
+	$('glow').style.transform = `scale(${lerp(1, 1.1, t / 8)})`;
+};
+window.render(0);
+</script>
+</body>
+</html>

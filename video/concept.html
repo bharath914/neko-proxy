@@ -1,0 +1,435 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	* { box-sizing: border-box; margin: 0; }
+	html, body { width: 1080px; height: 1080px; overflow: hidden; background: #000; }
+	body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; color: #f5f5f7; -webkit-font-smoothing: antialiased; }
+	.abs { position: absolute; }
+	.mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+	#glow { inset: 0; background: radial-gradient(50% 40% at 50% 38%, rgb(59 139 255 / 0.28), transparent 70%), radial-gradient(40% 30% at 70% 80%, rgb(255 111 156 / 0.14), transparent 70%); }
+	#shot { left: 90px; top: 300px; width: 900px; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 40px 120px rgb(0 0 0 / 0.8); transform-origin: 50% 0; }
+	#shot img { width: 100%; display: block; }
+	#shot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.75)); }
+
+	#icon { left: 50%; top: 0; width: 220px; height: 220px; margin-left: -110px; filter: drop-shadow(0 20px 50px rgb(59 139 255 / 0.55)); }
+	#name { left: 0; right: 0; text-align: center; font-size: 76px; font-weight: 700; letter-spacing: -0.035em; }
+	#tag { left: 0; right: 0; text-align: center; font-size: 32px; font-weight: 500; letter-spacing: -0.015em; color: #a1a1a6; }
+
+	.head { left: 0; right: 0; top: 112px; text-align: center; font-size: 92px; line-height: 1.02; font-weight: 700; letter-spacing: -0.045em; }
+	.head.two { top: 56px; font-size: 80px; }
+	.grad { background: linear-gradient(95deg, #3b8bff, #8b6bff 50%, #ff6f9c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+	/* Scene A/B: phone, hub, agent */
+	#phone { left: 40px; top: 300px; width: 250px; height: 560px; border-radius: 46px; padding: 9px; background: #1c1c1e; box-shadow: 0 0 0 2px #3a3a3c, 0 40px 100px rgb(0 0 0 / 0.8), 0 0 60px rgb(59 139 255 / 0.15); }
+	#screen { position: relative; width: 100%; height: 100%; border-radius: 38px; overflow: hidden; background: #f2f2f7; color: #1c1c1e; }
+	.sb { position: absolute; top: 12px; left: 26px; right: 22px; display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; }
+	.notch { position: absolute; top: 10px; left: 50%; width: 76px; height: 22px; margin-left: -38px; border-radius: 12px; background: #000; }
+	.ttl { position: absolute; top: 52px; left: 18px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+	.item { position: absolute; left: 16px; right: 16px; height: 70px; border-radius: 16px; background: #fff; display: flex; align-items: center; gap: 12px; padding: 0 12px; }
+	.thumb { width: 46px; height: 46px; border-radius: 12px; }
+	.iname { font-size: 16px; font-weight: 600; }
+	.iprice { margin-left: auto; font-size: 16px; font-weight: 600; color: #6e6e73; }
+	.total { position: absolute; top: 280px; left: 18px; right: 18px; display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; }
+	#err { position: absolute; top: 318px; left: 16px; right: 16px; padding: 14px; border-radius: 16px; background: #ffe5e3; color: #c4251c; }
+	#err b { display: block; font-size: 16px; }
+	#err span { font-size: 14px; color: #d1453b; }
+	#btn { position: absolute; top: 460px; left: 16px; right: 16px; height: 52px; border-radius: 16px; background: #0a6cff; color: #fff; font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; }
+	.spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid rgb(255 255 255 / 0.35); border-top-color: #fff; }
+	#plabel { left: 40px; width: 250px; top: 880px; text-align: center; font-size: 18px; color: #8e8e93; font-weight: 500; }
+
+	#hub { left: 380px; top: 500px; width: 120px; height: 120px; filter: drop-shadow(0 16px 40px rgb(59 139 255 / 0.6)); }
+	#hublabel { left: 340px; width: 200px; top: 630px; text-align: center; font-size: 20px; font-weight: 600; }
+	#hubpill { left: 340px; width: 200px; top: 668px; text-align: center; }
+	#hubpill span { display: inline-block; font-size: 17px; font-weight: 700; padding: 5px 14px; border-radius: 999px; }
+	.line { height: 2px; top: 559px; background: linear-gradient(90deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.25), rgb(255 255 255 / 0.05)); }
+	#l1 { left: 296px; width: 84px; }
+	#l2 { left: 500px; width: 84px; }
+	.dot { width: 10px; height: 10px; border-radius: 50%; top: 555px; background: #64a8ff; box-shadow: 0 0 12px #3b8bff; }
+
+	#agent { left: 590px; top: 300px; width: 450px; height: 560px; border-radius: 26px; background: rgb(22 22 24 / 0.92); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.06), 0 40px 120px rgb(0 0 0 / 0.7); overflow: hidden; }
+	.ah { display: flex; align-items: center; gap: 8px; padding: 16px 20px; border-bottom: 1px solid rgb(255 255 255 / 0.08); font-size: 17px; font-weight: 600; color: #a1a1a6; }
+	.ah i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+	.ah .who { margin-left: 8px; color: #f5f5f7; }
+	.ah .mcp { margin-left: auto; font-size: 14px; padding: 3px 10px; border-radius: 8px; background: rgb(59 139 255 / 0.22); color: #9cc4ff; }
+	#log { padding: 18px 22px; font: 500 18px/1.5 ui-monospace, 'SF Mono', Menlo, monospace; }
+	#log > div { white-space: pre; }
+	#prompt { color: #f5f5f7; margin-bottom: 14px; }
+	#prompt .car { display: inline-block; width: 10px; height: 20px; vertical-align: -3px; background: #f5f5f7; }
+	.call { color: #f5f5f7; margin-top: 10px; }
+	.call em { font-style: normal; color: #ff9d6b; }
+	.res { color: #8e8e93; }
+	.g { color: #32d74b; } .r { color: #ff6961; } .y { color: #ffb340; }
+	#final { margin-top: 14px; white-space: normal !important; font: 500 20px/1.4 -apple-system, system-ui, sans-serif; color: #f5f5f7; }
+
+	#card { left: 50%; top: 650px; width: 620px; margin-left: -310px; padding: 28px 32px; border-radius: 30px; background: rgb(44 44 48 / 0.82); backdrop-filter: blur(36px) saturate(1.8); box-shadow: 0 0 0 2.5px #3b8bff, inset 0 1px 0 rgb(255 255 255 / 0.1), 0 40px 120px rgb(0 0 0 / 0.8); }
+	.badge { display: inline-block; font-size: 20px; font-weight: 600; padding: 4px 12px; border-radius: 9px; background: rgb(59 139 255 / 0.25); color: #9cc4ff; }
+	.ct { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin: 14px 0 6px; }
+	.cs { font-size: 22px; color: #a1a1a6; }
+	.cb { display: flex; gap: 12px; margin-top: 22px; }
+	.cb span { font-size: 24px; font-weight: 600; padding: 12px 28px; border-radius: 14px; }
+	#allow { background: #0a6cff; color: #fff; }
+	.deny { background: rgb(255 255 255 / 0.12); }
+	.finger { width: 54px; height: 54px; left: 0; top: 0; border-radius: 50%; background: rgb(255 255 255 / 0.85); box-shadow: 0 6px 20px rgb(0 0 0 / 0.5); }
+
+	/* Scene C: request list */
+	#list { left: 120px; right: 120px; top: 330px; padding: 18px; border-radius: 28px; background: rgb(28 28 30 / 0.82); backdrop-filter: blur(30px) saturate(1.8); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.08), 0 40px 120px rgb(0 0 0 / 0.7); }
+	.lh { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 600; padding: 4px 10px 14px; }
+	.rec { width: 13px; height: 13px; border-radius: 50%; background: #ff453a; }
+	.port { margin-left: auto; font: 500 20px ui-monospace, 'SF Mono', Menlo, monospace; color: #8e8e93; }
+	.rows { position: relative; height: 492px; overflow: hidden; }
+	.row { position: absolute; left: 0; right: 0; height: 74px; display: grid; grid-template-columns: 112px 1fr 92px 120px; align-items: center; gap: 12px; padding: 0 16px; border-radius: 16px; font: 500 25px ui-monospace, 'SF Mono', Menlo, monospace; }
+	.m { font-weight: 600; font-size: 21px; color: #32d74b; }
+	.m.POST { color: #ffb340; }
+	.u { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8e8e93; font-size: 23px; }
+	.u b { color: #f5f5f7; font-weight: 500; }
+	.s { font-weight: 700; text-align: right; }
+	.ok { color: #32d74b; } .bad { color: #ff6961; }
+	.t { text-align: right; color: #8e8e93; font-size: 21px; }
+
+	/* Scene D: what it is */
+	#hD { top: 120px; }
+	#hD span { display: inline-block; }
+	.tile { width: 440px; height: 160px; padding: 28px 30px; border-radius: 28px; display: flex; align-items: center; gap: 22px; background: rgb(28 28 30 / 0.85); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.08), 0 30px 80px rgb(0 0 0 / 0.6); }
+	.tile.wide { width: 900px; box-shadow: 0 0 0 2px rgb(139 107 255 / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.08), 0 30px 80px rgb(0 0 0 / 0.6), 0 0 60px rgb(139 107 255 / 0.25); }
+	.ic { flex: none; width: 76px; height: 76px; border-radius: 20px; display: grid; place-items: center; }
+	.ic svg { width: 42px; height: 42px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+	.tile b { display: block; font-size: 36px; font-weight: 700; letter-spacing: -0.025em; }
+	.tile div span { display: block; margin-top: 4px; font-size: 22px; color: #a1a1a6; font-weight: 500; }
+
+	/* Scene F: composer */
+	#comp { left: 90px; top: 268px; width: 900px; height: 500px; border-radius: 26px; overflow: hidden; background: rgb(24 24 26 / 0.94); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.08), 0 40px 120px rgb(0 0 0 / 0.75), 0 0 80px rgb(59 139 255 / 0.12); }
+	.ctabs { display: flex; align-items: center; gap: 8px; height: 58px; padding: 0 16px; background: rgb(255 255 255 / 0.04); border-bottom: 1px solid rgb(255 255 255 / 0.08); font-size: 20px; font-weight: 600; }
+	.ctab { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-radius: 12px; color: #8e8e93; }
+	.ctab.on { background: rgb(255 255 255 / 0.1); color: #f5f5f7; }
+	.ctab b { font: 700 16px ui-monospace, 'SF Mono', Menlo, monospace; color: #32d74b; }
+	.ctab b.po { color: #ffb340; }
+	.ctab i { width: 9px; height: 9px; border-radius: 50%; background: #ffb340; }
+	.curl { display: flex; gap: 12px; padding: 16px 16px 12px; }
+	.cmeth { display: flex; align-items: center; padding: 0 20px; height: 58px; border-radius: 14px; background: rgb(255 255 255 / 0.08); font: 700 22px ui-monospace, 'SF Mono', Menlo, monospace; color: #32d74b; }
+	.cfield { flex: 1; display: flex; align-items: center; height: 58px; padding: 0 20px; border-radius: 14px; background: rgb(0 0 0 / 0.35); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1); font: 500 23px ui-monospace, 'SF Mono', Menlo, monospace; white-space: pre; }
+	.cfield .v { color: #64a8ff; background: rgb(59 139 255 / 0.18); border-radius: 6px; padding: 1px 3px; }
+	.cfield .car { display: inline-block; width: 3px; height: 28px; margin-left: 2px; background: #64a8ff; }
+	#send { display: flex; align-items: center; padding: 0 30px; height: 58px; border-radius: 14px; background: #0a6cff; font-size: 22px; font-weight: 700; }
+	.csub { display: flex; gap: 28px; padding: 6px 24px 12px; font-size: 20px; font-weight: 600; color: #8e8e93; border-bottom: 1px solid rgb(255 255 255 / 0.08); }
+	.csub .on { color: #f5f5f7; box-shadow: 0 3px 0 #3b8bff; padding-bottom: 8px; }
+	.csub em { font-style: normal; color: #32d74b; }
+	#cres { position: relative; padding: 16px 24px; }
+	.cstat { display: flex; align-items: center; gap: 14px; font: 600 21px ui-monospace, 'SF Mono', Menlo, monospace; color: #a1a1a6; }
+	.cstat .ok { padding: 5px 14px; border-radius: 10px; background: rgb(50 215 75 / 0.18); color: #32d74b; font-weight: 700; }
+	.cbody { display: flex; gap: 22px; margin-top: 14px; }
+	.cjson { flex: 1.1; padding: 16px 20px; border-radius: 16px; background: rgb(0 0 0 / 0.35); font: 500 21px/1.55 ui-monospace, 'SF Mono', Menlo, monospace; color: #c7c7cc; white-space: pre; }
+	.cjson .k { color: #64a8ff; } .cjson .n { color: #ffb340; } .cjson .st { color: #32d74b; }
+	.ctests { flex: 1; padding-top: 4px; }
+	.cth { font-size: 20px; font-weight: 700; color: #a1a1a6; margin-bottom: 10px; }
+	.cth span { color: #32d74b; }
+	.ct1 { display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 600; padding: 9px 0; }
+	.ct1 i { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #30b350; display: grid; place-items: center; font-style: normal; font-size: 17px; font-weight: 800; }
+	.chip2 { padding: 12px 24px; border-radius: 999px; background: rgb(28 28 30 / 0.9); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 14px 40px rgb(0 0 0 / 0.5); font-size: 25px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+	#url { left: 50%; transform: translateX(-50%); padding: 16px 30px; border-radius: 999px; background: #0a6cff; font-size: 30px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+	#foot { left: 0; right: 0; bottom: 56px; text-align: center; font-size: 22px; color: #6e6e73; }
+</style>
+</head>
+<body>
+<div id="glow" class="abs"></div>
+<div id="shot" class="abs"><img src="inspector-dark.jpg"></div>
+
+<img id="icon" class="abs" src="neko.png">
+<div id="name" class="abs">Neko Proxy</div>
+<div id="tag" class="abs">The open-source HTTP & HTTPS debugging proxy</div>
+
+<div id="hA" class="abs head two"><span class="grad">Your AI agent</span><br>talks to the proxy.</div>
+<div id="hB" class="abs head two">It writes rules<br><span class="grad">and sets breakpoints.</span></div>
+<div id="hC" class="abs head">See every request.</div>
+
+<div id="phone" class="abs"><div id="screen">
+	<div class="notch"></div>
+	<div class="sb"><span>9:41</span><span style="display:flex;gap:5px;align-items:center">5G <i style="width:24px;height:12px;border-radius:3px;border:1.5px solid #1c1c1e;padding:1px;display:inline-block"><i style="display:block;width:70%;height:100%;background:#1c1c1e;border-radius:1px"></i></i></span></div>
+	<div class="ttl">Cart</div>
+	<div class="item" style="top:106px"><span class="thumb" style="background:linear-gradient(135deg,#ff9f0a,#ff375f)"></span><span class="iname">Sneakers</span><span class="iprice">$89</span></div>
+	<div class="item" style="top:188px"><span class="thumb" style="background:linear-gradient(135deg,#64d2ff,#0a84ff)"></span><span class="iname">Cap</span><span class="iprice">$24</span></div>
+	<div class="total"><span>Total</span><span>$113</span></div>
+	<div id="err"><b>Checkout unavailable</b><span>Server error 503. Try again.</span></div>
+	<div id="btn"><span id="btnspin" class="spin"></span><span id="btntext">Checkout</span></div>
+</div></div>
+<div id="plabel" class="abs">Your app · Neko SDK</div>
+
+<div id="l1" class="abs line"></div>
+<div id="l2" class="abs line"></div>
+<img id="hub" class="abs" src="neko.png">
+<div id="hublabel" class="abs">Neko</div>
+<div id="hubpill" class="abs"><span id="pill"></span></div>
+
+<div id="agent" class="abs">
+	<div class="ah"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="who">Claude</span><span class="mcp">MCP · neko</span></div>
+	<div id="log">
+		<div id="prompt"></div>
+		<div id="c1" class="call">⏺ <em>neko</em> list_flows</div>
+		<div id="r1" class="res">  ⎿  POST /checkout  <span class="g">200</span></div>
+		<div id="c2" class="call">⏺ <em>neko</em> create_mock</div>
+		<div id="r2" class="res">  ⎿  <span class="r">503</span> for POST /checkout <span class="g">✓</span></div>
+		<div id="c3" class="call">⏺ <em>neko</em> add_breakpoint</div>
+		<div id="r3" class="res">  ⎿  POST /checkout <span class="g">✓</span></div>
+		<div id="r4" class="res">  ⎿  <span class="y">⏸ held</span> POST /checkout</div>
+		<div id="final">The error screen works. The retry is paused so you can look inside.</div>
+	</div>
+</div>
+
+<div id="card" class="abs">
+	<span class="badge">AI client</span>
+	<p class="ct">Mock 503 for POST /checkout</p>
+	<p class="cs">Claude wants to add a rule. Changes wait for you.</p>
+	<div class="cb"><span id="allow">Allow</span><span class="deny">Deny</span></div>
+</div>
+
+<div id="list" class="abs">
+	<div class="lh"><span class="rec"></span>Recording<span class="port">127.0.0.1:8899</span></div>
+	<div class="rows" id="rows"></div>
+</div>
+
+<div id="hD" class="abs head"><span id="w1">Native.</span> <span id="w2">Fast.</span> <span id="w3" class="grad">Simple.</span></div>
+<div id="t1" class="abs tile" style="left:90px;top:330px"><span class="ic" style="background:linear-gradient(135deg,#3b8bff,#0a5bd6)"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span><div><b>Native app</b><span>macOS and Linux</span></div></div>
+<div id="t2" class="abs tile" style="left:550px;top:330px"><span class="ic" style="background:linear-gradient(135deg,#ffb340,#ff7a1a)"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span><div><b>Fast</b><span>Rust core, starts instantly</span></div></div>
+<div id="t3" class="abs tile" style="left:90px;top:510px"><span class="ic" style="background:linear-gradient(135deg,#32d74b,#1f9e3a)"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M9 9v11"/></svg></span><div><b>Simple UI</b><span>Capture with zero setup</span></div></div>
+<div id="t4" class="abs tile" style="left:550px;top:510px"><span class="ic" style="background:linear-gradient(135deg,#ff6f9c,#d63a6e)"><svg viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><div><b>Open source</b><span>MIT or Apache-2.0</span></div></div>
+<div id="t5" class="abs tile wide" style="left:90px;top:700px"><span class="ic" style="background:linear-gradient(135deg,#8b6bff,#5a3fd6)"><svg viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/></svg></span><div><b>Connects to Claude with MCP</b><span>Your agent reads traffic, writes rules, sets breakpoints</span></div></div>
+
+<div id="hF" class="abs head two">Compose requests<br><span class="grad">and test them.</span></div>
+<div id="comp" class="abs">
+	<div class="ctabs"><span class="ctab on"><b>GET</b>Get order<i></i></span><span class="ctab"><b class="po">POST</b>Create order</span><span class="ctab">+</span></div>
+	<div class="curl"><span class="cmeth">GET</span><span class="cfield" id="cfield"></span><span id="send">Send</span></div>
+	<div class="csub"><span>Params</span><span>Authorization</span><span>Headers</span><span>Body</span><span class="on">Tests <em>3</em></span></div>
+	<div id="cres">
+		<div class="cstat" id="cstat"><span class="ok">200 OK</span><span>84 ms</span><span>1.2 KB</span></div>
+		<div class="cbody">
+			<div class="cjson" id="cjson"><span class="k">"id"</span>: <span class="n">4821</span>,
+<span class="k">"status"</span>: <span class="st">"shipped"</span>,
+<span class="k">"total"</span>: <span class="n">113.00</span>,
+<span class="k">"items"</span>: <span class="n">2</span></div>
+			<div class="ctests"><div class="cth">Tests <span>3/3 passed</span></div>
+				<div class="ct1" id="ct1"><i>✓</i>Status equals 200</div>
+				<div class="ct1" id="ct2"><i>✓</i>Time under 500 ms</div>
+				<div class="ct1" id="ct3"><i>✓</i>status equals shipped</div></div>
+		</div>
+	</div>
+</div>
+<div id="g1" class="abs chip2" style="left:90px;top:806px">Collections</div>
+<div id="g2" class="abs chip2" style="left:302px;top:806px">Environments</div>
+<div id="g3" class="abs chip2" style="left:540px;top:806px">Code snippets</div>
+<div id="g4" class="abs chip2" style="left:778px;top:806px">Postman import</div>
+<div id="f3" class="abs finger"></div>
+
+<div id="url" class="abs">bharath914.github.io/neko-proxy</div>
+<div id="foot" class="abs">Open source · macOS · Linux · Works with Claude via MCP</div>
+
+<div id="f1" class="abs finger"></div>
+<div id="f2" class="abs finger"></div>
+
+<script>
+window.DURATION = 20.4;
+const PROMPT = '> Test checkout when the API fails';
+
+// Real requests from the capture behind the website screenshots.
+const ROWS = [
+	['GET', 'api.github.com', '/repos/rust-lang/rust', 200, '554 ms'],
+	['POST', 'dummyjson.com', '/auth/login', 200, '212 ms'],
+	['POST', 'dummyjson.com', '/carts/add', 200, '301 ms'],
+	['GET', 'dummyjson.com', '/products/search?q=phone', 200, '313 ms'],
+	['GET', 'pokeapi.co', '/api/v2/pokemon/pikachu', 200, '53 ms'],
+	['GET', 'httpbin.org', '/status/500', 500, '1.07 s']
+];
+const rowsEl = document.getElementById('rows');
+const rowEls = ROWS.map((r) => {
+	const d = document.createElement('div');
+	d.className = 'row';
+	d.innerHTML = `<span class="m ${r[0]}">${r[0]}</span><span class="u"><b>${r[1]}</b>${r[2]}</span><span class="s ${r[3] >= 500 ? 'bad' : 'ok'}">${r[3]}</span><span class="t">${r[4]}</span>`;
+	rowsEl.appendChild(d);
+	return d;
+});
+const $ = (id) => document.getElementById(id);
+
+// Packets: phone → hub all through scenes A/B, and short bursts between hub and agent on each tool call.
+const dots = [];
+for (let i = 0; i < 16; i++) {
+	const d = document.createElement('div');
+	d.className = 'abs dot';
+	document.body.insertBefore(d, $('agent'));
+	dots.push(d);
+}
+// [start, from x, to x, color]
+const BURSTS = [];
+for (const [at, dir] of [[2.1, -1], [2.45, 1], [3.05, -1], [4.05, 1], [5.5, -1], [5.85, 1], [6.6, 1]])
+	for (let k = 0; k < 3; k++) BURSTS.push([at + k * 0.07, dir < 0 ? 584 : 496, dir < 0 ? 496 : 584, dir < 0 ? '#ff9d6b' : '#64a8ff']);
+
+// Springs in closed form, Apple-style: damping ratio + response (seconds).
+function spring(t, response = 0.45, damping = 1) {
+	if (t <= 0) return 0;
+	const w = (2 * Math.PI) / response;
+	if (damping >= 1) return 1 - (1 + w * t) * Math.exp(-w * t);
+	const wd = w * Math.sqrt(1 - damping * damping);
+	return 1 - Math.exp(-damping * w * t) * (Math.cos(wd * t) + ((damping * w) / wd) * Math.sin(wd * t));
+}
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const fade = (t, a, b) => clamp((t - a) / (b - a));
+// In at `a`, out at `b` (each a short spring/fade).
+const window_ = (t, a, b, inDur = 0.4, outDur = 0.35) => Math.min(spring(t - a, inDur), 1 - fade(t, b, b + outDur));
+function set(el, o, tf = '', extra = {}) {
+	el.style.opacity = o.toFixed(3);
+	el.style.transform = tf;
+	el.style.visibility = o < 0.002 ? 'hidden' : 'visible';
+	Object.assign(el.style, extra);
+}
+const rise = (t, a, d = 24) => `translateY(${lerp(d, 0, spring(t - a, 0.45))}px)`;
+// A tap: finger glides in from (x0, y0), presses at `at`, leaves.
+function tap(el, t, at, x, y, x0, y0) {
+	const o = window_(t, at - 0.4, at + 0.25, 0.3, 0.25);
+	const k = spring(t - (at - 0.4), 0.42);
+	const press = fade(t, at - 0.05, at + 0.05) * (1 - fade(t, at + 0.1, at + 0.25));
+	set(el, o * 0.9, `translate(${lerp(x0, x, k) - 27}px, ${lerp(y0, y, k) - 27}px) scale(${1 - press * 0.25})`);
+	return press;
+}
+
+window.render = function (t) {
+	const SCENE_OUT = 8.4;
+
+	// Headlines.
+	set($('hA'), window_(t, 0.05, 2.75, 0.5, 0.3), rise(t, 0.05, 30) + ` translateY(${lerp(0, -30, fade(t, 2.75, 3.05))}px)`);
+	set($('hB'), window_(t, 2.95, SCENE_OUT, 0.5, 0.3), rise(t, 2.95, 30) + ` translateY(${lerp(0, -30, fade(t, SCENE_OUT, SCENE_OUT + 0.3))}px)`);
+	set($('hC'), window_(t, 8.75, 10.6, 0.5, 0.3), rise(t, 8.75, 30) + ` translateY(${lerp(0, -30, fade(t, 10.6, 10.9))}px)`);
+
+	// Phone, hub and agent spring in, then leave together.
+	const out = fade(t, SCENE_OUT, SCENE_OUT + 0.35);
+	const sceneTf = (a, dx) => { const k = spring(t - a, 0.55, 0.82); return [clamp(k * 1.4) * (1 - out), `translate(${lerp(dx, 0, k)}px, ${lerp(40, 0, k) - out * 30}px) scale(${lerp(0.94, 1, k) - out * 0.04})`]; };
+	set($('phone'), ...sceneTf(0.15, -60));
+	set($('plabel'), ...sceneTf(0.3, -40));
+	set($('agent'), ...sceneTf(0.3, 60));
+	const [ho, htf] = sceneTf(0.22, 0);
+	set($('hub'), ho, htf);
+	set($('hublabel'), ho, htf);
+	set($('l1'), ho, ''); set($('l2'), ho, '');
+
+	// Hub status pill.
+	const pill = $('pill');
+	const mocked = t > 5.05 && t < 6.55, paused = t >= 6.55;
+	const pk = paused ? spring(t - 6.55, 0.4, 0.7) : spring(t - 5.05, 0.4, 0.7);
+	set($('hubpill'), (mocked || paused ? clamp(pk * 1.5) : 0) * (1 - out), `scale(${lerp(0.7, 1, pk)})`);
+	pill.textContent = paused ? '⏸ paused' : 'mocked 503';
+	Object.assign(pill.style, paused ? { background: 'rgb(255 179 64 / 0.2)', color: '#ffc46b' } : { background: 'rgb(255 111 156 / 0.2)', color: '#ff8fb1' });
+
+	// Packets.
+	dots.forEach((d) => set(d, 0));
+	let di = 0;
+	if (t > 0.6 && t < SCENE_OUT) {
+		for (let k = 0; k < 4; k++) {
+			const p = ((t - 0.6) / 0.9 + k / 4) % 1;
+			const x = lerp(296, 376, p);
+			set(dots[di++], Math.sin(p * Math.PI) * (1 - out), `translate(${x}px, 0)`, { left: '0px', background: '#64a8ff', boxShadow: '0 0 12px #3b8bff' });
+		}
+	}
+	for (const [a, x0, x1, c] of BURSTS) {
+		const p = (t - a) / 0.32;
+		if (p <= 0 || p >= 1 || di >= dots.length) continue;
+		set(dots[di++], Math.sin(p * Math.PI), `translate(${lerp(x0, x1, p)}px, 0)`, { left: '0px', background: c, boxShadow: `0 0 12px ${c}` });
+	}
+	// Hub pulses on each call.
+	const pulse = Math.max(0, ...[2.1, 3.05, 5.05, 5.5, 6.55].map((a) => (t > a ? Math.exp(-(t - a) * 7) * (t - a < 0.5 ? 1 : 0) : 0)));
+	if (ho > 0) $('hub').style.transform = htf + ` scale(${1 + pulse * 0.08})`;
+
+	// Agent log.
+	const n = Math.floor(clamp((t - 0.9) / 1.0) * PROMPT.length);
+	const caret = t > 0.5 && t < 2.2 && (Math.floor(t * 3) % 2 === 0 || (t > 0.9 && t < 1.9));
+	$('prompt').innerHTML = PROMPT.slice(0, n) + (caret ? '<span class="car"></span>' : '');
+	set($('prompt'), t > 0.5 ? 1 : 0);
+	for (const [id, at] of [['c1', 2.1], ['r1', 2.45], ['c2', 3.05], ['r2', 4.05], ['c3', 5.5], ['r3', 5.85], ['r4', 6.6], ['final', 7.0]]) {
+		const k = spring(t - at, 0.4);
+		set($(id), clamp(k * 1.4), `translateY(${lerp(10, 0, k)}px)`);
+	}
+
+	// Approval card for create_mock, with a tap on Allow.
+	const cIn = window_(t, 3.3, 4.25, 0.5, 0.35);
+	set($('card'), cIn * (1 - out), `translateY(${lerp(40, 0, spring(t - 3.3, 0.5, 0.82))}px) scale(${lerp(0.92, 1, spring(t - 3.3, 0.5, 0.82))})`, { filter: `blur(${(1 - clamp(cIn * 1.2)) * 10}px)` });
+	const pA = tap($('f1'), t, 3.85, 320, 842, 760, 1080);
+	$('allow').style.transform = `scale(${1 - pA * 0.08})`;
+	const allowed = t > 3.95;
+	$('allow').textContent = allowed ? '✓ Allowed' : 'Allow';
+	$('allow').style.background = allowed ? '#30b350' : '#0a6cff';
+
+	// Phone: tap Checkout (mocked 503), then Try again (held at breakpoint).
+	const f2a = tap($('f2'), t, 4.85, 165, 795, 260, 1080);
+	const f2b = t > 5.6 ? tap($('f2'), t, 6.3, 165, 795, 260, 1080) : 0;
+	const press = Math.max(f2a, f2b);
+	const errK = spring(t - 5.15, 0.45, 0.75);
+	set($('err'), t > 5.15 && t < 6.35 ? clamp(errK * 1.4) : t >= 6.35 ? 1 - fade(t, 6.35, 6.55) : 0, `translateY(${lerp(-12, 0, errK)}px) scale(${lerp(0.96, 1, errK)})`);
+	const spinning = (t > 4.9 && t < 5.15) || t > 6.35;
+	$('btntext').textContent = spinning ? (t > 6.35 ? 'Waiting…' : '') : t > 5.15 ? 'Try again' : 'Checkout';
+	$('btnspin').style.display = spinning ? 'block' : 'none';
+	$('btnspin').style.transform = `rotate(${t * 720}deg)`;
+	$('btn').style.transform = `scale(${1 - press * 0.05})`;
+	$('btn').style.background = spinning ? '#5a9bff' : '#0a6cff';
+
+	// Scene C: the real Inspector lying back, and requests dropping in.
+	const shotIn = window_(t, 8.6, 10.6, 0.7, 0.35);
+	set($('shot'), shotIn * 0.45, `perspective(1600px) rotateX(${lerp(26, 18, fade(t, 8.6, 10.6))}deg) translateY(${lerp(80, 0, spring(t - 8.6, 0.8))}px) scale(1.12)`);
+	const listIn = window_(t, 8.75, 10.6, 0.55, 0.35);
+	set($('list'), listIn, `translateY(${lerp(60, 0, spring(t - 8.75, 0.55))}px)`);
+	rowEls.forEach((el, i) => {
+		const k = spring(t - (8.95 + i * 0.2), 0.42, 0.78);
+		set(el, clamp(k * 1.5), `translateY(${i * 80 + lerp(-40, 0, k)}px)`);
+	});
+
+	// Scene F: the composer. Type a URL, send, tests pass.
+	const F = 10.85, F_OUT = 15.3, fOut = fade(t, F_OUT, F_OUT + 0.3);
+	const hk = spring(t - F, 0.5);
+	set($('hF'), clamp(hk * 1.3) * (1 - fOut), `translateY(${lerp(30, 0, hk) - fOut * 30}px)`);
+	const ck = spring(t - (F + 0.2), 0.6, 0.82);
+	set($('comp'), clamp(ck * 1.4) * (1 - fOut), `translateY(${lerp(60, 0, ck) - fOut * 30}px) scale(${lerp(0.95, 1, ck) - fOut * 0.03})`);
+	const URL_TEXT = '{{host}}/orders/4821';
+	const typed = Math.floor(clamp((t - 11.45) / 0.9) * URL_TEXT.length);
+	const caretF = t > 11.3 && t < 12.5 && Math.floor(t * 3) % 2 === 0;
+	const shown = URL_TEXT.slice(0, typed);
+	$('cfield').innerHTML = shown.replace(/\{\{host\}\}|\{\{host\}?|\{\{?[a-z]*$|\{$/, (m) => `<span class="v">${m}</span>`) + (caretF || (t > 11.3 && t < 12.4) ? '<span class="car"></span>' : '');
+	const sendPress = tap($('f3'), t, 12.55, 905, 361, 960, 760);
+	$('send').style.transform = `scale(${1 - sendPress * 0.08})`;
+	$('send').style.background = t > 12.6 && t < 12.9 ? '#5a9bff' : '#0a6cff';
+	const rk = spring(t - 12.65, 0.5, 0.85);
+	set($('cres'), t > 12.65 ? clamp(rk * 1.5) : 0, `translateY(${lerp(30, 0, rk)}px)`);
+	[['ct1', 13.0], ['ct2', 13.2], ['ct3', 13.4]].forEach(([id, a]) => {
+		const k = spring(t - a, 0.4, 0.7);
+		set($(id), clamp(k * 1.5), `translateX(${lerp(-20, 0, k)}px)`);
+		$(id).firstChild.style.transform = `scale(${lerp(0.4, 1, spring(t - a - 0.05, 0.35, 0.55))})`;
+	});
+	[['g1', 13.8], ['g2', 13.92], ['g3', 14.04], ['g4', 14.16]].forEach(([id, a]) => {
+		const k = spring(t - a, 0.5, 0.75);
+		set($(id), clamp(k * 1.4) * (1 - fOut), `translateY(${lerp(34, 0, k) - fOut * 20}px) scale(${lerp(0.9, 1, k)})`);
+	});
+
+	// Scene D: native, fast, simple, open source, Claude via MCP.
+	const D_OUT = 18.1, dOut = fade(t, D_OUT, D_OUT + 0.3);
+	set($('hD'), clamp(spring(t - 15.65, 0.5) * 1.3) * (1 - dOut), `translateY(${lerp(30, 0, spring(t - 15.65, 0.5)) - dOut * 30}px)`);
+	[['w1', 15.65], ['w2', 15.85], ['w3', 16.05]].forEach(([id, a]) => {
+		const k = spring(t - a, 0.45, 0.7);
+		set($(id), clamp(k * 1.4), `translateY(${lerp(24, 0, k)}px) scale(${lerp(0.85, 1, k)})`);
+	});
+	[['t1', 16.3], ['t2', 16.42], ['t3', 16.54], ['t4', 16.66], ['t5', 16.9]].forEach(([id, a]) => {
+		const k = spring(t - a, 0.5, 0.78);
+		set($(id), clamp(k * 1.4) * (1 - dOut), `translateY(${lerp(50, 0, k) - dOut * 30}px) scale(${lerp(0.9, 1, k)})`);
+	});
+
+	// Scene E: end card.
+	const E = 18.3;
+	const back = spring(t - E, 0.55, 0.8);
+	set($('icon'), clamp(back * 1.3), `translateY(${lerp(330, 250, back)}px) scale(${lerp(0.6, 0.9, back)})`);
+	const nameE = spring(t - E - 0.15, 0.5);
+	set($('name'), nameE, `translateY(${lerp(24, 0, nameE)}px)`, { top: '500px' });
+	set($('tag'), spring(t - E - 0.3, 0.5), `translateY(${lerp(20, 0, spring(t - E - 0.3, 0.5))}px)`, { top: '596px' });
+	const u = spring(t - E - 0.45, 0.5, 0.8);
+	set($('url'), clamp(u * 1.3), `translateX(-50%) translateY(${lerp(30, 0, u)}px) scale(${lerp(0.9, 1, u)})`, { top: '700px' });
+	set($('foot'), fade(t, E + 0.6, E + 0.95), '');
+	set($('glow'), 1, `scale(${lerp(1, 1.15, t / window.DURATION)})`);
+};
+window.render(0);
+</script>
+</body>
+</html>

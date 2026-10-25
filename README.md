@@ -1,107 +1,62 @@
 # Neko Proxy
 
-Fast, simple, open-source HTTP/HTTPS debugging proxy for Linux. A Rust capture core (`nekod`) and a native desktop app.
-
-## Run it
-
-```bash
-# once: Rust (https://rustup.rs). Nothing else to install.
-cargo run --release -p neko-desktop        # builds the core and the app, starts both
-```
-
-The app starts `nekod` for you and stops it on exit. Then:
-
-1. **Settings > Certificate**: run the install command shown for your distro (it asks before running anything), so HTTPS can be decrypted.
-2. **Settings > Open a browser through the proxy**, or paste the snippet from **Terminal and tools**.
-3. Traffic appears in **Inspector**.
-
-Try the interface without a core: `cargo run --release -p neko-desktop -- --demo --live`.
-
-## Rules, breakpoints and AI clients
-
-**Rules** (mock, map remote, rewrite, throttle, breakpoint, Map Local) and **Breakpoints** are screens in the app. Select a flow and use **Replay**, **Mock** or **Break**.
-
-Let Claude Code read traffic and set these up:
-
-```bash
-nekod mcp     # prints: claude mcp add --transport http proxy http://127.0.0.1:8898/mcp --header "Authorization: Bearer ..."
-```
-
-Changes from an AI client wait for your **Allow** in the app unless you switch it in Settings > AI clients. See `docs/phase-2.md`.
-
-## See your own app's calls: the in-app SDK
-
-Add one Gradle plugin to a debug build and its network calls show up in the Inspector, with no proxy or certificate to set up. Emulators and USB phones connect on their own; the phone icon in the toolbar says whether an app can reach the desktop and how to fix it if not.
-
-```kotlin
-// settings.gradle.kts
-pluginManagement { repositories { maven("https://bharath914.github.io/neko-proxy-sdk-maven/"); google(); mavenCentral(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositories { maven("https://bharath914.github.io/neko-proxy-sdk-maven/"); google(); mavenCentral() } }
-// app/build.gradle.kts
-plugins { id("com.android.application"); id("dev.nekoproxy.inspector") version "0.1.0" }
-```
-
-Details: `docs/sdk-quickstart.md`. iOS is not finished (`sdk/ios/README.md`).
-
-## Headless
-
-```bash
-cargo build --release -p neko-cli
-target/release/nekod run                   # proxy on 127.0.0.1:8899, API on $XDG_RUNTIME_DIR/neko/api.sock
-target/release/nekod flows                 # list captures (also: flows 'status:5xx host:example.com')
-target/release/nekod export --har -o out.har
-target/release/nekod ca path               # certificate to trust
-curl -x http://127.0.0.1:8899 --cacert "$(target/release/nekod ca path)" https://example.com
-```
+A fast, native, open-source HTTP/HTTPS debugging proxy with a built-in API client. Capture and inspect traffic, mock and break requests, compose and test your own, and let Claude help over MCP. Rust core, native Mac app.
 
 ## Install
 
-From a release (Linux x86_64 and aarch64):
-
-```bash
-sudo apt install ./neko_<ver>_amd64.deb        # Debian, Ubuntu
-sudo dnf install ./neko-<ver>-1.x86_64.rpm     # Fedora, RHEL, openSUSE
-chmod +x Neko-<ver>-x86_64.AppImage            # any distro, needs libfuse2 or --appimage-extract-and-run
-sh packaging/install.sh                         # any distro, into ~/.local, no root; --uninstall removes it
-```
-
-macOS 13+ (Apple silicon and Intel): open `Neko-<ver>-macos-universal.dmg` and drag Neko to Applications, or install from Terminal:
+**macOS 13+ (Apple silicon and Intel), from Terminal:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bharath914/neko-proxy/main/packaging/install-mac.sh | sh
 ```
 
-The app is not notarized yet, so a `.dmg` downloaded in a browser needs System Settings > Privacy & Security > Open Anyway on first launch; the Terminal install doesn't. Signing setup: `docs/macos-signing.md`.
+It downloads the latest release, checks its checksum, and puts `Neko.app` in `/Applications` (or `~/Applications`). No Gatekeeper prompt. Remove it with `... | sh -s -- --uninstall`.
 
-Every release lists `SHA256SUMS`; `install.sh` and `install-mac.sh` verify against it.
+Prefer a disk image? Download `Neko-<ver>-macos-universal.dmg` from [Releases](https://github.com/bharath914/neko-proxy/releases). The app is not notarized yet, so open it once via System Settings > Privacy & Security > Open Anyway.
 
-## Package and release
-
-```bash
-packaging/build.sh      # dist/: .tar.gz, .deb, .rpm (needs rpmbuild), .AppImage (needs APPIMAGETOOL=...), SHA256SUMS
-```
-
-Releases are built by `.github/workflows/release.yml` on Ubuntu 22.04 (glibc 2.35) for both architectures.
-Push a tag matching the `Cargo.toml` version (`git tag v0.1.0 && git push origin v0.1.0`) and the workflow opens a
-**draft** release; nothing is public until you publish it. Run the workflow by hand to get the packages as artifacts only.
-
-## Develop
+**Linux (x86_64, aarch64), into `~/.local`, no root:**
 
 ```bash
-cargo test --workspace                                   # core, API, app model, headless UI renders
-NEKO_SHOT_DIR=/tmp/shots cargo test -p neko-desktop    # writes a PNG of every screen
-cargo +nightly fuzz run --fuzz-dir core/fuzz http_parse  # needs: cargo install cargo-fuzz
+curl -fsSL https://raw.githubusercontent.com/bharath914/neko-proxy/main/packaging/install.sh | sh
 ```
 
-Layout: `core/crates/*` Rust core, `proto/api.proto` client API, `desktop/` app, `docs/` design and benchmarks.
-Design notes: `docs/desktop-design.md`.
+`.deb`, `.rpm` and AppImage packages are on the Releases page too.
+
+## Use it
+
+1. Open Neko. In **Settings > Certificate**, install the certificate so HTTPS can be read.
+2. Browse through the proxy (**Settings > Open a browser through the proxy**) or paste the snippet from **Terminal and tools**.
+3. Requests appear in **Inspector**. Select one to replay, mock or break on it.
+4. Open **Compose** to build requests like in Postman: collections, environments, tests, code snippets. The Composer is macOS only for now.
+
+## Let Claude in (MCP)
+
+```bash
+nekod mcp    # prints the `claude mcp add ...` command
+```
+
+Claude can read traffic and propose mocks and breakpoints. Every change waits for your **Allow** in the app.
+
+## Build from source
+
+```bash
+cargo build -p neko-cli && cd desktop-macos && swift run Neko    # macOS app
+cargo run --release -p neko-desktop                               # Linux app
+cargo test --workspace                                            # tests (macOS: also `swift test` in desktop-macos)
+```
+
+Layout: `core/crates/*` Rust core, `proto/api.proto` client API, `desktop-macos/` and `desktop/` apps, `sdk/` in-app SDK for Android and iOS, `docs/` design notes.
 
 ## Contributing
 
-Issues and pull requests are welcome. Run `cargo test --workspace` before sending a change, and see `CLAUDE.md` for the design constraints new work must keep (the UI holds no logic, the data path never waits on the UI or disk, captured bodies are untrusted data).
+Found a bug, a rough edge, or something missing? **Raise an issue or send a PR.** Small fixes are as welcome as big features.
+
+Good places to start: scripting in the Composer, digest and OAuth auth, a scenario-rule editor on macOS, more Linux testing. Run `cargo test --workspace` before sending a change, and read `CLAUDE.md` for the few rules new work must keep (the UI holds no logic, the data path never waits on the UI or disk, captured bodies are untrusted).
+
+## More
+
+[Features](docs/features.md) · [Composer](docs/composer-postman.md) · [MCP and rules](docs/phase-2.md) · [In-app SDK](docs/sdk-quickstart.md) · [Packaging and releases](docs/linux-packaging.md), [macOS signing](docs/macos-signing.md) · [Benchmarks](docs/bench.md)
 
 ## License
 
-Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.
-
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this project by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+Either [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Unless you say otherwise, any contribution you submit is dual licensed the same way.
