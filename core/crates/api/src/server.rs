@@ -113,7 +113,7 @@ fn to_query(f: Option<&pb::Filter>, since_ms: i64, until_ms: i64) -> Query {
     }
 }
 
-fn error(id: u64, code: &str, message: impl Into<String>) -> pb::ServerMessage {
+pub(crate) fn error(id: u64, code: &str, message: impl Into<String>) -> pb::ServerMessage {
     pb::ServerMessage {
         id,
         body: Some(Res::Error(pb::ErrorResponse {
@@ -771,6 +771,21 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
                 Err(e) => error(id, "fetch_failed", e.to_string()),
             }
         }
+        r @ (Req::ComposerGet(_)
+        | Req::ComposerSave(_)
+        | Req::ComposerRemove(_)
+        | Req::ComposerCollection(_)
+        | Req::ComposerEnvironments(_)
+        | Req::ComposerClearHistory(_)
+        | Req::ComposerResolve(_)
+        | Req::ComposerImport(_)
+        | Req::ComposerUrl(_)
+        | Req::ComposerBulk(_)
+        | Req::ComposerCode(_)
+        | Req::ComposerConfig(_)
+        | Req::ComposerGlobals(_)
+        | Req::ComposerTransfer(_)
+        | Req::ComposerSend(_)) => crate::composer::handle(ctx, id, r).await,
         Req::Watch(_) | Req::Subscribe(_) | Req::Unsubscribe(_) | Req::DevicesSubscribe(_) => {
             error(id, "internal", "handled elsewhere")
         }

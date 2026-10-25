@@ -135,6 +135,7 @@ final class DisclosureHeader: NSView {
 @MainActor
 final class DetailPane: NSView {
     private(set) var detail: FlowDetail?
+    var onCompose: (() -> Void)?
     var onCopyCurl: (() -> Void)?
     var onCopyURL: (() -> Void)?
     var onReplay: (() -> Void)?
@@ -153,8 +154,7 @@ final class DetailPane: NSView {
     private var headerStack: NSStackView?
     private var headerBottom: NSLayoutConstraint?
     private var open: Set<String> = []
-    private var raw: Set<String> = []
-    private var folds: [String: Set<Int>] = [:]
+    private var bodyStates: [String: BodyViewState] = [:]
     private var sep = Divider()
     override var isFlipped: Bool { true }
 
@@ -220,7 +220,7 @@ final class DetailPane: NSView {
     func show(_ d: FlowDetail?, resetTab: Bool = false) {
         let same = d?.summary.id == detail?.summary.id
         detail = d
-        if resetTab || !same { open = []; raw = []; folds = [:] }
+        if resetTab || !same { open = []; bodyStates = [:] }
         rebuild(keepScroll: same)
     }
 
@@ -311,7 +311,9 @@ final class DetailPane: NSView {
         mock.toolTip = "Answer requests like this with a fixed response"
         let brk = Chip("Break"); brk.isEnabled = !s.isTunnel; brk.onClick = { [weak self] in self?.onBreak?() }
         brk.toolTip = "Hold requests like this until you resume them"
-        for c in [curl, url, replay, mock, brk] { wrap.addSubview(c) }
+        let compose = Chip("Edit in Composer"); compose.isEnabled = !s.isTunnel
+        compose.onClick = { [weak self] in self?.onCompose?() }
+        for c in [curl, url, compose, replay, mock, brk] { wrap.addSubview(c) }
         rows.append(wrap)
         rows.append(tabs)
 
@@ -397,7 +399,9 @@ final class DetailPane: NSView {
         }
         stack.setCustomSpacing(18, after: stack.arrangedSubviews.last!)
         stack.addArrangedSubview(overline("\(name) body"))
-        addFull(bodyView(body, key: key))
+        let state = bodyStates[key] ?? BodyViewState()
+        bodyStates[key] = state
+        addFull(BodyViewer(body: body, state: state))
     }
 
     private func headersCard(_ headers: [Neko_Api_V1_Header]) -> NSView {
@@ -435,177 +439,5 @@ final class DetailPane: NSView {
             stack.setCustomSpacing(10, after: stack.arrangedSubviews.last!)
             addFull(label("DNS, connect and TLS are zero because this request reused an open connection.", .callout, Theme.text3, lines: 0))
         }
-    }
-
-    // MARK: body
-
-    private func bodyView(_ body: Neko_Api_V1_BodyView, key: String) -> NSView {
-        let card = Surface()
-        card.fill = Theme.code; card.border = Theme.separator; card.radius = Theme.Radius.card
-        card.translatesAutoresizingMaskIntoConstraints = false
-
-        if body.kind == .empty && body.note.isEmpty {
-            let l = label("No body", .callout, Theme.text3)
-            card.addSubview(l)
-            l.pin(to: card, insets: NSEdgeInsets(top: 14, left: 14, bottom: 14, right: 14))
-            return card
-        }
-        let kindName: String, kindColor: NSColor
-        switch body.kind {
-        case .json: kindName = "JSON"; kindColor = Theme.accent
-        case .html: kindName = "HTML"; kindColor = Theme.orange
-        case .form: kindName = "FORM"; kindColor = Theme.teal
-        case .image: kindName = "IMAGE"; kindColor = Theme.purple
-        case .text: kindName = "TEXT"; kindColor = Theme.text2
-        default: kindName = "BINARY"; kindColor = Theme.text2
-        }
-        var meta = Fmt.bytes(body.decodedSize > 0 ? body.decodedSize : body.wireSize)
-        if !body.contentEncoding.isEmpty { meta += " · \(body.contentEncoding)" }
-        let metaL = label(meta, .callout, Theme.text2)
-        var bar: [NSView] = [Badge(kindName, color: kindColor, role: .caption), metaL, NSView()]
-        let isJSON = body.kind == .json && !body.json.isEmpty
-        if isJSON {
-            let seg = Segmented(["Tree", "Raw"], selected: raw.contains(key) ? 1 : 0)
-            seg.padding = 12
-            seg.onChange = { [weak self] i in
-                guard let self else { return }
-                if i == 1 { self.raw.insert(key) } else { self.raw.remove(key) }
-                self.rebuild(keepScroll: true)
-            }
-            bar.append(seg)
-        }
-        let copy = IconButton("doc.on.doc", tip: "Copy body")
-        copy.onClick = { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(body.text, forType: .string) }
-        bar.append(copy)
-        let barStack = NSStackView.horizontal(bar, spacing: 8)
-        barStack.translatesAutoresizingMaskIntoConstraints = false
-        let barBox = Surface()
-        barBox.fill = Theme.card
-        barBox.translatesAutoresizingMaskIntoConstraints = false
-        barBox.addSubview(barStack)
-        barStack.pin(to: barBox, insets: NSEdgeInsets(top: 6, left: 10, bottom: 6, right: 8))
-        let line = Divider()
-
-        let content: NSView
-        if body.kind == .image, let img = NSImage(data: body.image) {
-            let iv = NSImageView(image: img)
-            iv.imageScaling = .scaleProportionallyDown
-            iv.translatesAutoresizingMaskIntoConstraints = false
-            iv.heightAnchor.constraint(lessThanOrEqualToConstant: 320).isActive = true
-            let box = FlippedView(); box.translatesAutoresizingMaskIntoConstraints = false
-            box.addSubview(iv)
-            iv.pin(to: box, insets: NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12))
-            content = box
-        } else if body.kind == .form && !body.form.isEmpty {
-            let rows = body.form.map { ($0.name, $0.value, true) }
-            let c = infoCard(rows)
-            let box = FlippedView(); box.translatesAutoresizingMaskIntoConstraints = false
-            box.addSubview(c); c.pin(to: box, insets: NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10))
-            content = box
-        } else {
-            let code = CodeView()
-            let (text, nums) = codeText(body, key: key, tree: isJSON && !raw.contains(key))
-            code.set(text, numbers: nums)
-            code.showGutter = body.kind != .binary
-            code.onLink = { [weak self] link in
-                guard link.hasPrefix("fold:"), let i = Int(link.dropFirst(5)), let self else { return }
-                var f = self.folds[key] ?? []
-                if f.contains(i) { f.remove(i) } else { f.insert(i) }
-                self.folds[key] = f
-                self.rebuild(keepScroll: true)
-            }
-            content = code
-        }
-        var parts: [NSView] = [barBox, line, content]
-        if body.captureTruncated || body.previewTruncated || !body.note.isEmpty {
-            let n = label(body.note.isEmpty ? "Truncated: the body is larger than what is stored or shown." : body.note, .callout, Theme.orange, lines: 3)
-            let nb = FlippedView(); nb.translatesAutoresizingMaskIntoConstraints = false
-            nb.addSubview(n); n.pin(to: nb, insets: NSEdgeInsets(top: 8, left: 12, bottom: 10, right: 12))
-            parts.append(Divider()); parts.append(nb)
-        }
-        let v = NSStackView.vertical(parts, spacing: 0)
-        v.alignment = .width
-        card.addSubview(v)
-        v.pin(to: card, insets: NSEdgeInsets(top: 1, left: 1, bottom: 1, right: 1))
-        return card
-    }
-
-    private static let maxLines = 3000
-
-    private func codeText(_ body: Neko_Api_V1_BodyView, key: String, tree: Bool) -> (NSAttributedString, [Int]) {
-        let out = NSMutableAttributedString()
-        var nums: [Int] = []
-        let base = Theme.attrs(.code, Theme.Syn.text)
-        func color(_ k: Neko_Api_V1_JsonTokenKind) -> NSColor {
-            switch k {
-            case .key: return Theme.Syn.key
-            case .string: return Theme.Syn.string
-            case .number: return Theme.Syn.number
-            case .literal: return Theme.Syn.literal
-            default: return Theme.Syn.punct
-            }
-        }
-        let para = NSMutableParagraphStyle()
-        para.minimumLineHeight = 20; para.maximumLineHeight = 20
-        func add(_ s: String, _ c: NSColor, link: String? = nil) {
-            var a = base; a[.foregroundColor] = c; a[.paragraphStyle] = para
-            if let link { a[.link] = URL(string: link) }
-            out.append(NSAttributedString(string: s, attributes: a))
-        }
-        if tree {
-            let lines = body.json
-            let folded = folds[key] ?? []
-            var i = 0
-            while i < lines.count && nums.count < Self.maxLines {
-                let l = lines[i]
-                if i > 0 { add("\n", Theme.Syn.text) }
-                nums.append(i + 1)
-                add(String(repeating: "  ", count: Int(l.depth)), Theme.Syn.text)
-                let foldable = l.foldEnd >= 0
-                if foldable { add(folded.contains(i) ? "›" : "⌄", Theme.text3, link: "fold:\(i)"); add(" ", Theme.Syn.text) }
-                else { add("  ", Theme.Syn.text) }
-                for t in l.tokens { add(t.text, color(t.kind)) }
-                if foldable && folded.contains(i) {
-                    let end = Int(l.foldEnd)
-                    add(" … ", Theme.Syn.punct)
-                    if end < lines.count { add(lines[end].tokens.map(\.text).joined().trimmingCharacters(in: .whitespaces), Theme.Syn.punct) }
-                    i = end + 1
-                } else {
-                    i += 1
-                }
-            }
-            if i < lines.count {
-                add("\n… \(lines.count - i) more lines", Theme.text3)
-                nums.append(i + 1)
-            }
-        } else if body.kind == .html && !body.source.isEmpty {
-            var n = 0
-            for (idx, l) in body.source.enumerated() where n < Self.maxLines {
-                if idx > 0 { add("\n", Theme.Syn.text) }
-                n += 1; nums.append(n)
-                for t in l.tokens {
-                    let c: NSColor
-                    switch t.kind {
-                    case .srcTag: c = Theme.Syn.tag
-                    case .srcAttr: c = Theme.Syn.attr
-                    case .srcValue: c = Theme.Syn.value
-                    case .srcComment: c = Theme.Syn.comment
-                    case .srcPunct: c = Theme.Syn.punct
-                    case .srcEntity: c = Theme.Syn.entity
-                    default: c = Theme.Syn.text
-                    }
-                    add(t.text, c)
-                }
-            }
-        } else {
-            let text = body.text.isEmpty ? body.note : body.text
-            var n = 0
-            for line in text.split(separator: "\n", omittingEmptySubsequences: false).prefix(Self.maxLines) {
-                if n > 0 { add("\n", Theme.Syn.text) }
-                n += 1; nums.append(n)
-                add(String(line), body.kind == .binary ? Theme.text2 : Theme.Syn.text)
-            }
-        }
-        return (out, nums)
     }
 }

@@ -87,6 +87,7 @@ async fn setup(writes: rules::McpWrites) -> Env {
         hub: Hub::new(),
         control: Arc::new(FakeControl(AtomicBool::new(true))),
         rules,
+        composer: Arc::new(api::compose::Composer::in_memory()),
         approvals: Arc::new(api::Approvals::default()),
         mcp: None,
         sdk: None,

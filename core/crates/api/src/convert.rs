@@ -351,3 +351,301 @@ pub fn mcp_writes_from_pb(w: i32) -> rules::McpWrites {
         pb::McpWrites::McpOff => rules::McpWrites::Off,
     }
 }
+
+// ---------------------------------------------------------------- composer
+
+fn kv_to_pb(rows: &[compose::KeyValue]) -> Vec<pb::KeyValue> {
+    rows.iter()
+        .map(|r| pb::KeyValue {
+            name: r.name.clone(),
+            value: r.value.clone(),
+            disabled: r.disabled,
+            description: r.description.clone(),
+            secret: r.secret,
+            file: r.file,
+        })
+        .collect()
+}
+
+pub fn kv_to_pb_pub(rows: &[compose::KeyValue]) -> Vec<pb::KeyValue> {
+    kv_to_pb(rows)
+}
+
+pub fn cookie_to_pb(c: &compose::Cookie) -> pb::Cookie {
+    pb::Cookie {
+        name: c.name.clone(),
+        value: c.value.clone(),
+        domain: c.domain.clone(),
+        path: c.path.clone(),
+        expires: c.expires.clone(),
+        max_age: c.max_age.clone(),
+        secure: c.secure,
+        http_only: c.http_only,
+        same_site: c.same_site.clone(),
+    }
+}
+
+pub fn kv_from_pb(rows: Vec<pb::KeyValue>) -> Vec<compose::KeyValue> {
+    rows.into_iter()
+        .map(|r| compose::KeyValue {
+            name: r.name,
+            value: r.value,
+            disabled: r.disabled,
+            description: r.description,
+            secret: r.secret,
+            file: r.file,
+        })
+        .collect()
+}
+
+fn body_to_pb(k: compose::BodyKind) -> pb::ComposeBody {
+    use compose::BodyKind as K;
+    match k {
+        K::None => pb::ComposeBody::None,
+        K::Json => pb::ComposeBody::Json,
+        K::Text => pb::ComposeBody::Text,
+        K::Xml => pb::ComposeBody::Xml,
+        K::Form => pb::ComposeBody::Form,
+        K::Html => pb::ComposeBody::Html,
+        K::Javascript => pb::ComposeBody::Javascript,
+        K::FormData => pb::ComposeBody::FormData,
+        K::Graphql => pb::ComposeBody::Graphql,
+        K::Binary => pb::ComposeBody::Binary,
+    }
+}
+
+fn body_from_pb(k: i32) -> compose::BodyKind {
+    use compose::BodyKind as K;
+    match pb::ComposeBody::try_from(k).unwrap_or(pb::ComposeBody::None) {
+        pb::ComposeBody::None => K::None,
+        pb::ComposeBody::Json => K::Json,
+        pb::ComposeBody::Text => K::Text,
+        pb::ComposeBody::Xml => K::Xml,
+        pb::ComposeBody::Form => K::Form,
+        pb::ComposeBody::Html => K::Html,
+        pb::ComposeBody::Javascript => K::Javascript,
+        pb::ComposeBody::FormData => K::FormData,
+        pb::ComposeBody::Graphql => K::Graphql,
+        pb::ComposeBody::Binary => K::Binary,
+    }
+}
+
+fn auth_to_pb(k: compose::AuthKind) -> pb::ComposeAuth {
+    use compose::AuthKind as K;
+    match k {
+        K::None => pb::ComposeAuth::None,
+        K::Bearer => pb::ComposeAuth::Bearer,
+        K::Basic => pb::ComposeAuth::Basic,
+        K::Inherit => pb::ComposeAuth::Inherit,
+        K::ApiKey => pb::ComposeAuth::ApiKey,
+    }
+}
+
+fn auth_from_pb(k: i32) -> compose::AuthKind {
+    use compose::AuthKind as K;
+    match pb::ComposeAuth::try_from(k).unwrap_or(pb::ComposeAuth::None) {
+        pb::ComposeAuth::None => K::None,
+        pb::ComposeAuth::Bearer => K::Bearer,
+        pb::ComposeAuth::Basic => K::Basic,
+        pb::ComposeAuth::Inherit => K::Inherit,
+        pb::ComposeAuth::ApiKey => K::ApiKey,
+    }
+}
+
+fn assertion_to_pb(a: &compose::Assertion) -> pb::Assertion {
+    use compose::{AssertKind as K, AssertOp as O};
+    pb::Assertion {
+        kind: match a.kind {
+            K::Status => pb::AssertKind::Status,
+            K::Header => pb::AssertKind::Header,
+            K::Body => pb::AssertKind::Body,
+            K::Json => pb::AssertKind::Json,
+            K::Time => pb::AssertKind::Time,
+            K::Size => pb::AssertKind::Size,
+        } as i32,
+        target: a.target.clone(),
+        op: match a.op {
+            O::Equals => pb::AssertOp::Equals,
+            O::NotEquals => pb::AssertOp::NotEquals,
+            O::Contains => pb::AssertOp::Contains,
+            O::NotContains => pb::AssertOp::NotContains,
+            O::Exists => pb::AssertOp::Exists,
+            O::NotExists => pb::AssertOp::NotExists,
+            O::LessThan => pb::AssertOp::LessThan,
+            O::GreaterThan => pb::AssertOp::GreaterThan,
+            O::Matches => pb::AssertOp::Matches,
+        } as i32,
+        expected: a.expected.clone(),
+        disabled: a.disabled,
+    }
+}
+
+fn assertion_from_pb(a: pb::Assertion) -> compose::Assertion {
+    use compose::{AssertKind as K, AssertOp as O};
+    compose::Assertion {
+        kind: match pb::AssertKind::try_from(a.kind).unwrap_or(pb::AssertKind::Status) {
+            pb::AssertKind::Status => K::Status,
+            pb::AssertKind::Header => K::Header,
+            pb::AssertKind::Body => K::Body,
+            pb::AssertKind::Json => K::Json,
+            pb::AssertKind::Time => K::Time,
+            pb::AssertKind::Size => K::Size,
+        },
+        target: a.target,
+        op: match pb::AssertOp::try_from(a.op).unwrap_or(pb::AssertOp::Equals) {
+            pb::AssertOp::Equals => O::Equals,
+            pb::AssertOp::NotEquals => O::NotEquals,
+            pb::AssertOp::Contains => O::Contains,
+            pb::AssertOp::NotContains => O::NotContains,
+            pb::AssertOp::Exists => O::Exists,
+            pb::AssertOp::NotExists => O::NotExists,
+            pb::AssertOp::LessThan => O::LessThan,
+            pb::AssertOp::GreaterThan => O::GreaterThan,
+            pb::AssertOp::Matches => O::Matches,
+        },
+        expected: a.expected,
+        disabled: a.disabled,
+    }
+}
+
+pub fn composed_to_pb(r: &compose::Request) -> pb::ComposedRequest {
+    pb::ComposedRequest {
+        id: r.id.clone(),
+        name: r.name.clone(),
+        collection: r.collection.clone(),
+        method: r.method.clone(),
+        url: r.url.clone(),
+        params: kv_to_pb(&r.params),
+        headers: kv_to_pb(&r.headers),
+        body_kind: body_to_pb(r.body_kind) as i32,
+        body: r.body.clone(),
+        form: kv_to_pb(&r.form),
+        auth: auth_to_pb(r.auth) as i32,
+        auth_token: r.auth_token.clone(),
+        auth_user: r.auth_user.clone(),
+        auth_password: r.auth_password.clone(),
+        updated_ms: r.updated_ms,
+        auth_key: r.auth_key.clone(),
+        auth_value: r.auth_value.clone(),
+        auth_in_query: r.auth_in_query,
+        auth_prefix: r.auth_prefix.clone(),
+        description: r.description.clone(),
+        path_vars: kv_to_pb(&r.path_vars),
+        graphql_variables: r.graphql_variables.clone(),
+        binary_path: r.binary_path.clone(),
+        tests: r.tests.iter().map(assertion_to_pb).collect(),
+    }
+}
+
+pub fn composed_from_pb(r: pb::ComposedRequest) -> compose::Request {
+    compose::Request {
+        body_kind: body_from_pb(r.body_kind),
+        auth: auth_from_pb(r.auth),
+        id: r.id,
+        name: r.name,
+        collection: r.collection,
+        method: r.method,
+        url: r.url,
+        params: kv_from_pb(r.params),
+        headers: kv_from_pb(r.headers),
+        body: r.body,
+        form: kv_from_pb(r.form),
+        auth_token: r.auth_token,
+        auth_user: r.auth_user,
+        auth_password: r.auth_password,
+        auth_key: r.auth_key,
+        auth_value: r.auth_value,
+        auth_in_query: r.auth_in_query,
+        auth_prefix: r.auth_prefix,
+        description: r.description,
+        path_vars: kv_from_pb(r.path_vars),
+        graphql_variables: r.graphql_variables,
+        binary_path: r.binary_path,
+        tests: r.tests.into_iter().map(assertion_from_pb).collect(),
+        updated_ms: r.updated_ms,
+    }
+}
+
+pub fn environment_from_pb(e: pb::Environment) -> compose::Environment {
+    compose::Environment {
+        name: e.name,
+        vars: kv_from_pb(e.vars),
+    }
+}
+
+fn auth_config_to_pb(a: &compose::Auth) -> pb::ComposeAuthConfig {
+    pb::ComposeAuthConfig {
+        kind: auth_to_pb(a.kind) as i32,
+        token: a.token.clone(),
+        user: a.user.clone(),
+        password: a.password.clone(),
+        key: a.key.clone(),
+        value: a.value.clone(),
+        in_query: a.in_query,
+        prefix: a.prefix.clone(),
+    }
+}
+
+pub fn config_from_pb(c: pb::CollectionConfig) -> compose::CollectionConfig {
+    let a = c.auth.unwrap_or_default();
+    compose::CollectionConfig {
+        name: c.name,
+        description: c.description,
+        auth: compose::Auth {
+            kind: auth_from_pb(a.kind),
+            token: a.token,
+            user: a.user,
+            password: a.password,
+            key: a.key,
+            value: a.value,
+            in_query: a.in_query,
+            prefix: a.prefix,
+        },
+        headers: kv_from_pb(c.headers),
+        vars: kv_from_pb(c.vars),
+    }
+}
+
+pub fn composer_to_pb(s: &compose::State) -> pb::ComposerState {
+    pb::ComposerState {
+        collections: s.collections.clone(),
+        requests: s.requests.iter().map(composed_to_pb).collect(),
+        environments: s
+            .environments
+            .iter()
+            .map(|e| pb::Environment {
+                name: e.name.clone(),
+                vars: kv_to_pb(&e.vars),
+            })
+            .collect(),
+        active_environment: s.active_environment.clone(),
+        history: s
+            .history
+            .iter()
+            .map(|h| pb::ComposerHistoryEntry {
+                request: Some(composed_to_pb(&h.request)),
+                flow_id: h.flow_id,
+                status: h.status as u32,
+                sent_ms: h.sent_ms,
+                duration_ms: h.duration_ms,
+                method: h.method.clone(),
+                url: h.url.clone(),
+                error: h.error.clone(),
+            })
+            .collect(),
+        saved_id: String::new(),
+        globals: kv_to_pb(&s.globals),
+        configs: s
+            .configs
+            .iter()
+            .map(|c| pb::CollectionConfig {
+                name: c.name.clone(),
+                description: c.description.clone(),
+                auth: Some(auth_config_to_pb(&c.auth)),
+                headers: kv_to_pb(&c.headers),
+                vars: kv_to_pb(&c.vars),
+            })
+            .collect(),
+        notice: String::new(),
+    }
+}

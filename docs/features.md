@@ -35,6 +35,7 @@ Milestones refer to the build order in `CLAUDE.md` (M1 capture core, M2 desktop 
 
 ## Developer experience
 - Copy as curl, fetch, Dio, Retrofit (M2)
+- Request composer, Postman-style: tabs, nested collections with inherited auth/headers/variables, environments and globals, path variables, all body types, declarative tests, cookies, code snippets, Postman import/export, cURL and captured-flow import (done: core and macOS app; scripting, digest/OAuth and settings are not)
 - Generate models in Dart, Kotlin, Swift, TypeScript from responses (M5)
 - OpenAPI spec generated from traffic (M5)
 - Command palette and keyboard-first navigation (M2)

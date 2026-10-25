@@ -146,6 +146,7 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
             recording: AtomicBool::new(true),
         }),
         rules: Arc::new(rules::RuleSet::in_memory()),
+        composer: Arc::new(neko_api::compose::Composer::in_memory()),
         approvals: Arc::new(neko_api::Approvals::default()),
         mcp: None,
         sdk,
@@ -841,6 +842,140 @@ async fn replay_edits_a_stored_flow_and_mcp_settings_round_trip() {
 }
 
 #[tokio::test]
+async fn composer_saves_imports_resolves_and_sends() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.enqueue(record(99, "api.example.com", 200, "{}"));
+    ctx.store.flush();
+
+    let Res::Composer(s) = c
+        .call(Req::ComposerEnvironments(pb::ComposerEnvironmentsRequest {
+            environments: vec![pb::Environment {
+                name: "staging".into(),
+                vars: vec![pb::KeyValue {
+                    name: "base".into(),
+                    value: "https://staging.example.com".into(),
+                    ..Default::default()
+                }],
+            }],
+            active: "staging".into(),
+        }))
+        .await
+    else {
+        panic!("composer state")
+    };
+    assert_eq!(s.active_environment, "staging");
+
+    let Res::Composed(req) = c
+        .call(Req::ComposerImport(pb::ComposerImportRequest {
+            source: Some(pb::composer_import_request::Source::Curl(
+                "curl -X POST '{{base}}/v1/items?page=2' -H 'content-type: application/json' -d '{\"a\":1}'".into(),
+            )),
+        }))
+        .await
+    else {
+        panic!("imported request")
+    };
+    assert_eq!(req.method, "POST");
+    assert_eq!(req.params.len(), 1);
+    assert_eq!(req.body_kind, pb::ComposeBody::Json as i32);
+
+    let Res::Composed(from_flow) = c
+        .call(Req::ComposerImport(pb::ComposerImportRequest {
+            source: Some(pb::composer_import_request::Source::FlowId(99)),
+        }))
+        .await
+    else {
+        panic!("request from a flow")
+    };
+    assert_eq!(from_flow.url, "https://api.example.com/v1/me");
+
+    let Res::ComposerResolved(r) = c
+        .call(Req::ComposerResolve(pb::ComposerResolveRequest {
+            request: Some(req.clone()),
+        }))
+        .await
+    else {
+        panic!("resolved")
+    };
+    assert_eq!(r.url, "https://staging.example.com/v1/items?page=2");
+    assert!(r.missing.is_empty());
+    assert!(r.curl.starts_with("curl"));
+
+    let Res::Composer(s) = c
+        .call(Req::ComposerSave(pb::ComposerSaveRequest {
+            request: Some(pb::ComposedRequest {
+                collection: "Shop".into(),
+                ..req.clone()
+            }),
+        }))
+        .await
+    else {
+        panic!("saved")
+    };
+    assert_eq!(s.saved_id, "q1");
+    assert_eq!(s.collections, vec!["Shop".to_string()]);
+    assert_eq!(s.requests[0].name, "POST /v1/items");
+
+    let Res::ComposerSent(sent) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(req.clone()),
+        }))
+        .await
+    else {
+        panic!("sent")
+    };
+    assert_eq!((sent.flow_id, sent.status), (99, 200));
+
+    let Res::ComposerSent(failed) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(pb::ComposedRequest {
+                url: "https://fail.example.com".into(),
+                ..Default::default()
+            }),
+        }))
+        .await
+    else {
+        panic!("sent")
+    };
+    assert_eq!((failed.flow_id, failed.error.as_str()), (0, "refused"));
+
+    let Res::Error(e) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(pb::ComposedRequest {
+                url: "{{nope}}/x".into(),
+                ..Default::default()
+            }),
+        }))
+        .await
+    else {
+        panic!("error")
+    };
+    assert!(e.message.contains("{{nope}}"), "{}", e.message);
+
+    let Res::Composer(s) = c.call(Req::ComposerGet(pb::ComposerGetRequest {})).await else {
+        panic!()
+    };
+    assert_eq!(s.history.len(), 2);
+    assert_eq!(s.history[0].error, "refused");
+    assert_eq!(
+        s.history[1].url,
+        "https://staging.example.com/v1/items?page=2"
+    );
+
+    let Res::Composer(s) = c
+        .call(Req::ComposerCollection(pb::ComposerCollectionRequest {
+            name: "Shop".into(),
+            remove: true,
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert!(s.requests.is_empty() && s.collections.is_empty());
+}
+
+#[tokio::test]
 async fn sdk_calls_are_unavailable_without_a_listener() {
     let (mut c, _ctx, _dir) = setup().await;
     match c.call(Req::SdkStatus(pb::SdkStatusRequest {})).await {
@@ -1027,4 +1162,154 @@ async fn stored_sse_events_are_decoded_over_api() {
     assert_eq!(body.events[0].data, "first\nsecond");
     assert_eq!(body.events[0].id, "2");
     assert_eq!(body.events[0].event, "update");
+}
+
+#[tokio::test]
+async fn composer_postman_features() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.enqueue(record(99, "api.example.com", 200, "{}"));
+    ctx.store.flush();
+
+    // The URL text and the params table follow each other.
+    let Res::ComposerUrl(u) = c
+        .call(Req::ComposerUrl(pb::ComposerUrlRequest {
+            request: Some(pb::ComposedRequest::default()),
+            edit: true,
+            text: "https://x.dev/users/:id?page=2&q=a%20b".into(),
+        }))
+        .await
+    else {
+        panic!("url")
+    };
+    let r = u.request.unwrap();
+    assert_eq!(r.url, "https://x.dev/users/:id");
+    assert_eq!(r.params.len(), 2);
+    assert_eq!(r.path_vars[0].name, "id");
+    assert_eq!(u.display, "https://x.dev/users/:id?page=2&q=a%20b");
+
+    // Bulk edit both ways.
+    let Res::ComposerBulk(b) = c
+        .call(Req::ComposerBulk(pb::ComposerBulkRequest {
+            source: Some(pb::composer_bulk_request::Source::Text(
+                "Accept: */*\n// X-Off: 1".into(),
+            )),
+        }))
+        .await
+    else {
+        panic!("bulk")
+    };
+    assert_eq!(b.rows.len(), 2);
+    assert!(b.rows[1].disabled);
+
+    // A collection passes auth and variables down to its requests.
+    let Res::Composer(_) = c
+        .call(Req::ComposerCollection(pb::ComposerCollectionRequest {
+            name: "Shop/Orders".into(),
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!("collection")
+    };
+    let Res::Composer(s) = c
+        .call(Req::ComposerConfig(pb::ComposerConfigRequest {
+            config: Some(pb::CollectionConfig {
+                name: "Shop".into(),
+                auth: Some(pb::ComposeAuthConfig {
+                    kind: pb::ComposeAuth::Bearer as i32,
+                    token: "{{tok}}".into(),
+                    ..Default::default()
+                }),
+                vars: vec![pb::KeyValue {
+                    name: "tok".into(),
+                    value: "abc".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }),
+        }))
+        .await
+    else {
+        panic!("config")
+    };
+    assert_eq!(s.collections, vec!["Shop", "Shop/Orders"]);
+    assert_eq!(s.configs.len(), 1);
+
+    let inheriting = pb::ComposedRequest {
+        collection: "Shop/Orders".into(),
+        url: "https://api.example.com/v1/me".into(),
+        auth: pb::ComposeAuth::Inherit as i32,
+        tests: vec![pb::Assertion {
+            kind: pb::AssertKind::Status as i32,
+            expected: "200".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let Res::ComposerResolved(r) = c
+        .call(Req::ComposerResolve(pb::ComposerResolveRequest {
+            request: Some(inheriting.clone()),
+        }))
+        .await
+    else {
+        panic!("resolved")
+    };
+    assert!(r.missing.is_empty(), "{:?}", r.missing);
+    assert!(r
+        .headers
+        .iter()
+        .any(|h| h.name == "Authorization" && h.value == "Bearer abc"));
+    assert!(r.generated.contains(&"Authorization".to_string()));
+
+    // Snippets.
+    let Res::ComposerCode(code) = c
+        .call(Req::ComposerCode(pb::ComposerCodeRequest {
+            request: Some(inheriting.clone()),
+            lang: "python".into(),
+        }))
+        .await
+    else {
+        panic!("code")
+    };
+    assert!(code.error.is_empty(), "{}", code.error);
+    assert!(code.code.contains("Bearer abc"));
+    assert!(code.languages.len() >= 10);
+
+    // Tests run against the stored response.
+    let Res::ComposerSent(sent) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(inheriting),
+        }))
+        .await
+    else {
+        panic!("sent")
+    };
+    assert_eq!(sent.flow_id, 99);
+    assert_eq!(sent.tests.len(), 1);
+    assert!(sent.tests[0].passed, "{:?}", sent.tests[0]);
+
+    // Postman files round trip.
+    let Res::ComposerExport(e) = c
+        .call(Req::ComposerTransfer(pb::ComposerTransferRequest {
+            action: Some(pb::composer_transfer_request::Action::Export(
+                pb::ComposerExportTarget {
+                    environment: false,
+                    name: "Shop".into(),
+                },
+            )),
+        }))
+        .await
+    else {
+        panic!("export")
+    };
+    assert_eq!(e.filename, "Shop.postman_collection.json");
+    let Res::Composer(s) = c
+        .call(Req::ComposerTransfer(pb::ComposerTransferRequest {
+            action: Some(pb::composer_transfer_request::Action::ImportJson(e.json)),
+        }))
+        .await
+    else {
+        panic!("import")
+    };
+    assert!(s.notice.contains("Shop (2)"), "{}", s.notice);
 }

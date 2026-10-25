@@ -2050,6 +2050,7 @@ dependencies = [
  "bytes",
  "flow",
  "futures-util",
+ "neko-compose",
  "neko-decode",
  "neko-proto",
  "neko-rules",
@@ -2090,6 +2091,19 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "neko-compose"
+version = "0.1.1"
+dependencies = [
+ "base64",
+ "blake3",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

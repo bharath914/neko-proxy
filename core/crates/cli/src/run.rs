@@ -224,6 +224,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
         hub,
         control: Arc::new(ProxyControl(proxy.clone())),
         rules: rules.clone(),
+        composer: Arc::new(api::compose::Composer::load(&data_dir)),
         approvals: Arc::new(api::Approvals::default()),
         mcp: mcp_endpoint.clone(),
         sdk: sdk.clone(),

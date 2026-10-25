@@ -22,6 +22,7 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
     let sequence: SequenceView
     let devicesView: DevicesView
     let approval = ApprovalCard()
+    let composerView: ComposerView
     private var inspector = FlippedView()
     private var screen = FlippedView()
     private var split = ThinSplit()
@@ -30,11 +31,13 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
     private var sidebarWidth: NSLayoutConstraint!
     private var chipsHeight: NSLayoutConstraint!
     private(set) var section: Section = .inspector
+    private var inspectorSection: Section = .inspector
     private var detailTask: Task<Void, Never>?
     var onError: ((String) -> Void)?
 
     init(model: FlowModel) {
         self.model = model
+        composerView = ComposerView(model: model.composer)
         sidebar = Sidebar(model: model)
         list = FlowList(model: model)
         settings = SettingsView(model: model)
@@ -122,7 +125,7 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
     override func viewDidLayout() {
         super.viewDidLayout()
         // Below about 1040 pt the host list could become a rail; keep it fixed and let the split flex.
-        sidebarWidth.constant = view.bounds.width < 1000 ? 200 : 236
+        sidebarWidth.constant = section == .composer ? 0 : (view.bounds.width < 1000 ? 200 : 236)
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate p: CGFloat, ofSubviewAt i: Int) -> CGFloat {
@@ -151,7 +154,13 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
     }
 
     private func wire() {
-        top.nav.onChange = { [weak self] i in self?.setSection(Section(rawValue: i) ?? .inspector) }
+        composerView.onInspect = { [weak self] id in self?.setSection(.inspector); self?.list.select(id: id) }
+        detail.onCompose = { [weak self] in self?.openInComposer() }
+        top.workspace.onChange = { [weak self] i in
+            guard let self else { return }
+            self.setSection(i == 1 ? .composer : self.inspectorSection)
+        }
+        top.nav.onChange = { [weak self] i in self?.setSection(TopBar.inspectorSections[i]) }
         top.record.onClick = { [weak self] in self?.toggleRecording() }
         top.clear.onClick = { [weak self] in self?.confirmClear() }
         top.filter.onChange = { [weak self] i in
@@ -201,10 +210,14 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
 
     func setSection(_ s: Section) {
         section = s
+        if s != .composer { inspectorSection = s }
+        sidebar.isHidden = s == .composer
+        sidebarWidth.constant = s == .composer ? 0 : (view.bounds.width < 1000 ? 200 : 236)
         top.setSection(s)
         screen.subviews.forEach { $0.removeFromSuperview() }
         let v: NSView
         switch s {
+        case .composer: v = composerView
         case .inspector: v = inspector
         case .breakpoints: v = breakpoints; breakpoints.reload()
         case .rules: v = rules; rules.reload()
@@ -266,7 +279,7 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         top.phone.dot = model.pending.isEmpty ? nil : Theme.orange
         refreshChips()
         if section == .settings { settings.rebuild() }
-        top.nav.titles = ["Inspector", model.paused > 0 ? "Breakpoints (\(model.paused))" : "Breakpoints", "Rules",
+        top.nav.titles = ["Traffic", model.paused > 0 ? "Breakpoints (\(model.paused))" : "Breakpoints", "Rules",
                           model.pending.isEmpty ? "Devices" : "Devices (\(model.pending.count))", "Settings"]
     }
 
@@ -308,7 +321,19 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
         NSPasteboard.general.setString(s, forType: .string)
     }
 
-    func copyCurl() { copy(detail.detail?.curl) }
+    func copyCurl() {
+        if section == .composer { composerView.copyCurl() } else { copy(detail.detail?.curl) }
+    }
+
+    func openInComposer() {
+        guard let d = detail.detail, !d.summary.isTunnel else { return }
+        Task {
+            if let error = await model.composer.importFlow(d.summary.id) { tell(view.window, "Could not import request", error) }
+            else { setSection(.composer) }
+        }
+    }
+    func newRequest() { setSection(.composer); composerView.newRequest() }
+    func importCurl() { setSection(.composer); composerView.importCurl() }
     func copyURL() { copy(detail.detail?.url) }
 
     // MARK: command palette
@@ -328,8 +353,16 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
     func closePalette() { palette?.close() }
 
     private func paletteCommands() -> [PaletteItem] {
-        var c: [PaletteItem] = []
-        let names = ["Inspector", "Breakpoints", "Rules", "Devices", "Settings"]
+        var c: [PaletteItem] = [
+            PaletteItem(title: "Open in Composer") { [weak self] in self?.openInComposer() },
+            PaletteItem(title: "New request", detail: "⌘N") { [weak self] in self?.newRequest() },
+            PaletteItem(title: "Import cURL…", detail: "⇧⌘I") { [weak self] in self?.importCurl() },
+            PaletteItem(title: "New request tab", detail: "⌘T") { [weak self] in self?.newRequest() },
+            PaletteItem(title: "Send request", detail: "⌘↵") { [weak self] in self?.setSection(.composer); self?.composerView.send() },
+            PaletteItem(title: "Show code snippet…", detail: "⇧⌘U") { [weak self] in self?.setSection(.composer); self?.composerView.showCode() },
+            PaletteItem(title: "Edit environments…", detail: "⇧⌘E") { [weak self] in self?.setSection(.composer); self?.composerView.editEnvironments() }
+        ]
+        let names = ["Inspector", "Composer", "Breakpoints", "Rules", "Devices", "Settings"]
         for s in Section.allCases {
             c.append(PaletteItem(title: "Go to \(names[s.rawValue])", detail: "⌘\(s.rawValue + 1)") { [weak self] in self?.setSection(s) })
         }

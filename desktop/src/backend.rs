@@ -1700,6 +1700,24 @@ impl Backend for DemoBackend {
                     message: "no such flow".into(),
                 }),
             },
+            Req::ComposerGet(_)
+            | Req::ComposerSave(_)
+            | Req::ComposerRemove(_)
+            | Req::ComposerCollection(_)
+            | Req::ComposerEnvironments(_)
+            | Req::ComposerClearHistory(_)
+            | Req::ComposerResolve(_)
+            | Req::ComposerImport(_)
+            | Req::ComposerUrl(_)
+            | Req::ComposerBulk(_)
+            | Req::ComposerCode(_)
+            | Req::ComposerConfig(_)
+            | Req::ComposerGlobals(_)
+            | Req::ComposerTransfer(_)
+            | Req::ComposerSend(_) => Res::Error(pb::ErrorResponse {
+                code: "unsupported".into(),
+                message: "the composer is not in the demo".into(),
+            }),
         };
         s.queue.push(Event::Response(tag, res));
         tag
