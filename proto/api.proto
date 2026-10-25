@@ -55,6 +55,22 @@ message ClientMessage {
     FetchBodyRequest fetch_body = 41;
     RegenerateSdkCertRequest regenerate_sdk_cert = 42;
     SdkSetSettingsRequest sdk_set_settings = 43;
+    ComposerGetRequest composer_get = 60;
+    ComposerSaveRequest composer_save = 61;
+    ComposerRemoveRequest composer_remove = 62;
+    ComposerCollectionRequest composer_collection = 63;
+    ComposerEnvironmentsRequest composer_environments = 64;
+    ComposerClearHistoryRequest composer_clear_history = 65;
+    ComposerSendRequest composer_send = 66;
+    ComposerResolveRequest composer_resolve = 67;
+    ComposerImportRequest composer_import = 68;
+    ComposerUrlRequest composer_url = 69;
+    ComposerBulkRequest composer_bulk = 70;
+    ComposerCodeRequest composer_code = 71;
+    ComposerConfigRequest composer_config = 72;
+    ComposerGlobalsRequest composer_globals = 73;
+    ComposerTransferRequest composer_transfer = 74;
+    ImportHarRequest import_har = 44;
   }
 }
 
@@ -80,10 +96,19 @@ message ServerMessage {
     SdkStatus sdk_status = 25;
     DevicesSnapshot devices = 26;
     OkResponse ok = 27;
+    ImportHarResponse imported_har = 28;
     FlowBatch batch = 30;
     Resync resync = 31;
     PauseNotice pause_notice = 32;
     ApprovalNotice approval_notice = 33;
+    ComposerState composer = 34;
+    ComposerSent composer_sent = 35;
+    ComposerResolved composer_resolved = 36;
+    ComposedRequest composed = 37;
+    ComposerUrl composer_url = 38;
+    ComposerBulk composer_bulk = 39;
+    ComposerCode composer_code = 40;
+    ComposerExport composer_export = 41;
   }
 }
 
@@ -135,6 +160,8 @@ enum FlowState {
 // 256 edited        a rule or a breakpoint edit changed the request or response
 // 512 breakpoint    the flow was held at a breakpoint
 // 1024 replayed     sent again by the proxy
+// 16384 slow, 32768 possible duplicate, 65536 large payload,
+// 131072 missing cache headers, 262144 possible N+1, 524288 sensitive data.
 message FlowSummary {
   uint64 id = 1;
   int64 started_at_ms = 2;
@@ -164,6 +191,7 @@ message FlowSummary {
   string screen = 25;
   string route_template = 26;
   string client_stack = 27;
+  repeated string issue_labels = 28;
 }
 
 enum FlowSource {
@@ -297,6 +325,7 @@ message BodyView {
   string html_title = 14;
   repeated SourceLine source = 15;  // highlighted markup lines for HTML
   repeated SseEvent events = 16;
+  ProtocolView protocol = 17;
 }
 
 // parts bit mask for GetFlowRequest.
@@ -317,6 +346,8 @@ message FlowDetail {
   string curl = 6;
   BodyView request_body = 7;
   BodyView response_body = 8;
+  string dio = 30;
+  repeated string issues = 31;
   SdkContext sdk = 9;     // set for SDK and merged flows
   FlowDetail wire = 10;   // set for merged flows: what the proxy saw
 }
@@ -604,6 +635,7 @@ message Rule {
     RewriteAction rewrite = 12;
     ThrottleAction throttle = 13;
     BreakpointAction breakpoint = 14;
+    ScenarioAction scenario = 15;
   }
 }
 
@@ -887,3 +919,319 @@ message FetchBodyRequest {
   uint64 flow_id = 1;
   bool response = 2;  // false = request body
 }
+
+// ---------------------------------------------------------------- composer
+
+// Requests written by hand in the app and sent through the core, like a
+// REST client. Saved requests live in collections; environments hold the
+// values for {{variables}}. The core keeps them in composer.json.
+
+// One editable row: a header, query parameter, form field or variable.
+message KeyValue {
+  string name = 1;
+  string value = 2;
+  bool disabled = 3;  // kept in the table, left out when sending
+  string description = 4;
+  bool secret = 5;    // a variable whose value the app masks
+  bool file = 6;      // form-data row: value is the path of a file to upload
+}
+
+enum ComposeBody {
+  COMPOSE_BODY_NONE = 0;
+  COMPOSE_BODY_JSON = 1;
+  COMPOSE_BODY_TEXT = 2;
+  COMPOSE_BODY_XML = 3;
+  COMPOSE_BODY_FORM = 4;  // x-www-form-urlencoded from form
+  COMPOSE_BODY_HTML = 5;
+  COMPOSE_BODY_JAVASCRIPT = 6;
+  COMPOSE_BODY_FORM_DATA = 7;  // multipart/form-data from form; a row can be a file
+  COMPOSE_BODY_GRAPHQL = 8;    // body is the query, graphql_variables its variables
+  COMPOSE_BODY_BINARY = 9;     // the file at binary_path
+}
+
+enum ComposeAuth {
+  COMPOSE_AUTH_NONE = 0;
+  COMPOSE_AUTH_BEARER = 1;
+  COMPOSE_AUTH_BASIC = 2;
+  COMPOSE_AUTH_INHERIT = 3;  // the nearest collection or folder that sets one
+  COMPOSE_AUTH_API_KEY = 4;
+}
+
+enum AssertKind {
+  ASSERT_KIND_STATUS = 0;
+  ASSERT_KIND_HEADER = 1;   // target = header name
+  ASSERT_KIND_BODY = 2;
+  ASSERT_KIND_JSON = 3;     // target = path such as data.items[0].id
+  ASSERT_KIND_TIME = 4;     // milliseconds
+  ASSERT_KIND_SIZE = 5;     // bytes
+}
+
+enum AssertOp {
+  ASSERT_OP_EQUALS = 0;
+  ASSERT_OP_NOT_EQUALS = 1;
+  ASSERT_OP_CONTAINS = 2;
+  ASSERT_OP_NOT_CONTAINS = 3;
+  ASSERT_OP_EXISTS = 4;
+  ASSERT_OP_NOT_EXISTS = 5;
+  ASSERT_OP_LESS_THAN = 6;
+  ASSERT_OP_GREATER_THAN = 7;
+  ASSERT_OP_MATCHES = 8;
+}
+
+// One check run against the response after every send.
+message Assertion {
+  AssertKind kind = 1;
+  string target = 2;
+  AssertOp op = 3;
+  string expected = 4;
+  bool disabled = 5;
+}
+
+message TestResult {
+  string name = 1;     // "Status equals 200"
+  bool passed = 2;
+  string message = 3;  // what was found, when it failed
+}
+
+message Cookie {
+  string name = 1;
+  string value = 2;
+  string domain = 3;
+  string path = 4;
+  string expires = 5;
+  string max_age = 6;
+  bool secure = 7;
+  bool http_only = 8;
+  string same_site = 9;
+}
+
+// Auth settings of a collection or folder.
+message ComposeAuthConfig {
+  ComposeAuth kind = 1;
+  string token = 2;
+  string user = 3;
+  string password = 4;
+  string key = 5;
+  string value = 6;
+  bool in_query = 7;
+  string prefix = 8;  // bearer prefix; empty means "Bearer"
+}
+
+// What the requests in a collection or folder inherit. `name` is the path,
+// with "/" between a folder and its parents.
+message CollectionConfig {
+  string name = 1;
+  string description = 2;
+  ComposeAuthConfig auth = 3;
+  repeated KeyValue headers = 4;
+  repeated KeyValue vars = 5;
+}
+
+// Any text may hold {{variables}}, filled in from the active environment.
+message ComposedRequest {
+  string id = 1;          // empty until saved
+  string name = 2;
+  string collection = 3;
+  string method = 4;
+  string url = 5;
+  repeated KeyValue params = 6;   // added to the URL's query
+  repeated KeyValue headers = 7;
+  ComposeBody body_kind = 8;
+  string body = 9;                // JSON, text and XML bodies
+  repeated KeyValue form = 10;    // form bodies
+  ComposeAuth auth = 11;
+  string auth_token = 12;
+  string auth_user = 13;
+  string auth_password = 14;
+  int64 updated_ms = 15;
+  string auth_key = 16;           // API key name
+  string auth_value = 17;
+  bool auth_in_query = 18;        // the API key goes in the query
+  string auth_prefix = 19;        // bearer prefix; empty means "Bearer"
+  string description = 20;
+  repeated KeyValue path_vars = 21;  // values for :name segments of the path
+  string graphql_variables = 22;
+  string binary_path = 23;
+  repeated Assertion tests = 24;
+}
+
+message Environment {
+  string name = 1;
+  repeated KeyValue vars = 2;
+}
+
+message ComposerHistoryEntry {
+  ComposedRequest request = 1;
+  uint64 flow_id = 2;  // 0 when the request never left
+  uint32 status = 3;
+  int64 sent_ms = 4;
+  double duration_ms = 5;
+  string method = 6;   // after variables were filled in
+  string url = 7;
+  string error = 8;
+}
+
+message ComposerState {
+  repeated string collections = 1;
+  repeated ComposedRequest requests = 2;
+  repeated Environment environments = 3;
+  string active_environment = 4;  // empty for none
+  repeated ComposerHistoryEntry history = 5;  // newest first
+  string saved_id = 6;  // in the reply to a save: the request's id
+  repeated KeyValue globals = 7;
+  repeated CollectionConfig configs = 8;
+  string notice = 9;    // in the reply to an import: what was added
+}
+
+message ComposerGetRequest {}
+
+// Add or replace a saved request; one without an id gets one. Answers with
+// the state, with saved_id set.
+message ComposerSaveRequest {
+  ComposedRequest request = 1;
+}
+
+message ComposerRemoveRequest {
+  string id = 1;
+}
+
+// Create a collection, rename it (rename_to) or remove it with its requests.
+message ComposerCollectionRequest {
+  string name = 1;
+  string rename_to = 2;
+  bool remove = 3;
+}
+
+// Replace every environment and choose the active one.
+message ComposerEnvironmentsRequest {
+  repeated Environment environments = 1;
+  string active = 2;
+}
+
+message ComposerClearHistoryRequest {}
+
+// Send a request now. It goes straight upstream as a new flow, like a replay.
+message ComposerSendRequest {
+  ComposedRequest request = 1;
+}
+
+message ComposerSent {
+  uint64 flow_id = 1;  // 0 when the request never left
+  uint32 status = 2;
+  string method = 3;
+  string url = 4;
+  string error = 5;    // why it failed; the flow, if any, says more
+  double duration_ms = 6;
+  uint64 size = 7;      // response body bytes
+  repeated TestResult tests = 8;
+  repeated Cookie cookies = 9;
+}
+
+// What a request would send, without sending it.
+message ComposerResolveRequest {
+  ComposedRequest request = 1;
+}
+
+message ComposerResolved {
+  string method = 1;
+  string url = 2;
+  repeated Header headers = 3;
+  bytes body = 4;
+  string curl = 5;
+  repeated string missing = 6;  // {{variables}} with no value
+  repeated string generated = 7;  // header names added for the person
+  string error = 8;               // why it can't be built, other than missing variables
+}
+
+// Start a request from a cURL command or a captured flow.
+message ComposerImportRequest {
+  oneof source {
+    string curl = 1;
+    uint64 flow_id = 2;
+  }
+}
+
+// Keeps the URL text and the Params table in step. With edit set, `text` is
+// what the person typed in the URL bar and the request's url and params follow
+// it; without, the request is only normalized. Always answers with the request
+// and the URL text to show.
+message ComposerUrlRequest {
+  ComposedRequest request = 1;
+  bool edit = 2;
+  string text = 3;
+}
+
+message ComposerUrl {
+  ComposedRequest request = 1;
+  string display = 2;
+}
+
+message KeyValueList {
+  repeated KeyValue rows = 1;
+}
+
+// Bulk edit: parse "name: value" lines into rows, or format rows as lines.
+message ComposerBulkRequest {
+  oneof source {
+    string text = 1;
+    KeyValueList rows = 2;
+  }
+}
+
+message ComposerBulk {
+  repeated KeyValue rows = 1;
+  string text = 2;
+}
+
+message CodeLanguage {
+  string id = 1;
+  string label = 2;
+}
+
+// A code snippet for the request as it would be sent. With lang empty, only
+// the list of languages is answered.
+message ComposerCodeRequest {
+  ComposedRequest request = 1;
+  string lang = 2;
+}
+
+message ComposerCode {
+  string code = 1;
+  string error = 2;
+  repeated CodeLanguage languages = 3;
+}
+
+// Set what a collection or folder passes down; an empty config removes it.
+message ComposerConfigRequest {
+  CollectionConfig config = 1;
+}
+
+message ComposerGlobalsRequest {
+  repeated KeyValue vars = 1;
+}
+
+message ComposerExportTarget {
+  bool environment = 1;  // false = a collection
+  string name = 2;
+}
+
+// Postman files: import_json adds what the file holds; export answers with a
+// ComposerExport.
+message ComposerTransferRequest {
+  oneof action {
+    string import_json = 1;
+    ComposerExportTarget export = 2;
+  }
+}
+
+message ComposerExport {
+  string json = 1;
+  string filename = 2;
+}
+message ImportHarRequest { bytes data = 1; }
+message ImportHarResponse { repeated uint64 ids = 1; uint32 count = 2; }
+
+message DecodedField { uint32 depth = 1; string label = 2; string value = 3; }
+message ProtocolView { string title = 1; repeated DecodedField fields = 2; string note = 3; }
+
+message ScenarioAction { uint32 fail_one_in = 1; uint32 delay_ms = 2; uint32 jitter_ms = 3; uint32 flaky_one_in = 4; }

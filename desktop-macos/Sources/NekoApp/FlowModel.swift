@@ -5,6 +5,7 @@ import NekoAPI
 /// core; this only mirrors what the core sends and applies its batches.
 @MainActor
 final class FlowModel {
+    let composer = ComposerModel()
     private(set) var flows: [Flow] = []
     private var rowByID: [UInt64: Int] = [:]
     private(set) var total: UInt64 = 0
@@ -65,6 +66,7 @@ final class FlowModel {
                 return d
             }
             await admin.attach(c)
+            await composer.attach(c)
             try await resubscribe()
             await refreshHosts(force: true)
             await loadCA()

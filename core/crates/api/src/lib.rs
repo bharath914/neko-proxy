@@ -4,12 +4,14 @@
 //! surface and nothing else.
 
 mod approvals;
+mod composer;
 mod convert;
 mod hub;
 mod ops;
 mod sdk_api;
 mod server;
 
+pub use compose;
 pub use proto::pb;
 
 pub use approvals::{Approval, ApprovalEvent, Approvals, Decision};
@@ -78,10 +80,13 @@ pub struct CoreInfo {
 }
 
 pub struct ApiContext {
+    pub ids: Arc<flow::IdGen>,
     pub store: store::Store,
     pub hub: Hub,
     pub control: Arc<dyn Control>,
     pub rules: Arc<rules::RuleSet>,
+    /// Requests written and saved in the app's composer.
+    pub composer: Arc<compose::Composer>,
     pub approvals: Arc<Approvals>,
     /// None when the MCP server is not running.
     pub mcp: Option<McpEndpoint>,

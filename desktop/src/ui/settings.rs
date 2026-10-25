@@ -3,10 +3,10 @@ use super::widgets::{self, Kind};
 use crate::app::{App, Job, Sheet};
 use crate::paint::{self, cr};
 use crate::platform::{self, LaunchOptions};
-use proto::pb;
 use crate::theme::{radius, Role, Style};
 use egui::text::{LayoutJob, TextFormat};
 use egui::{pos2, vec2, Align, Color32, Frame, Layout, Margin, Rect, ScrollArea, Stroke, Ui};
+use proto::pb;
 
 fn job(text: &str, role: Role, color: Color32) -> LayoutJob {
     let s = role.spec();
@@ -482,7 +482,7 @@ impl App {
             .map(|s| s.data_dir.clone())
             .unwrap_or_default();
         let count = self.status.as_ref().map(|s| s.flows).unwrap_or(0);
-        let mut redact = self.redact_export;
+
         group(ui, st, |ui| {
             row(
                 ui,
@@ -510,10 +510,10 @@ impl App {
             row(
                 ui,
                 st,
-                "Hide secrets in exports",
+                "Secrets are hidden in exports",
                 "Authorization, cookies and token-shaped values become [redacted].",
                 |ui| {
-                    widgets::toggle(ui, st, &mut redact);
+                    ui.label("Always on");
                 },
             );
             divider(ui, st);
@@ -559,7 +559,7 @@ impl App {
                 },
             );
         });
-        self.redact_export = redact;
+        self.redact_export = true;
     }
 
     fn settings_ai(&mut self, ui: &mut Ui, st: &Style) {
@@ -637,8 +637,15 @@ impl App {
                 "Connect Claude Code",
                 "Run this once in a terminal. It includes the access token.",
                 |ui| {
-                    if widgets::button(ui, st, "Copy command", Kind::Primary, Some(Icon::Terminal), true)
-                        .clicked()
+                    if widgets::button(
+                        ui,
+                        st,
+                        "Copy command",
+                        Kind::Primary,
+                        Some(Icon::Terminal),
+                        true,
+                    )
+                    .clicked()
                     {
                         ui.ctx().copy_text(m.command.clone());
                         self.toast(ui.ctx(), "Command copied", true);
@@ -653,7 +660,11 @@ impl App {
             };
             code(ui, st, &shown);
             ui.add_space(6.0);
-            let label = if self.show_token { "Hide token" } else { "Show token" };
+            let label = if self.show_token {
+                "Hide token"
+            } else {
+                "Show token"
+            };
             if widgets::button(ui, st, label, Kind::Plain, None, true).clicked() {
                 self.show_token = !self.show_token;
             }

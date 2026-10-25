@@ -75,6 +75,9 @@ fn record(id: u64) -> Arc<FlowRecord> {
 }
 
 async fn setup(writes: rules::McpWrites) -> Env {
+    setup_with_sdk(writes, false).await
+}
+async fn setup_with_sdk(writes: rules::McpWrites, with_sdk: bool) -> Env {
     let dir = tempfile::tempdir().unwrap();
     let store = store::Store::open(&dir.path().join("data")).unwrap();
     store.enqueue(record(1));
@@ -82,14 +85,29 @@ async fn setup(writes: rules::McpWrites) -> Env {
     store.flush();
     let rules = Arc::new(rules::RuleSet::in_memory());
     rules.set_mcp_writes(writes).unwrap();
+    let ids = Arc::new(flow::IdGen::starting_after(1000));
+    let sdk = if with_sdk {
+        let mut opts = sdk::SdkOptions::new(dir.path().join("sdk"));
+        opts.port = 0;
+        opts.bind = "127.0.0.1".parse().unwrap();
+        opts.advertise = false;
+        opts.watch_adb = false;
+        Some(Arc::new(
+            sdk::Sdk::new(opts, Arc::new(flow::NullSink), store.clone(), ids.clone()).unwrap(),
+        ))
+    } else {
+        None
+    };
     let ctx = Arc::new(ApiContext {
+        ids,
         store,
         hub: Hub::new(),
         control: Arc::new(FakeControl(AtomicBool::new(true))),
         rules,
+        composer: Arc::new(api::compose::Composer::in_memory()),
         approvals: Arc::new(api::Approvals::default()),
         mcp: None,
-        sdk: None,
+        sdk,
         info: CoreInfo {
             version: "test".into(),
             listen: "127.0.0.1:8899".into(),
@@ -465,4 +483,197 @@ async fn replay_and_capture_tools() {
     assert!(!env.ctx.control.recording());
     let (_, text) = tool(&env, "status", json!({})).await;
     assert!(text.contains("\"recording\":false"), "{text}");
+}
+
+#[tokio::test]
+async fn scenarios_wait_for_approval_and_obey_readonly() {
+    let env = Arc::new(setup(rules::McpWrites::Ask).await);
+    let e = env.clone();
+    let call = tokio::spawn(async move {
+        tool(
+            &e,
+            "create_scenario",
+            json!({"host":"api.test","fail_one_in":3,"jitter_ms":20}),
+        )
+        .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while env.ctx.approvals.list().is_empty() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(env.ctx.rules.rules().is_empty());
+    env.ctx
+        .approvals
+        .decide(&env.ctx.approvals.list()[0].id, true);
+    let (err, text) = call.await.unwrap();
+    assert!(!err, "{text}");
+    assert_eq!(env.ctx.rules.rules()[0].kind(), "scenario");
+    env.ctx.rules.set_mcp_writes(rules::McpWrites::Off).unwrap();
+    assert!(
+        tool(&env, "create_scenario", json!({"host":"*","fail_one_in":2}))
+            .await
+            .0
+    );
+}
+
+#[tokio::test]
+async fn artifacts_issues_catalog_and_sdk_reads_are_redacted() {
+    let env = setup_with_sdk(rules::McpWrites::Ask, true).await;
+    let mut rec = (*record(3)).clone();
+    rec.source = flow::Source::Sdk;
+    rec.sdk = Some(Arc::new(flow::SdkInfo {
+        device_id: "device-a".into(),
+        app_id: "app.test".into(),
+        name: "Checkout".into(),
+        route_template: "/users/{id}".into(),
+        ..Default::default()
+    }));
+    env.ctx.store.enqueue(Arc::new(rec));
+    env.ctx.store.flush();
+    for (name, args) in [
+        ("export_traffic", json!({"kind":"postman","ids":[3]})),
+        ("list_issues", json!({})),
+        ("scan_sensitive_data", json!({})),
+        ("route_catalog", json!({})),
+        ("sdk_status", json!({})),
+        ("list_sdk_devices", json!({})),
+        ("list_sdk_flows", json!({})),
+        ("get_sdk_flow", json!({"id":3})),
+    ] {
+        let (err, text) = tool(&env, name, args).await;
+        assert!(!err, "{name}: {text}");
+        assert!(!text.contains("hunter2"), "{name}: {text}");
+        assert!(
+            !text.contains("abcdefghijklmnopqrstuvwxyz"),
+            "{name}: {text}"
+        );
+        serde_json::from_str::<Value>(&text).unwrap();
+    }
+    let (_, catalog) = tool(&env, "route_catalog", json!({})).await;
+    assert!(catalog.contains("/users/{id}"));
+    let (_, sdk) = tool(&env, "get_sdk_flow", json!({"id":3})).await;
+    assert!(sdk.contains("Checkout"));
+    assert!(
+        env.ctx.approvals.list().is_empty(),
+        "reads require no approval"
+    );
+    env.ctx.sdk.as_ref().unwrap().shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn file_exports_and_sdk_changes_wait_for_app_approval() {
+    let env = Arc::new(setup_with_sdk(rules::McpWrites::Ask, true).await);
+    let mut rec = (*record(3)).clone();
+    rec.source = flow::Source::Sdk;
+    rec.sdk = Some(Arc::new(flow::SdkInfo::default()));
+    env.ctx.store.enqueue(Arc::new(rec));
+    env.ctx.store.flush();
+    for (name, args) in [
+        ("fetch_sdk_body", json!({"id":3,"part":"request"})),
+        ("save_export", json!({"kind":"wiremock","ids":[1]})),
+        ("export_har", json!({"ids":[1]})),
+        ("set_sdk_enabled", json!({"enabled":false})),
+    ] {
+        let e = env.clone();
+        let call = tokio::spawn(async move { tool(&e, name, args).await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while env.ctx.approvals.list().is_empty() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let pending = env.ctx.approvals.list();
+        assert_eq!(pending[0].tool, name);
+        env.ctx.approvals.decide(&pending[0].id, true);
+        let (err, text) = call.await.unwrap();
+        assert!(!err, "{name}: {text}");
+        if name == "save_export" || name == "export_har" {
+            let value: Value = serde_json::from_str(&text).unwrap();
+            let path = value["path"].as_str().unwrap();
+            let data = std::fs::read_to_string(path).unwrap();
+            assert!(!data.contains("hunter2"));
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+    }
+    env.ctx.rules.set_mcp_writes(rules::McpWrites::Off).unwrap();
+    assert!(tool(&env, "save_export", json!({"kind":"har"})).await.0);
+    assert!(
+        tool(&env, "set_sdk_enabled", json!({"enabled":true}))
+            .await
+            .0
+    );
+    env.ctx.sdk.as_ref().unwrap().shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn rule_reads_redact_short_credentials_and_bad_arguments_fail() {
+    let env = setup(rules::McpWrites::Ask).await;
+    env.ctx
+        .rules
+        .put_rule(rules::Rule {
+            id: String::new(),
+            name: "test".into(),
+            enabled: true,
+            matcher: rules::Match {
+                scheme: String::new(),
+                host: "api.test".into(),
+                port: 0,
+                method: String::new(),
+                path: String::new(),
+                query: "%61pi_key=short-query".into(),
+            },
+            action: rules::Action::Mock {
+                status: 200,
+                headers: vec![("set-cookie".into(), "short-cookie".into())],
+                body: "{\"password\":\"short-password\"}".into(),
+                delay_ms: 0,
+            },
+        })
+        .unwrap();
+    let (err, text) = tool(&env, "list_rules", json!({})).await;
+    assert!(!err, "{text}");
+    for value in ["short-query", "short-cookie", "short-password"] {
+        assert!(!text.contains(value), "{text}");
+    }
+    assert!(
+        tool(&env, "export_traffic", json!({"kind":"har","ids":["bad"]}))
+            .await
+            .0
+    );
+    assert!(tool(&env, "list_flows", json!([])).await.0);
+}
+
+#[tokio::test]
+async fn malformed_json_and_sse_bodies_redact_short_credentials() {
+    let env = setup(rules::McpWrites::Ask).await;
+    for (id, ct, body) in [
+        (4, "application/json", "{\"password\":\"tiny-secret"),
+        (
+            5,
+            "text/event-stream",
+            "data: {\"api_key\":\"tiny-secret\"}\n\n",
+        ),
+        (6, "text/plain", "Cookie: a=tiny-secret; b=another-secret"),
+    ] {
+        let mut rec = (*record(id)).clone();
+        rec.res_headers = vec![("content-type".into(), ct.into())];
+        rec.res_body = Bytes::from(body.to_string());
+        rec.res_size = body.len() as u64;
+        env.ctx.store.enqueue(Arc::new(rec));
+    }
+    env.ctx.store.flush();
+    for id in [4, 5, 6] {
+        let (err, text) = tool(&env, "get_flow", json!({"id":id})).await;
+        assert!(!err, "{text}");
+        assert!(!text.contains("tiny-secret"), "{text}");
+        assert!(!text.contains("another-secret"), "{text}");
+    }
 }

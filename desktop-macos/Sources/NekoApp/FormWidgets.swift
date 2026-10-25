@@ -77,6 +77,14 @@ final class Field: Surface, NSTextFieldDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     func controlTextDidChange(_ obj: Notification) { onChange?(input.stringValue) }
+
+    /// Return in the field; nil leaves the default behavior.
+    var onSubmit: (() -> Void)?
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
+        guard sel == #selector(NSResponder.insertNewline(_:)), let onSubmit else { return false }
+        onSubmit()
+        return true
+    }
 }
 
 /// A multi-line text input in the code-field style.

@@ -21,6 +21,6 @@ let package = Package(
             dependencies: ["NekoAPI"],
             resources: [.copy("Resources/Fonts")]
         ),
-        .testTarget(name: "NekoAPITests", dependencies: ["NekoAPI"]),
+        .testTarget(name: "NekoAPITests", dependencies: ["NekoAPI", "NekoApp"]),
     ]
 )

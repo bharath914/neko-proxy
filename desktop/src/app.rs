@@ -444,7 +444,11 @@ impl App {
             return;
         }
         self.sdk_next_poll = now + if self.link_open { 1.5 } else { 5.0 };
-        if self.pending.values().any(|p| matches!(p, Pending::SdkStatus)) {
+        if self
+            .pending
+            .values()
+            .any(|p| matches!(p, Pending::SdkStatus))
+        {
             return;
         }
         self.send(Req::SdkStatus(pb::SdkStatusRequest {}), Pending::SdkStatus);
@@ -811,10 +815,14 @@ impl App {
     }
 
     pub fn export_har(&mut self) {
+        self.export_kind("har");
+    }
+
+    pub fn export_kind(&mut self, kind: &str) {
         let filter = self.current_filter();
         self.send(
             Req::Export(pb::ExportRequest {
-                kind: "har".into(),
+                kind: kind.into(),
                 ids: vec![],
                 filter: Some(filter),
                 redact: self.redact_export,
@@ -907,7 +915,13 @@ impl App {
                     // A flow we are looking at moved on: refresh its detail.
                     if let Some(sel) = self.selected {
                         if let Some(u) = b.upserts.iter().find(|u| u.id == sel) {
-                            if self.detail_fetched_state.get(&sel) != Some(&u.state) {
+                            if self.detail_fetched_state.get(&sel) != Some(&u.state)
+                                || self.details.get(&sel).is_some_and(|e| {
+                                    e.detail.summary.as_ref().is_some_and(|s| {
+                                        s.flags != u.flags || s.res_size != u.res_size
+                                    })
+                                })
+                            {
                                 self.fetch_detail(sel);
                             }
                         }
@@ -998,8 +1012,16 @@ impl App {
                 if n.status == pb::DeviceStatus::DeviceConnected as i32
                     && !self.devices.devices.iter().any(connected)
                 {
-                    let name = if n.app_name.is_empty() { &n.app_id } else { &n.app_name };
-                    self.toast(ctx, format!("{} connected from {}", name, n.device_name), true);
+                    let name = if n.app_name.is_empty() {
+                        &n.app_id
+                    } else {
+                        &n.app_name
+                    };
+                    self.toast(
+                        ctx,
+                        format!("{} connected from {}", name, n.device_name),
+                        true,
+                    );
                 }
             }
         }
@@ -1187,7 +1209,6 @@ impl App {
         std::thread::spawn(move || {
             let picked = rfd::FileDialog::new()
                 .set_file_name(&x.filename)
-                .add_filter("HTTP Archive", &["har"])
                 .save_file();
             let result = match picked {
                 Some(path) => std::fs::write(&path, &x.data)

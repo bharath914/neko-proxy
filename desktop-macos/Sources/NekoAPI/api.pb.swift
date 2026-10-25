@@ -561,6 +561,248 @@ public enum Neko_Api_V1_Redaction: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
+public enum Neko_Api_V1_ComposeBody: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case none // = 0
+  case json // = 1
+  case text // = 2
+  case xml // = 3
+
+  /// x-www-form-urlencoded from form
+  case form // = 4
+  case html // = 5
+  case javascript // = 6
+
+  /// multipart/form-data from form; a row can be a file
+  case formData // = 7
+
+  /// body is the query, graphql_variables its variables
+  case graphql // = 8
+
+  /// the file at binary_path
+  case binary // = 9
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .none
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .none
+    case 1: self = .json
+    case 2: self = .text
+    case 3: self = .xml
+    case 4: self = .form
+    case 5: self = .html
+    case 6: self = .javascript
+    case 7: self = .formData
+    case 8: self = .graphql
+    case 9: self = .binary
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .none: return 0
+    case .json: return 1
+    case .text: return 2
+    case .xml: return 3
+    case .form: return 4
+    case .html: return 5
+    case .javascript: return 6
+    case .formData: return 7
+    case .graphql: return 8
+    case .binary: return 9
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Neko_Api_V1_ComposeBody] = [
+    .none,
+    .json,
+    .text,
+    .xml,
+    .form,
+    .html,
+    .javascript,
+    .formData,
+    .graphql,
+    .binary,
+  ]
+
+}
+
+public enum Neko_Api_V1_ComposeAuth: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case none // = 0
+  case bearer // = 1
+  case basic // = 2
+
+  /// the nearest collection or folder that sets one
+  case inherit // = 3
+  case apiKey // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .none
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .none
+    case 1: self = .bearer
+    case 2: self = .basic
+    case 3: self = .inherit
+    case 4: self = .apiKey
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .none: return 0
+    case .bearer: return 1
+    case .basic: return 2
+    case .inherit: return 3
+    case .apiKey: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Neko_Api_V1_ComposeAuth] = [
+    .none,
+    .bearer,
+    .basic,
+    .inherit,
+    .apiKey,
+  ]
+
+}
+
+public enum Neko_Api_V1_AssertKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case status // = 0
+
+  /// target = header name
+  case header // = 1
+  case body // = 2
+
+  /// target = path such as data.items[0].id
+  case json // = 3
+
+  /// milliseconds
+  case time // = 4
+
+  /// bytes
+  case size // = 5
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .status
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .status
+    case 1: self = .header
+    case 2: self = .body
+    case 3: self = .json
+    case 4: self = .time
+    case 5: self = .size
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .status: return 0
+    case .header: return 1
+    case .body: return 2
+    case .json: return 3
+    case .time: return 4
+    case .size: return 5
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Neko_Api_V1_AssertKind] = [
+    .status,
+    .header,
+    .body,
+    .json,
+    .time,
+    .size,
+  ]
+
+}
+
+public enum Neko_Api_V1_AssertOp: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case equals // = 0
+  case notEquals // = 1
+  case contains // = 2
+  case notContains // = 3
+  case exists // = 4
+  case notExists // = 5
+  case lessThan // = 6
+  case greaterThan // = 7
+  case matches // = 8
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .equals
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .equals
+    case 1: self = .notEquals
+    case 2: self = .contains
+    case 3: self = .notContains
+    case 4: self = .exists
+    case 5: self = .notExists
+    case 6: self = .lessThan
+    case 7: self = .greaterThan
+    case 8: self = .matches
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .equals: return 0
+    case .notEquals: return 1
+    case .contains: return 2
+    case .notContains: return 3
+    case .exists: return 4
+    case .notExists: return 5
+    case .lessThan: return 6
+    case .greaterThan: return 7
+    case .matches: return 8
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Neko_Api_V1_AssertOp] = [
+    .equals,
+    .notEquals,
+    .contains,
+    .notContains,
+    .exists,
+    .notExists,
+    .lessThan,
+    .greaterThan,
+    .matches,
+  ]
+
+}
+
 public struct Neko_Api_V1_ClientMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -842,6 +1084,134 @@ public struct Neko_Api_V1_ClientMessage: Sendable {
     set {body = .sdkSetSettings(newValue)}
   }
 
+  public var composerGet: Neko_Api_V1_ComposerGetRequest {
+    get {
+      if case .composerGet(let v)? = body {return v}
+      return Neko_Api_V1_ComposerGetRequest()
+    }
+    set {body = .composerGet(newValue)}
+  }
+
+  public var composerSave: Neko_Api_V1_ComposerSaveRequest {
+    get {
+      if case .composerSave(let v)? = body {return v}
+      return Neko_Api_V1_ComposerSaveRequest()
+    }
+    set {body = .composerSave(newValue)}
+  }
+
+  public var composerRemove: Neko_Api_V1_ComposerRemoveRequest {
+    get {
+      if case .composerRemove(let v)? = body {return v}
+      return Neko_Api_V1_ComposerRemoveRequest()
+    }
+    set {body = .composerRemove(newValue)}
+  }
+
+  public var composerCollection: Neko_Api_V1_ComposerCollectionRequest {
+    get {
+      if case .composerCollection(let v)? = body {return v}
+      return Neko_Api_V1_ComposerCollectionRequest()
+    }
+    set {body = .composerCollection(newValue)}
+  }
+
+  public var composerEnvironments: Neko_Api_V1_ComposerEnvironmentsRequest {
+    get {
+      if case .composerEnvironments(let v)? = body {return v}
+      return Neko_Api_V1_ComposerEnvironmentsRequest()
+    }
+    set {body = .composerEnvironments(newValue)}
+  }
+
+  public var composerClearHistory: Neko_Api_V1_ComposerClearHistoryRequest {
+    get {
+      if case .composerClearHistory(let v)? = body {return v}
+      return Neko_Api_V1_ComposerClearHistoryRequest()
+    }
+    set {body = .composerClearHistory(newValue)}
+  }
+
+  public var composerSend: Neko_Api_V1_ComposerSendRequest {
+    get {
+      if case .composerSend(let v)? = body {return v}
+      return Neko_Api_V1_ComposerSendRequest()
+    }
+    set {body = .composerSend(newValue)}
+  }
+
+  public var composerResolve: Neko_Api_V1_ComposerResolveRequest {
+    get {
+      if case .composerResolve(let v)? = body {return v}
+      return Neko_Api_V1_ComposerResolveRequest()
+    }
+    set {body = .composerResolve(newValue)}
+  }
+
+  public var composerImport: Neko_Api_V1_ComposerImportRequest {
+    get {
+      if case .composerImport(let v)? = body {return v}
+      return Neko_Api_V1_ComposerImportRequest()
+    }
+    set {body = .composerImport(newValue)}
+  }
+
+  public var composerURL: Neko_Api_V1_ComposerUrlRequest {
+    get {
+      if case .composerURL(let v)? = body {return v}
+      return Neko_Api_V1_ComposerUrlRequest()
+    }
+    set {body = .composerURL(newValue)}
+  }
+
+  public var composerBulk: Neko_Api_V1_ComposerBulkRequest {
+    get {
+      if case .composerBulk(let v)? = body {return v}
+      return Neko_Api_V1_ComposerBulkRequest()
+    }
+    set {body = .composerBulk(newValue)}
+  }
+
+  public var composerCode: Neko_Api_V1_ComposerCodeRequest {
+    get {
+      if case .composerCode(let v)? = body {return v}
+      return Neko_Api_V1_ComposerCodeRequest()
+    }
+    set {body = .composerCode(newValue)}
+  }
+
+  public var composerConfig: Neko_Api_V1_ComposerConfigRequest {
+    get {
+      if case .composerConfig(let v)? = body {return v}
+      return Neko_Api_V1_ComposerConfigRequest()
+    }
+    set {body = .composerConfig(newValue)}
+  }
+
+  public var composerGlobals: Neko_Api_V1_ComposerGlobalsRequest {
+    get {
+      if case .composerGlobals(let v)? = body {return v}
+      return Neko_Api_V1_ComposerGlobalsRequest()
+    }
+    set {body = .composerGlobals(newValue)}
+  }
+
+  public var composerTransfer: Neko_Api_V1_ComposerTransferRequest {
+    get {
+      if case .composerTransfer(let v)? = body {return v}
+      return Neko_Api_V1_ComposerTransferRequest()
+    }
+    set {body = .composerTransfer(newValue)}
+  }
+
+  public var importHar: Neko_Api_V1_ImportHarRequest {
+    get {
+      if case .importHar(let v)? = body {return v}
+      return Neko_Api_V1_ImportHarRequest()
+    }
+    set {body = .importHar(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Body: Equatable, Sendable {
@@ -879,6 +1249,22 @@ public struct Neko_Api_V1_ClientMessage: Sendable {
     case fetchBody(Neko_Api_V1_FetchBodyRequest)
     case regenerateSdkCert(Neko_Api_V1_RegenerateSdkCertRequest)
     case sdkSetSettings(Neko_Api_V1_SdkSetSettingsRequest)
+    case composerGet(Neko_Api_V1_ComposerGetRequest)
+    case composerSave(Neko_Api_V1_ComposerSaveRequest)
+    case composerRemove(Neko_Api_V1_ComposerRemoveRequest)
+    case composerCollection(Neko_Api_V1_ComposerCollectionRequest)
+    case composerEnvironments(Neko_Api_V1_ComposerEnvironmentsRequest)
+    case composerClearHistory(Neko_Api_V1_ComposerClearHistoryRequest)
+    case composerSend(Neko_Api_V1_ComposerSendRequest)
+    case composerResolve(Neko_Api_V1_ComposerResolveRequest)
+    case composerImport(Neko_Api_V1_ComposerImportRequest)
+    case composerURL(Neko_Api_V1_ComposerUrlRequest)
+    case composerBulk(Neko_Api_V1_ComposerBulkRequest)
+    case composerCode(Neko_Api_V1_ComposerCodeRequest)
+    case composerConfig(Neko_Api_V1_ComposerConfigRequest)
+    case composerGlobals(Neko_Api_V1_ComposerGlobalsRequest)
+    case composerTransfer(Neko_Api_V1_ComposerTransferRequest)
+    case importHar(Neko_Api_V1_ImportHarRequest)
 
   }
 
@@ -1046,6 +1432,14 @@ public struct Neko_Api_V1_ServerMessage: Sendable {
     set {body = .ok(newValue)}
   }
 
+  public var importedHar: Neko_Api_V1_ImportHarResponse {
+    get {
+      if case .importedHar(let v)? = body {return v}
+      return Neko_Api_V1_ImportHarResponse()
+    }
+    set {body = .importedHar(newValue)}
+  }
+
   public var batch: Neko_Api_V1_FlowBatch {
     get {
       if case .batch(let v)? = body {return v}
@@ -1078,6 +1472,70 @@ public struct Neko_Api_V1_ServerMessage: Sendable {
     set {body = .approvalNotice(newValue)}
   }
 
+  public var composer: Neko_Api_V1_ComposerState {
+    get {
+      if case .composer(let v)? = body {return v}
+      return Neko_Api_V1_ComposerState()
+    }
+    set {body = .composer(newValue)}
+  }
+
+  public var composerSent: Neko_Api_V1_ComposerSent {
+    get {
+      if case .composerSent(let v)? = body {return v}
+      return Neko_Api_V1_ComposerSent()
+    }
+    set {body = .composerSent(newValue)}
+  }
+
+  public var composerResolved: Neko_Api_V1_ComposerResolved {
+    get {
+      if case .composerResolved(let v)? = body {return v}
+      return Neko_Api_V1_ComposerResolved()
+    }
+    set {body = .composerResolved(newValue)}
+  }
+
+  public var composed: Neko_Api_V1_ComposedRequest {
+    get {
+      if case .composed(let v)? = body {return v}
+      return Neko_Api_V1_ComposedRequest()
+    }
+    set {body = .composed(newValue)}
+  }
+
+  public var composerURL: Neko_Api_V1_ComposerUrl {
+    get {
+      if case .composerURL(let v)? = body {return v}
+      return Neko_Api_V1_ComposerUrl()
+    }
+    set {body = .composerURL(newValue)}
+  }
+
+  public var composerBulk: Neko_Api_V1_ComposerBulk {
+    get {
+      if case .composerBulk(let v)? = body {return v}
+      return Neko_Api_V1_ComposerBulk()
+    }
+    set {body = .composerBulk(newValue)}
+  }
+
+  public var composerCode: Neko_Api_V1_ComposerCode {
+    get {
+      if case .composerCode(let v)? = body {return v}
+      return Neko_Api_V1_ComposerCode()
+    }
+    set {body = .composerCode(newValue)}
+  }
+
+  public var composerExport: Neko_Api_V1_ComposerExport {
+    get {
+      if case .composerExport(let v)? = body {return v}
+      return Neko_Api_V1_ComposerExport()
+    }
+    set {body = .composerExport(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Body: Equatable, Sendable {
@@ -1100,10 +1558,19 @@ public struct Neko_Api_V1_ServerMessage: Sendable {
     case sdkStatus(Neko_Api_V1_SdkStatus)
     case devices(Neko_Api_V1_DevicesSnapshot)
     case ok(Neko_Api_V1_OkResponse)
+    case importedHar(Neko_Api_V1_ImportHarResponse)
     case batch(Neko_Api_V1_FlowBatch)
     case resync(Neko_Api_V1_Resync)
     case pauseNotice(Neko_Api_V1_PauseNotice)
     case approvalNotice(Neko_Api_V1_ApprovalNotice)
+    case composer(Neko_Api_V1_ComposerState)
+    case composerSent(Neko_Api_V1_ComposerSent)
+    case composerResolved(Neko_Api_V1_ComposerResolved)
+    case composed(Neko_Api_V1_ComposedRequest)
+    case composerURL(Neko_Api_V1_ComposerUrl)
+    case composerBulk(Neko_Api_V1_ComposerBulk)
+    case composerCode(Neko_Api_V1_ComposerCode)
+    case composerExport(Neko_Api_V1_ComposerExport)
 
   }
 
@@ -1204,6 +1671,8 @@ public struct Neko_Api_V1_Filter: Sendable {
 /// 256 edited        a rule or a breakpoint edit changed the request or response
 /// 512 breakpoint    the flow was held at a breakpoint
 /// 1024 replayed     sent again by the proxy
+/// 16384 slow, 32768 possible duplicate, 65536 large payload,
+/// 131072 missing cache headers, 262144 possible N+1, 524288 sensitive data.
 public struct Neko_Api_V1_FlowSummary: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1347,6 +1816,11 @@ public struct Neko_Api_V1_FlowSummary: @unchecked Sendable {
   public var clientStack: String {
     get {return _storage._clientStack}
     set {_uniqueStorage()._clientStack = newValue}
+  }
+
+  public var issueLabels: [String] {
+    get {return _storage._issueLabels}
+    set {_uniqueStorage()._issueLabels = newValue}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -1513,51 +1987,139 @@ public struct Neko_Api_V1_SourceLine: Sendable {
   public init() {}
 }
 
+public struct Neko_Api_V1_SseEvent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var event: String = String()
+
+  public var id: String = String()
+
+  public var data: String = String()
+
+  public var retryMs: UInt64 {
+    get {return _retryMs ?? 0}
+    set {_retryMs = newValue}
+  }
+  /// Returns true if `retryMs` has been explicitly set.
+  public var hasRetryMs: Bool {return self._retryMs != nil}
+  /// Clears the value of `retryMs`. Subsequent reads from it will return its default value.
+  public mutating func clearRetryMs() {self._retryMs = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _retryMs: UInt64? = nil
+}
+
 public struct Neko_Api_V1_BodyView: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var kind: Neko_Api_V1_BodyKind = .empty
+  public var kind: Neko_Api_V1_BodyKind {
+    get {return _storage._kind}
+    set {_uniqueStorage()._kind = newValue}
+  }
 
-  public var contentType: String = String()
+  public var contentType: String {
+    get {return _storage._contentType}
+    set {_uniqueStorage()._contentType = newValue}
+  }
 
-  public var contentEncoding: String = String()
+  public var contentEncoding: String {
+    get {return _storage._contentEncoding}
+    set {_uniqueStorage()._contentEncoding = newValue}
+  }
 
-  public var wireSize: UInt64 = 0
+  public var wireSize: UInt64 {
+    get {return _storage._wireSize}
+    set {_uniqueStorage()._wireSize = newValue}
+  }
 
-  public var decodedSize: UInt64 = 0
+  public var decodedSize: UInt64 {
+    get {return _storage._decodedSize}
+    set {_uniqueStorage()._decodedSize = newValue}
+  }
 
   /// body was larger than the capture cap
-  public var captureTruncated: Bool = false
+  public var captureTruncated: Bool {
+    get {return _storage._captureTruncated}
+    set {_uniqueStorage()._captureTruncated = newValue}
+  }
 
   /// text or json cut for display
-  public var previewTruncated: Bool = false
+  public var previewTruncated: Bool {
+    get {return _storage._previewTruncated}
+    set {_uniqueStorage()._previewTruncated = newValue}
+  }
 
   /// utf-8 text (pretty printed for JSON)
-  public var text: String = String()
+  public var text: String {
+    get {return _storage._text}
+    set {_uniqueStorage()._text = newValue}
+  }
 
-  public var json: [Neko_Api_V1_JsonLine] = []
+  public var json: [Neko_Api_V1_JsonLine] {
+    get {return _storage._json}
+    set {_uniqueStorage()._json = newValue}
+  }
 
-  public var form: [Neko_Api_V1_FormField] = []
+  public var form: [Neko_Api_V1_FormField] {
+    get {return _storage._form}
+    set {_uniqueStorage()._form = newValue}
+  }
 
   /// raw bytes for images up to 4 MiB
-  public var image: Data = Data()
+  public var image: Data {
+    get {return _storage._image}
+    set {_uniqueStorage()._image = newValue}
+  }
 
   /// decode problems, binary description
-  public var note: String = String()
+  public var note: String {
+    get {return _storage._note}
+    set {_uniqueStorage()._note = newValue}
+  }
 
   /// preview blocks for HTML
-  public var html: [Neko_Api_V1_HtmlBlock] = []
+  public var html: [Neko_Api_V1_HtmlBlock] {
+    get {return _storage._html}
+    set {_uniqueStorage()._html = newValue}
+  }
 
-  public var htmlTitle: String = String()
+  public var htmlTitle: String {
+    get {return _storage._htmlTitle}
+    set {_uniqueStorage()._htmlTitle = newValue}
+  }
 
   /// highlighted markup lines for HTML
-  public var source: [Neko_Api_V1_SourceLine] = []
+  public var source: [Neko_Api_V1_SourceLine] {
+    get {return _storage._source}
+    set {_uniqueStorage()._source = newValue}
+  }
+
+  public var events: [Neko_Api_V1_SseEvent] {
+    get {return _storage._events}
+    set {_uniqueStorage()._events = newValue}
+  }
+
+  public var `protocol`: Neko_Api_V1_ProtocolView {
+    get {return _storage._protocol ?? Neko_Api_V1_ProtocolView()}
+    set {_uniqueStorage()._protocol = newValue}
+  }
+  /// Returns true if ``protocol`` has been explicitly set.
+  public var hasProtocol: Bool {return _storage._protocol != nil}
+  /// Clears the value of ``protocol``. Subsequent reads from it will return its default value.
+  public mutating func clearProtocol() {_uniqueStorage()._protocol = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// parts bit mask for GetFlowRequest.
@@ -1638,6 +2200,16 @@ public struct Neko_Api_V1_FlowDetail: @unchecked Sendable {
   public var hasResponseBody: Bool {return _storage._responseBody != nil}
   /// Clears the value of `responseBody`. Subsequent reads from it will return its default value.
   public mutating func clearResponseBody() {_uniqueStorage()._responseBody = nil}
+
+  public var dio: String {
+    get {return _storage._dio}
+    set {_uniqueStorage()._dio = newValue}
+  }
+
+  public var issues: [String] {
+    get {return _storage._issues}
+    set {_uniqueStorage()._issues = newValue}
+  }
 
   /// set for SDK and merged flows
   public var sdk: Neko_Api_V1_SdkContext {
@@ -2634,6 +3206,14 @@ public struct Neko_Api_V1_Rule: Sendable {
     set {action = .breakpoint(newValue)}
   }
 
+  public var scenario: Neko_Api_V1_ScenarioAction {
+    get {
+      if case .scenario(let v)? = action {return v}
+      return Neko_Api_V1_ScenarioAction()
+    }
+    set {action = .scenario(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Action: Equatable, Sendable {
@@ -2642,6 +3222,7 @@ public struct Neko_Api_V1_Rule: Sendable {
     case rewrite(Neko_Api_V1_RewriteAction)
     case throttle(Neko_Api_V1_ThrottleAction)
     case breakpoint(Neko_Api_V1_BreakpointAction)
+    case scenario(Neko_Api_V1_ScenarioAction)
 
   }
 
@@ -3574,6 +4155,951 @@ public struct Neko_Api_V1_FetchBodyRequest: Sendable {
   public init() {}
 }
 
+/// One editable row: a header, query parameter, form field or variable.
+public struct Neko_Api_V1_KeyValue: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var value: String = String()
+
+  /// kept in the table, left out when sending
+  public var disabled: Bool = false
+
+  public var description_p: String = String()
+
+  /// a variable whose value the app masks
+  public var secret: Bool = false
+
+  /// form-data row: value is the path of a file to upload
+  public var file: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// One check run against the response after every send.
+public struct Neko_Api_V1_Assertion: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var kind: Neko_Api_V1_AssertKind = .status
+
+  public var target: String = String()
+
+  public var op: Neko_Api_V1_AssertOp = .equals
+
+  public var expected: String = String()
+
+  public var disabled: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_TestResult: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// "Status equals 200"
+  public var name: String = String()
+
+  public var passed: Bool = false
+
+  /// what was found, when it failed
+  public var message: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_Cookie: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var value: String = String()
+
+  public var domain: String = String()
+
+  public var path: String = String()
+
+  public var expires: String = String()
+
+  public var maxAge: String = String()
+
+  public var secure: Bool = false
+
+  public var httpOnly: Bool = false
+
+  public var sameSite: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Auth settings of a collection or folder.
+public struct Neko_Api_V1_ComposeAuthConfig: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var kind: Neko_Api_V1_ComposeAuth = .none
+
+  public var token: String = String()
+
+  public var user: String = String()
+
+  public var password: String = String()
+
+  public var key: String = String()
+
+  public var value: String = String()
+
+  public var inQuery: Bool = false
+
+  /// bearer prefix; empty means "Bearer"
+  public var prefix: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// What the requests in a collection or folder inherit. `name` is the path,
+/// with "/" between a folder and its parents.
+public struct Neko_Api_V1_CollectionConfig: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var description_p: String = String()
+
+  public var auth: Neko_Api_V1_ComposeAuthConfig {
+    get {return _auth ?? Neko_Api_V1_ComposeAuthConfig()}
+    set {_auth = newValue}
+  }
+  /// Returns true if `auth` has been explicitly set.
+  public var hasAuth: Bool {return self._auth != nil}
+  /// Clears the value of `auth`. Subsequent reads from it will return its default value.
+  public mutating func clearAuth() {self._auth = nil}
+
+  public var headers: [Neko_Api_V1_KeyValue] = []
+
+  public var vars: [Neko_Api_V1_KeyValue] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _auth: Neko_Api_V1_ComposeAuthConfig? = nil
+}
+
+/// Any text may hold {{variables}}, filled in from the active environment.
+public struct Neko_Api_V1_ComposedRequest: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// empty until saved
+  public var id: String {
+    get {return _storage._id}
+    set {_uniqueStorage()._id = newValue}
+  }
+
+  public var name: String {
+    get {return _storage._name}
+    set {_uniqueStorage()._name = newValue}
+  }
+
+  public var collection: String {
+    get {return _storage._collection}
+    set {_uniqueStorage()._collection = newValue}
+  }
+
+  public var method: String {
+    get {return _storage._method}
+    set {_uniqueStorage()._method = newValue}
+  }
+
+  public var url: String {
+    get {return _storage._url}
+    set {_uniqueStorage()._url = newValue}
+  }
+
+  /// added to the URL's query
+  public var params: [Neko_Api_V1_KeyValue] {
+    get {return _storage._params}
+    set {_uniqueStorage()._params = newValue}
+  }
+
+  public var headers: [Neko_Api_V1_KeyValue] {
+    get {return _storage._headers}
+    set {_uniqueStorage()._headers = newValue}
+  }
+
+  public var bodyKind: Neko_Api_V1_ComposeBody {
+    get {return _storage._bodyKind}
+    set {_uniqueStorage()._bodyKind = newValue}
+  }
+
+  /// JSON, text and XML bodies
+  public var body: String {
+    get {return _storage._body}
+    set {_uniqueStorage()._body = newValue}
+  }
+
+  /// form bodies
+  public var form: [Neko_Api_V1_KeyValue] {
+    get {return _storage._form}
+    set {_uniqueStorage()._form = newValue}
+  }
+
+  public var auth: Neko_Api_V1_ComposeAuth {
+    get {return _storage._auth}
+    set {_uniqueStorage()._auth = newValue}
+  }
+
+  public var authToken: String {
+    get {return _storage._authToken}
+    set {_uniqueStorage()._authToken = newValue}
+  }
+
+  public var authUser: String {
+    get {return _storage._authUser}
+    set {_uniqueStorage()._authUser = newValue}
+  }
+
+  public var authPassword: String {
+    get {return _storage._authPassword}
+    set {_uniqueStorage()._authPassword = newValue}
+  }
+
+  public var updatedMs: Int64 {
+    get {return _storage._updatedMs}
+    set {_uniqueStorage()._updatedMs = newValue}
+  }
+
+  /// API key name
+  public var authKey: String {
+    get {return _storage._authKey}
+    set {_uniqueStorage()._authKey = newValue}
+  }
+
+  public var authValue: String {
+    get {return _storage._authValue}
+    set {_uniqueStorage()._authValue = newValue}
+  }
+
+  /// the API key goes in the query
+  public var authInQuery: Bool {
+    get {return _storage._authInQuery}
+    set {_uniqueStorage()._authInQuery = newValue}
+  }
+
+  /// bearer prefix; empty means "Bearer"
+  public var authPrefix: String {
+    get {return _storage._authPrefix}
+    set {_uniqueStorage()._authPrefix = newValue}
+  }
+
+  public var description_p: String {
+    get {return _storage._description_p}
+    set {_uniqueStorage()._description_p = newValue}
+  }
+
+  /// values for :name segments of the path
+  public var pathVars: [Neko_Api_V1_KeyValue] {
+    get {return _storage._pathVars}
+    set {_uniqueStorage()._pathVars = newValue}
+  }
+
+  public var graphqlVariables: String {
+    get {return _storage._graphqlVariables}
+    set {_uniqueStorage()._graphqlVariables = newValue}
+  }
+
+  public var binaryPath: String {
+    get {return _storage._binaryPath}
+    set {_uniqueStorage()._binaryPath = newValue}
+  }
+
+  public var tests: [Neko_Api_V1_Assertion] {
+    get {return _storage._tests}
+    set {_uniqueStorage()._tests = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public struct Neko_Api_V1_Environment: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var vars: [Neko_Api_V1_KeyValue] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ComposerHistoryEntry: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Neko_Api_V1_ComposedRequest {
+    get {return _request ?? Neko_Api_V1_ComposedRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {return self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  /// 0 when the request never left
+  public var flowID: UInt64 = 0
+
+  public var status: UInt32 = 0
+
+  public var sentMs: Int64 = 0
+
+  public var durationMs: Double = 0
+
+  /// after variables were filled in
+  public var method: String = String()
+
+  public var url: String = String()
+
+  public var error: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Neko_Api_V1_ComposedRequest? = nil
+}
+
+public struct Neko_Api_V1_ComposerState: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var collections: [String] = []
+
+  public var requests: [Neko_Api_V1_ComposedRequest] = []
+
+  public var environments: [Neko_Api_V1_Environment] = []
+
+  /// empty for none
+  public var activeEnvironment: String = String()
+
+  /// newest first
+  public var history: [Neko_Api_V1_ComposerHistoryEntry] = []
+
+  /// in the reply to a save: the request's id
+  public var savedID: String = String()
+
+  public var globals: [Neko_Api_V1_KeyValue] = []
+
+  public var configs: [Neko_Api_V1_CollectionConfig] = []
+
+  /// in the reply to an import: what was added
+  public var notice: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ComposerGetRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Add or replace a saved request; one without an id gets one. Answers with
+/// the state, with saved_id set.
+public struct Neko_Api_V1_ComposerSaveRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Neko_Api_V1_ComposedRequest {
+    get {return _request ?? Neko_Api_V1_ComposedRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {return self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Neko_Api_V1_ComposedRequest? = nil
+}
+
+public struct Neko_Api_V1_ComposerRemoveRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Create a collection, rename it (rename_to) or remove it with its requests.
+public struct Neko_Api_V1_ComposerCollectionRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var renameTo: String = String()
+
+  public var remove: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Replace every environment and choose the active one.
+public struct Neko_Api_V1_ComposerEnvironmentsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var environments: [Neko_Api_V1_Environment] = []
+
+  public var active: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ComposerClearHistoryRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Send a request now. It goes straight upstream as a new flow, like a replay.
+public struct Neko_Api_V1_ComposerSendRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Neko_Api_V1_ComposedRequest {
+    get {return _request ?? Neko_Api_V1_ComposedRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {return self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Neko_Api_V1_ComposedRequest? = nil
+}
+
+public struct Neko_Api_V1_ComposerSent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// 0 when the request never left
+  public var flowID: UInt64 = 0
+
+  public var status: UInt32 = 0
+
+  public var method: String = String()
+
+  public var url: String = String()
+
+  /// why it failed; the flow, if any, says more
+  public var error: String = String()
+
+  public var durationMs: Double = 0
+
+  /// response body bytes
+  public var size: UInt64 = 0
+
+  public var tests: [Neko_Api_V1_TestResult] = []
+
+  public var cookies: [Neko_Api_V1_Cookie] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// What a request would send, without sending it.
+public struct Neko_Api_V1_ComposerResolveRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Neko_Api_V1_ComposedRequest {
+    get {return _request ?? Neko_Api_V1_ComposedRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {return self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Neko_Api_V1_ComposedRequest? = nil
+}
+
+public struct Neko_Api_V1_ComposerResolved: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var method: String = String()
+
+  public var url: String = String()
+
+  public var headers: [Neko_Api_V1_Header] = []
+
+  public var body: Data = Data()
+
+  public var curl: String = String()
+
+  /// {{variables}} with no value
+  public var missing: [String] = []
+
+  /// header names added for the person
+  public var generated: [String] = []
+
+  /// why it can't be built, other than missing variables
+  public var error: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Start a request from a cURL command or a captured flow.
+public struct Neko_Api_V1_ComposerImportRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var source: Neko_Api_V1_ComposerImportRequest.OneOf_Source? = nil
+
+  public var curl: String {
+    get {
+      if case .curl(let v)? = source {return v}
+      return String()
+    }
+    set {source = .curl(newValue)}
+  }
+
+  public var flowID: UInt64 {
+    get {
+      if case .flowID(let v)? = source {return v}
+      return 0
+    }
+    set {source = .flowID(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Source: Equatable, Sendable {
+    case curl(String)
+    case flowID(UInt64)
+
+  }
+
+  public init() {}
+}
+
+/// Keeps the URL text and the Params table in step. With edit set, `text` is
+/// what the person typed in the URL bar and the request's url and params follow
+/// it; without, the request is only normalized. Always answers with the request
+/// and the URL text to show.
+public struct Neko_Api_V1_ComposerUrlRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Neko_Api_V1_ComposedRequest {
+    get {return _request ?? Neko_Api_V1_ComposedRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {return self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var edit: Bool = false
+
+  public var text: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Neko_Api_V1_ComposedRequest? = nil
+}
+
+public struct Neko_Api_V1_ComposerUrl: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Neko_Api_V1_ComposedRequest {
+    get {return _request ?? Neko_Api_V1_ComposedRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {return self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var display: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Neko_Api_V1_ComposedRequest? = nil
+}
+
+public struct Neko_Api_V1_KeyValueList: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var rows: [Neko_Api_V1_KeyValue] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Bulk edit: parse "name: value" lines into rows, or format rows as lines.
+public struct Neko_Api_V1_ComposerBulkRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var source: Neko_Api_V1_ComposerBulkRequest.OneOf_Source? = nil
+
+  public var text: String {
+    get {
+      if case .text(let v)? = source {return v}
+      return String()
+    }
+    set {source = .text(newValue)}
+  }
+
+  public var rows: Neko_Api_V1_KeyValueList {
+    get {
+      if case .rows(let v)? = source {return v}
+      return Neko_Api_V1_KeyValueList()
+    }
+    set {source = .rows(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Source: Equatable, Sendable {
+    case text(String)
+    case rows(Neko_Api_V1_KeyValueList)
+
+  }
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ComposerBulk: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var rows: [Neko_Api_V1_KeyValue] = []
+
+  public var text: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_CodeLanguage: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var label: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// A code snippet for the request as it would be sent. With lang empty, only
+/// the list of languages is answered.
+public struct Neko_Api_V1_ComposerCodeRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Neko_Api_V1_ComposedRequest {
+    get {return _request ?? Neko_Api_V1_ComposedRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {return self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var lang: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Neko_Api_V1_ComposedRequest? = nil
+}
+
+public struct Neko_Api_V1_ComposerCode: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var code: String = String()
+
+  public var error: String = String()
+
+  public var languages: [Neko_Api_V1_CodeLanguage] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Set what a collection or folder passes down; an empty config removes it.
+public struct Neko_Api_V1_ComposerConfigRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var config: Neko_Api_V1_CollectionConfig {
+    get {return _config ?? Neko_Api_V1_CollectionConfig()}
+    set {_config = newValue}
+  }
+  /// Returns true if `config` has been explicitly set.
+  public var hasConfig: Bool {return self._config != nil}
+  /// Clears the value of `config`. Subsequent reads from it will return its default value.
+  public mutating func clearConfig() {self._config = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _config: Neko_Api_V1_CollectionConfig? = nil
+}
+
+public struct Neko_Api_V1_ComposerGlobalsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var vars: [Neko_Api_V1_KeyValue] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ComposerExportTarget: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// false = a collection
+  public var environment: Bool = false
+
+  public var name: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Postman files: import_json adds what the file holds; export answers with a
+/// ComposerExport.
+public struct Neko_Api_V1_ComposerTransferRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var action: Neko_Api_V1_ComposerTransferRequest.OneOf_Action? = nil
+
+  public var importJson: String {
+    get {
+      if case .importJson(let v)? = action {return v}
+      return String()
+    }
+    set {action = .importJson(newValue)}
+  }
+
+  public var export: Neko_Api_V1_ComposerExportTarget {
+    get {
+      if case .export(let v)? = action {return v}
+      return Neko_Api_V1_ComposerExportTarget()
+    }
+    set {action = .export(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Action: Equatable, Sendable {
+    case importJson(String)
+    case export(Neko_Api_V1_ComposerExportTarget)
+
+  }
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ComposerExport: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var json: String = String()
+
+  public var filename: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ImportHarRequest: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var data: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ImportHarResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var ids: [UInt64] = []
+
+  public var count: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_DecodedField: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var depth: UInt32 = 0
+
+  public var label: String = String()
+
+  public var value: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ProtocolView: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var title: String = String()
+
+  public var fields: [Neko_Api_V1_DecodedField] = []
+
+  public var note: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Neko_Api_V1_ScenarioAction: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var failOneIn: UInt32 = 0
+
+  public var delayMs: UInt32 = 0
+
+  public var jitterMs: UInt32 = 0
+
+  public var flakyOneIn: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "neko.api.v1"
@@ -3689,6 +5215,56 @@ extension Neko_Api_V1_Redaction: SwiftProtobuf._ProtoNameProviding {
   ]
 }
 
+extension Neko_Api_V1_ComposeBody: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "COMPOSE_BODY_NONE"),
+    1: .same(proto: "COMPOSE_BODY_JSON"),
+    2: .same(proto: "COMPOSE_BODY_TEXT"),
+    3: .same(proto: "COMPOSE_BODY_XML"),
+    4: .same(proto: "COMPOSE_BODY_FORM"),
+    5: .same(proto: "COMPOSE_BODY_HTML"),
+    6: .same(proto: "COMPOSE_BODY_JAVASCRIPT"),
+    7: .same(proto: "COMPOSE_BODY_FORM_DATA"),
+    8: .same(proto: "COMPOSE_BODY_GRAPHQL"),
+    9: .same(proto: "COMPOSE_BODY_BINARY"),
+  ]
+}
+
+extension Neko_Api_V1_ComposeAuth: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "COMPOSE_AUTH_NONE"),
+    1: .same(proto: "COMPOSE_AUTH_BEARER"),
+    2: .same(proto: "COMPOSE_AUTH_BASIC"),
+    3: .same(proto: "COMPOSE_AUTH_INHERIT"),
+    4: .same(proto: "COMPOSE_AUTH_API_KEY"),
+  ]
+}
+
+extension Neko_Api_V1_AssertKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "ASSERT_KIND_STATUS"),
+    1: .same(proto: "ASSERT_KIND_HEADER"),
+    2: .same(proto: "ASSERT_KIND_BODY"),
+    3: .same(proto: "ASSERT_KIND_JSON"),
+    4: .same(proto: "ASSERT_KIND_TIME"),
+    5: .same(proto: "ASSERT_KIND_SIZE"),
+  ]
+}
+
+extension Neko_Api_V1_AssertOp: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "ASSERT_OP_EQUALS"),
+    1: .same(proto: "ASSERT_OP_NOT_EQUALS"),
+    2: .same(proto: "ASSERT_OP_CONTAINS"),
+    3: .same(proto: "ASSERT_OP_NOT_CONTAINS"),
+    4: .same(proto: "ASSERT_OP_EXISTS"),
+    5: .same(proto: "ASSERT_OP_NOT_EXISTS"),
+    6: .same(proto: "ASSERT_OP_LESS_THAN"),
+    7: .same(proto: "ASSERT_OP_GREATER_THAN"),
+    8: .same(proto: "ASSERT_OP_MATCHES"),
+  ]
+}
+
 extension Neko_Api_V1_ClientMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClientMessage"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -3727,6 +5303,22 @@ extension Neko_Api_V1_ClientMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
     41: .standard(proto: "fetch_body"),
     42: .standard(proto: "regenerate_sdk_cert"),
     43: .standard(proto: "sdk_set_settings"),
+    60: .standard(proto: "composer_get"),
+    61: .standard(proto: "composer_save"),
+    62: .standard(proto: "composer_remove"),
+    63: .standard(proto: "composer_collection"),
+    64: .standard(proto: "composer_environments"),
+    65: .standard(proto: "composer_clear_history"),
+    66: .standard(proto: "composer_send"),
+    67: .standard(proto: "composer_resolve"),
+    68: .standard(proto: "composer_import"),
+    69: .standard(proto: "composer_url"),
+    70: .standard(proto: "composer_bulk"),
+    71: .standard(proto: "composer_code"),
+    72: .standard(proto: "composer_config"),
+    73: .standard(proto: "composer_globals"),
+    74: .standard(proto: "composer_transfer"),
+    44: .standard(proto: "import_har"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -4178,6 +5770,214 @@ extension Neko_Api_V1_ClientMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
           self.body = .sdkSetSettings(v)
         }
       }()
+      case 44: try {
+        var v: Neko_Api_V1_ImportHarRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .importHar(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .importHar(v)
+        }
+      }()
+      case 60: try {
+        var v: Neko_Api_V1_ComposerGetRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerGet(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerGet(v)
+        }
+      }()
+      case 61: try {
+        var v: Neko_Api_V1_ComposerSaveRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerSave(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerSave(v)
+        }
+      }()
+      case 62: try {
+        var v: Neko_Api_V1_ComposerRemoveRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerRemove(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerRemove(v)
+        }
+      }()
+      case 63: try {
+        var v: Neko_Api_V1_ComposerCollectionRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerCollection(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerCollection(v)
+        }
+      }()
+      case 64: try {
+        var v: Neko_Api_V1_ComposerEnvironmentsRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerEnvironments(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerEnvironments(v)
+        }
+      }()
+      case 65: try {
+        var v: Neko_Api_V1_ComposerClearHistoryRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerClearHistory(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerClearHistory(v)
+        }
+      }()
+      case 66: try {
+        var v: Neko_Api_V1_ComposerSendRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerSend(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerSend(v)
+        }
+      }()
+      case 67: try {
+        var v: Neko_Api_V1_ComposerResolveRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerResolve(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerResolve(v)
+        }
+      }()
+      case 68: try {
+        var v: Neko_Api_V1_ComposerImportRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerImport(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerImport(v)
+        }
+      }()
+      case 69: try {
+        var v: Neko_Api_V1_ComposerUrlRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerURL(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerURL(v)
+        }
+      }()
+      case 70: try {
+        var v: Neko_Api_V1_ComposerBulkRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerBulk(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerBulk(v)
+        }
+      }()
+      case 71: try {
+        var v: Neko_Api_V1_ComposerCodeRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerCode(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerCode(v)
+        }
+      }()
+      case 72: try {
+        var v: Neko_Api_V1_ComposerConfigRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerConfig(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerConfig(v)
+        }
+      }()
+      case 73: try {
+        var v: Neko_Api_V1_ComposerGlobalsRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerGlobals(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerGlobals(v)
+        }
+      }()
+      case 74: try {
+        var v: Neko_Api_V1_ComposerTransferRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerTransfer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerTransfer(v)
+        }
+      }()
       default: break
       }
     }
@@ -4328,6 +6128,70 @@ extension Neko_Api_V1_ClientMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
       guard case .sdkSetSettings(let v)? = self.body else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 43)
     }()
+    case .importHar?: try {
+      guard case .importHar(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 44)
+    }()
+    case .composerGet?: try {
+      guard case .composerGet(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 60)
+    }()
+    case .composerSave?: try {
+      guard case .composerSave(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 61)
+    }()
+    case .composerRemove?: try {
+      guard case .composerRemove(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 62)
+    }()
+    case .composerCollection?: try {
+      guard case .composerCollection(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 63)
+    }()
+    case .composerEnvironments?: try {
+      guard case .composerEnvironments(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 64)
+    }()
+    case .composerClearHistory?: try {
+      guard case .composerClearHistory(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 65)
+    }()
+    case .composerSend?: try {
+      guard case .composerSend(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 66)
+    }()
+    case .composerResolve?: try {
+      guard case .composerResolve(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 67)
+    }()
+    case .composerImport?: try {
+      guard case .composerImport(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 68)
+    }()
+    case .composerURL?: try {
+      guard case .composerURL(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 69)
+    }()
+    case .composerBulk?: try {
+      guard case .composerBulk(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 70)
+    }()
+    case .composerCode?: try {
+      guard case .composerCode(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 71)
+    }()
+    case .composerConfig?: try {
+      guard case .composerConfig(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 72)
+    }()
+    case .composerGlobals?: try {
+      guard case .composerGlobals(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 73)
+    }()
+    case .composerTransfer?: try {
+      guard case .composerTransfer(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 74)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -4364,10 +6228,19 @@ extension Neko_Api_V1_ServerMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
     25: .standard(proto: "sdk_status"),
     26: .same(proto: "devices"),
     27: .same(proto: "ok"),
+    28: .standard(proto: "imported_har"),
     30: .same(proto: "batch"),
     31: .same(proto: "resync"),
     32: .standard(proto: "pause_notice"),
     33: .standard(proto: "approval_notice"),
+    34: .same(proto: "composer"),
+    35: .standard(proto: "composer_sent"),
+    36: .standard(proto: "composer_resolved"),
+    37: .same(proto: "composed"),
+    38: .standard(proto: "composer_url"),
+    39: .standard(proto: "composer_bulk"),
+    40: .standard(proto: "composer_code"),
+    41: .standard(proto: "composer_export"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -4624,6 +6497,19 @@ extension Neko_Api_V1_ServerMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
           self.body = .ok(v)
         }
       }()
+      case 28: try {
+        var v: Neko_Api_V1_ImportHarResponse?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .importedHar(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .importedHar(v)
+        }
+      }()
       case 30: try {
         var v: Neko_Api_V1_FlowBatch?
         var hadOneofValue = false
@@ -4674,6 +6560,110 @@ extension Neko_Api_V1_ServerMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
           self.body = .approvalNotice(v)
+        }
+      }()
+      case 34: try {
+        var v: Neko_Api_V1_ComposerState?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composer(v)
+        }
+      }()
+      case 35: try {
+        var v: Neko_Api_V1_ComposerSent?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerSent(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerSent(v)
+        }
+      }()
+      case 36: try {
+        var v: Neko_Api_V1_ComposerResolved?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerResolved(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerResolved(v)
+        }
+      }()
+      case 37: try {
+        var v: Neko_Api_V1_ComposedRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composed(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composed(v)
+        }
+      }()
+      case 38: try {
+        var v: Neko_Api_V1_ComposerUrl?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerURL(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerURL(v)
+        }
+      }()
+      case 39: try {
+        var v: Neko_Api_V1_ComposerBulk?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerBulk(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerBulk(v)
+        }
+      }()
+      case 40: try {
+        var v: Neko_Api_V1_ComposerCode?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerCode(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerCode(v)
+        }
+      }()
+      case 41: try {
+        var v: Neko_Api_V1_ComposerExport?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .composerExport(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .composerExport(v)
         }
       }()
       default: break
@@ -4766,6 +6756,10 @@ extension Neko_Api_V1_ServerMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
       guard case .ok(let v)? = self.body else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 27)
     }()
+    case .importedHar?: try {
+      guard case .importedHar(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 28)
+    }()
     case .batch?: try {
       guard case .batch(let v)? = self.body else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 30)
@@ -4781,6 +6775,38 @@ extension Neko_Api_V1_ServerMessage: SwiftProtobuf.Message, SwiftProtobuf._Messa
     case .approvalNotice?: try {
       guard case .approvalNotice(let v)? = self.body else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 33)
+    }()
+    case .composer?: try {
+      guard case .composer(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 34)
+    }()
+    case .composerSent?: try {
+      guard case .composerSent(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 35)
+    }()
+    case .composerResolved?: try {
+      guard case .composerResolved(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 36)
+    }()
+    case .composed?: try {
+      guard case .composed(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 37)
+    }()
+    case .composerURL?: try {
+      guard case .composerURL(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 38)
+    }()
+    case .composerBulk?: try {
+      guard case .composerBulk(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 39)
+    }()
+    case .composerCode?: try {
+      guard case .composerCode(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 40)
+    }()
+    case .composerExport?: try {
+      guard case .composerExport(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 41)
     }()
     case nil: break
     }
@@ -4928,6 +6954,7 @@ extension Neko_Api_V1_FlowSummary: SwiftProtobuf.Message, SwiftProtobuf._Message
     25: .same(proto: "screen"),
     26: .standard(proto: "route_template"),
     27: .standard(proto: "client_stack"),
+    28: .standard(proto: "issue_labels"),
   ]
 
   fileprivate class _StorageClass {
@@ -4958,6 +6985,7 @@ extension Neko_Api_V1_FlowSummary: SwiftProtobuf.Message, SwiftProtobuf._Message
     var _screen: String = String()
     var _routeTemplate: String = String()
     var _clientStack: String = String()
+    var _issueLabels: [String] = []
 
     #if swift(>=5.10)
       // This property is used as the initial default value for new instances of the type.
@@ -4999,6 +7027,7 @@ extension Neko_Api_V1_FlowSummary: SwiftProtobuf.Message, SwiftProtobuf._Message
       _screen = source._screen
       _routeTemplate = source._routeTemplate
       _clientStack = source._clientStack
+      _issueLabels = source._issueLabels
     }
   }
 
@@ -5044,6 +7073,7 @@ extension Neko_Api_V1_FlowSummary: SwiftProtobuf.Message, SwiftProtobuf._Message
         case 25: try { try decoder.decodeSingularStringField(value: &_storage._screen) }()
         case 26: try { try decoder.decodeSingularStringField(value: &_storage._routeTemplate) }()
         case 27: try { try decoder.decodeSingularStringField(value: &_storage._clientStack) }()
+        case 28: try { try decoder.decodeRepeatedStringField(value: &_storage._issueLabels) }()
         default: break
         }
       }
@@ -5133,6 +7163,9 @@ extension Neko_Api_V1_FlowSummary: SwiftProtobuf.Message, SwiftProtobuf._Message
       if !_storage._clientStack.isEmpty {
         try visitor.visitSingularStringField(value: _storage._clientStack, fieldNumber: 27)
       }
+      if !_storage._issueLabels.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._issueLabels, fieldNumber: 28)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -5169,6 +7202,7 @@ extension Neko_Api_V1_FlowSummary: SwiftProtobuf.Message, SwiftProtobuf._Message
         if _storage._screen != rhs_storage._screen {return false}
         if _storage._routeTemplate != rhs_storage._routeTemplate {return false}
         if _storage._clientStack != rhs_storage._clientStack {return false}
+        if _storage._issueLabels != rhs_storage._issueLabels {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -5574,6 +7608,60 @@ extension Neko_Api_V1_SourceLine: SwiftProtobuf.Message, SwiftProtobuf._MessageI
   }
 }
 
+extension Neko_Api_V1_SseEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SseEvent"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "event"),
+    2: .same(proto: "id"),
+    3: .same(proto: "data"),
+    4: .standard(proto: "retry_ms"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.event) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.data) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self._retryMs) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.event.isEmpty {
+      try visitor.visitSingularStringField(value: self.event, fieldNumber: 1)
+    }
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 2)
+    }
+    if !self.data.isEmpty {
+      try visitor.visitSingularStringField(value: self.data, fieldNumber: 3)
+    }
+    try { if let v = self._retryMs {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 4)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_SseEvent, rhs: Neko_Api_V1_SseEvent) -> Bool {
+    if lhs.event != rhs.event {return false}
+    if lhs.id != rhs.id {return false}
+    if lhs.data != rhs.data {return false}
+    if lhs._retryMs != rhs._retryMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension Neko_Api_V1_BodyView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BodyView"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -5592,99 +7680,187 @@ extension Neko_Api_V1_BodyView: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     13: .same(proto: "html"),
     14: .standard(proto: "html_title"),
     15: .same(proto: "source"),
+    16: .same(proto: "events"),
+    17: .same(proto: "protocol"),
   ]
 
+  fileprivate class _StorageClass {
+    var _kind: Neko_Api_V1_BodyKind = .empty
+    var _contentType: String = String()
+    var _contentEncoding: String = String()
+    var _wireSize: UInt64 = 0
+    var _decodedSize: UInt64 = 0
+    var _captureTruncated: Bool = false
+    var _previewTruncated: Bool = false
+    var _text: String = String()
+    var _json: [Neko_Api_V1_JsonLine] = []
+    var _form: [Neko_Api_V1_FormField] = []
+    var _image: Data = Data()
+    var _note: String = String()
+    var _html: [Neko_Api_V1_HtmlBlock] = []
+    var _htmlTitle: String = String()
+    var _source: [Neko_Api_V1_SourceLine] = []
+    var _events: [Neko_Api_V1_SseEvent] = []
+    var _protocol: Neko_Api_V1_ProtocolView? = nil
+
+    #if swift(>=5.10)
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+    #else
+      static let defaultInstance = _StorageClass()
+    #endif
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _kind = source._kind
+      _contentType = source._contentType
+      _contentEncoding = source._contentEncoding
+      _wireSize = source._wireSize
+      _decodedSize = source._decodedSize
+      _captureTruncated = source._captureTruncated
+      _previewTruncated = source._previewTruncated
+      _text = source._text
+      _json = source._json
+      _form = source._form
+      _image = source._image
+      _note = source._note
+      _html = source._html
+      _htmlTitle = source._htmlTitle
+      _source = source._source
+      _events = source._events
+      _protocol = source._protocol
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.contentType) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.contentEncoding) }()
-      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.wireSize) }()
-      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.decodedSize) }()
-      case 6: try { try decoder.decodeSingularBoolField(value: &self.captureTruncated) }()
-      case 7: try { try decoder.decodeSingularBoolField(value: &self.previewTruncated) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self.text) }()
-      case 9: try { try decoder.decodeRepeatedMessageField(value: &self.json) }()
-      case 10: try { try decoder.decodeRepeatedMessageField(value: &self.form) }()
-      case 11: try { try decoder.decodeSingularBytesField(value: &self.image) }()
-      case 12: try { try decoder.decodeSingularStringField(value: &self.note) }()
-      case 13: try { try decoder.decodeRepeatedMessageField(value: &self.html) }()
-      case 14: try { try decoder.decodeSingularStringField(value: &self.htmlTitle) }()
-      case 15: try { try decoder.decodeRepeatedMessageField(value: &self.source) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularEnumField(value: &_storage._kind) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._contentType) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._contentEncoding) }()
+        case 4: try { try decoder.decodeSingularUInt64Field(value: &_storage._wireSize) }()
+        case 5: try { try decoder.decodeSingularUInt64Field(value: &_storage._decodedSize) }()
+        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._captureTruncated) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._previewTruncated) }()
+        case 8: try { try decoder.decodeSingularStringField(value: &_storage._text) }()
+        case 9: try { try decoder.decodeRepeatedMessageField(value: &_storage._json) }()
+        case 10: try { try decoder.decodeRepeatedMessageField(value: &_storage._form) }()
+        case 11: try { try decoder.decodeSingularBytesField(value: &_storage._image) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._note) }()
+        case 13: try { try decoder.decodeRepeatedMessageField(value: &_storage._html) }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._htmlTitle) }()
+        case 15: try { try decoder.decodeRepeatedMessageField(value: &_storage._source) }()
+        case 16: try { try decoder.decodeRepeatedMessageField(value: &_storage._events) }()
+        case 17: try { try decoder.decodeSingularMessageField(value: &_storage._protocol) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.kind != .empty {
-      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
-    }
-    if !self.contentType.isEmpty {
-      try visitor.visitSingularStringField(value: self.contentType, fieldNumber: 2)
-    }
-    if !self.contentEncoding.isEmpty {
-      try visitor.visitSingularStringField(value: self.contentEncoding, fieldNumber: 3)
-    }
-    if self.wireSize != 0 {
-      try visitor.visitSingularUInt64Field(value: self.wireSize, fieldNumber: 4)
-    }
-    if self.decodedSize != 0 {
-      try visitor.visitSingularUInt64Field(value: self.decodedSize, fieldNumber: 5)
-    }
-    if self.captureTruncated != false {
-      try visitor.visitSingularBoolField(value: self.captureTruncated, fieldNumber: 6)
-    }
-    if self.previewTruncated != false {
-      try visitor.visitSingularBoolField(value: self.previewTruncated, fieldNumber: 7)
-    }
-    if !self.text.isEmpty {
-      try visitor.visitSingularStringField(value: self.text, fieldNumber: 8)
-    }
-    if !self.json.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.json, fieldNumber: 9)
-    }
-    if !self.form.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.form, fieldNumber: 10)
-    }
-    if !self.image.isEmpty {
-      try visitor.visitSingularBytesField(value: self.image, fieldNumber: 11)
-    }
-    if !self.note.isEmpty {
-      try visitor.visitSingularStringField(value: self.note, fieldNumber: 12)
-    }
-    if !self.html.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.html, fieldNumber: 13)
-    }
-    if !self.htmlTitle.isEmpty {
-      try visitor.visitSingularStringField(value: self.htmlTitle, fieldNumber: 14)
-    }
-    if !self.source.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.source, fieldNumber: 15)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if _storage._kind != .empty {
+        try visitor.visitSingularEnumField(value: _storage._kind, fieldNumber: 1)
+      }
+      if !_storage._contentType.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._contentType, fieldNumber: 2)
+      }
+      if !_storage._contentEncoding.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._contentEncoding, fieldNumber: 3)
+      }
+      if _storage._wireSize != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._wireSize, fieldNumber: 4)
+      }
+      if _storage._decodedSize != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._decodedSize, fieldNumber: 5)
+      }
+      if _storage._captureTruncated != false {
+        try visitor.visitSingularBoolField(value: _storage._captureTruncated, fieldNumber: 6)
+      }
+      if _storage._previewTruncated != false {
+        try visitor.visitSingularBoolField(value: _storage._previewTruncated, fieldNumber: 7)
+      }
+      if !_storage._text.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._text, fieldNumber: 8)
+      }
+      if !_storage._json.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._json, fieldNumber: 9)
+      }
+      if !_storage._form.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._form, fieldNumber: 10)
+      }
+      if !_storage._image.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._image, fieldNumber: 11)
+      }
+      if !_storage._note.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._note, fieldNumber: 12)
+      }
+      if !_storage._html.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._html, fieldNumber: 13)
+      }
+      if !_storage._htmlTitle.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._htmlTitle, fieldNumber: 14)
+      }
+      if !_storage._source.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._source, fieldNumber: 15)
+      }
+      if !_storage._events.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._events, fieldNumber: 16)
+      }
+      try { if let v = _storage._protocol {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 17)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Neko_Api_V1_BodyView, rhs: Neko_Api_V1_BodyView) -> Bool {
-    if lhs.kind != rhs.kind {return false}
-    if lhs.contentType != rhs.contentType {return false}
-    if lhs.contentEncoding != rhs.contentEncoding {return false}
-    if lhs.wireSize != rhs.wireSize {return false}
-    if lhs.decodedSize != rhs.decodedSize {return false}
-    if lhs.captureTruncated != rhs.captureTruncated {return false}
-    if lhs.previewTruncated != rhs.previewTruncated {return false}
-    if lhs.text != rhs.text {return false}
-    if lhs.json != rhs.json {return false}
-    if lhs.form != rhs.form {return false}
-    if lhs.image != rhs.image {return false}
-    if lhs.note != rhs.note {return false}
-    if lhs.html != rhs.html {return false}
-    if lhs.htmlTitle != rhs.htmlTitle {return false}
-    if lhs.source != rhs.source {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._kind != rhs_storage._kind {return false}
+        if _storage._contentType != rhs_storage._contentType {return false}
+        if _storage._contentEncoding != rhs_storage._contentEncoding {return false}
+        if _storage._wireSize != rhs_storage._wireSize {return false}
+        if _storage._decodedSize != rhs_storage._decodedSize {return false}
+        if _storage._captureTruncated != rhs_storage._captureTruncated {return false}
+        if _storage._previewTruncated != rhs_storage._previewTruncated {return false}
+        if _storage._text != rhs_storage._text {return false}
+        if _storage._json != rhs_storage._json {return false}
+        if _storage._form != rhs_storage._form {return false}
+        if _storage._image != rhs_storage._image {return false}
+        if _storage._note != rhs_storage._note {return false}
+        if _storage._html != rhs_storage._html {return false}
+        if _storage._htmlTitle != rhs_storage._htmlTitle {return false}
+        if _storage._source != rhs_storage._source {return false}
+        if _storage._events != rhs_storage._events {return false}
+        if _storage._protocol != rhs_storage._protocol {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5739,6 +7915,8 @@ extension Neko_Api_V1_FlowDetail: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     6: .same(proto: "curl"),
     7: .standard(proto: "request_body"),
     8: .standard(proto: "response_body"),
+    30: .same(proto: "dio"),
+    31: .same(proto: "issues"),
     9: .same(proto: "sdk"),
     10: .same(proto: "wire"),
   ]
@@ -5752,6 +7930,8 @@ extension Neko_Api_V1_FlowDetail: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     var _curl: String = String()
     var _requestBody: Neko_Api_V1_BodyView? = nil
     var _responseBody: Neko_Api_V1_BodyView? = nil
+    var _dio: String = String()
+    var _issues: [String] = []
     var _sdk: Neko_Api_V1_SdkContext? = nil
     var _wire: Neko_Api_V1_FlowDetail? = nil
 
@@ -5776,6 +7956,8 @@ extension Neko_Api_V1_FlowDetail: SwiftProtobuf.Message, SwiftProtobuf._MessageI
       _curl = source._curl
       _requestBody = source._requestBody
       _responseBody = source._responseBody
+      _dio = source._dio
+      _issues = source._issues
       _sdk = source._sdk
       _wire = source._wire
     }
@@ -5806,6 +7988,8 @@ extension Neko_Api_V1_FlowDetail: SwiftProtobuf.Message, SwiftProtobuf._MessageI
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._responseBody) }()
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._sdk) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._wire) }()
+        case 30: try { try decoder.decodeSingularStringField(value: &_storage._dio) }()
+        case 31: try { try decoder.decodeRepeatedStringField(value: &_storage._issues) }()
         default: break
         }
       }
@@ -5848,6 +8032,12 @@ extension Neko_Api_V1_FlowDetail: SwiftProtobuf.Message, SwiftProtobuf._MessageI
       try { if let v = _storage._wire {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
       } }()
+      if !_storage._dio.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._dio, fieldNumber: 30)
+      }
+      if !_storage._issues.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._issues, fieldNumber: 31)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -5865,6 +8055,8 @@ extension Neko_Api_V1_FlowDetail: SwiftProtobuf.Message, SwiftProtobuf._MessageI
         if _storage._curl != rhs_storage._curl {return false}
         if _storage._requestBody != rhs_storage._requestBody {return false}
         if _storage._responseBody != rhs_storage._responseBody {return false}
+        if _storage._dio != rhs_storage._dio {return false}
+        if _storage._issues != rhs_storage._issues {return false}
         if _storage._sdk != rhs_storage._sdk {return false}
         if _storage._wire != rhs_storage._wire {return false}
         return true
@@ -7671,6 +9863,7 @@ extension Neko_Api_V1_Rule: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     12: .same(proto: "rewrite"),
     13: .same(proto: "throttle"),
     14: .same(proto: "breakpoint"),
+    15: .same(proto: "scenario"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -7748,6 +9941,19 @@ extension Neko_Api_V1_Rule: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
           self.action = .breakpoint(v)
         }
       }()
+      case 15: try {
+        var v: Neko_Api_V1_ScenarioAction?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .scenario(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .scenario(v)
+        }
+      }()
       default: break
       }
     }
@@ -7790,6 +9996,10 @@ extension Neko_Api_V1_Rule: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     case .breakpoint?: try {
       guard case .breakpoint(let v)? = self.action else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+    }()
+    case .scenario?: try {
+      guard case .scenario(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
     }()
     case nil: break
     }
@@ -9647,6 +11857,2074 @@ extension Neko_Api_V1_FetchBodyRequest: SwiftProtobuf.Message, SwiftProtobuf._Me
   public static func ==(lhs: Neko_Api_V1_FetchBodyRequest, rhs: Neko_Api_V1_FetchBodyRequest) -> Bool {
     if lhs.flowID != rhs.flowID {return false}
     if lhs.response != rhs.response {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_KeyValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".KeyValue"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "name"),
+    2: .same(proto: "value"),
+    3: .same(proto: "disabled"),
+    4: .same(proto: "description"),
+    5: .same(proto: "secret"),
+    6: .same(proto: "file"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.disabled) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.secret) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.file) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 2)
+    }
+    if self.disabled != false {
+      try visitor.visitSingularBoolField(value: self.disabled, fieldNumber: 3)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 4)
+    }
+    if self.secret != false {
+      try visitor.visitSingularBoolField(value: self.secret, fieldNumber: 5)
+    }
+    if self.file != false {
+      try visitor.visitSingularBoolField(value: self.file, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_KeyValue, rhs: Neko_Api_V1_KeyValue) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.disabled != rhs.disabled {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.secret != rhs.secret {return false}
+    if lhs.file != rhs.file {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_Assertion: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Assertion"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "kind"),
+    2: .same(proto: "target"),
+    3: .same(proto: "op"),
+    4: .same(proto: "expected"),
+    5: .same(proto: "disabled"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.target) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.op) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.expected) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.disabled) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.kind != .status {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.target.isEmpty {
+      try visitor.visitSingularStringField(value: self.target, fieldNumber: 2)
+    }
+    if self.op != .equals {
+      try visitor.visitSingularEnumField(value: self.op, fieldNumber: 3)
+    }
+    if !self.expected.isEmpty {
+      try visitor.visitSingularStringField(value: self.expected, fieldNumber: 4)
+    }
+    if self.disabled != false {
+      try visitor.visitSingularBoolField(value: self.disabled, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_Assertion, rhs: Neko_Api_V1_Assertion) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.target != rhs.target {return false}
+    if lhs.op != rhs.op {return false}
+    if lhs.expected != rhs.expected {return false}
+    if lhs.disabled != rhs.disabled {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_TestResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TestResult"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "name"),
+    2: .same(proto: "passed"),
+    3: .same(proto: "message"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.passed) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if self.passed != false {
+      try visitor.visitSingularBoolField(value: self.passed, fieldNumber: 2)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_TestResult, rhs: Neko_Api_V1_TestResult) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.passed != rhs.passed {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_Cookie: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Cookie"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "name"),
+    2: .same(proto: "value"),
+    3: .same(proto: "domain"),
+    4: .same(proto: "path"),
+    5: .same(proto: "expires"),
+    6: .standard(proto: "max_age"),
+    7: .same(proto: "secure"),
+    8: .standard(proto: "http_only"),
+    9: .standard(proto: "same_site"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.domain) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.path) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.expires) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.maxAge) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.secure) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.httpOnly) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.sameSite) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 2)
+    }
+    if !self.domain.isEmpty {
+      try visitor.visitSingularStringField(value: self.domain, fieldNumber: 3)
+    }
+    if !self.path.isEmpty {
+      try visitor.visitSingularStringField(value: self.path, fieldNumber: 4)
+    }
+    if !self.expires.isEmpty {
+      try visitor.visitSingularStringField(value: self.expires, fieldNumber: 5)
+    }
+    if !self.maxAge.isEmpty {
+      try visitor.visitSingularStringField(value: self.maxAge, fieldNumber: 6)
+    }
+    if self.secure != false {
+      try visitor.visitSingularBoolField(value: self.secure, fieldNumber: 7)
+    }
+    if self.httpOnly != false {
+      try visitor.visitSingularBoolField(value: self.httpOnly, fieldNumber: 8)
+    }
+    if !self.sameSite.isEmpty {
+      try visitor.visitSingularStringField(value: self.sameSite, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_Cookie, rhs: Neko_Api_V1_Cookie) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.domain != rhs.domain {return false}
+    if lhs.path != rhs.path {return false}
+    if lhs.expires != rhs.expires {return false}
+    if lhs.maxAge != rhs.maxAge {return false}
+    if lhs.secure != rhs.secure {return false}
+    if lhs.httpOnly != rhs.httpOnly {return false}
+    if lhs.sameSite != rhs.sameSite {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposeAuthConfig: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposeAuthConfig"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "kind"),
+    2: .same(proto: "token"),
+    3: .same(proto: "user"),
+    4: .same(proto: "password"),
+    5: .same(proto: "key"),
+    6: .same(proto: "value"),
+    7: .standard(proto: "in_query"),
+    8: .same(proto: "prefix"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.user) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.password) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.key) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.inQuery) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.prefix) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.kind != .none {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 2)
+    }
+    if !self.user.isEmpty {
+      try visitor.visitSingularStringField(value: self.user, fieldNumber: 3)
+    }
+    if !self.password.isEmpty {
+      try visitor.visitSingularStringField(value: self.password, fieldNumber: 4)
+    }
+    if !self.key.isEmpty {
+      try visitor.visitSingularStringField(value: self.key, fieldNumber: 5)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 6)
+    }
+    if self.inQuery != false {
+      try visitor.visitSingularBoolField(value: self.inQuery, fieldNumber: 7)
+    }
+    if !self.prefix.isEmpty {
+      try visitor.visitSingularStringField(value: self.prefix, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposeAuthConfig, rhs: Neko_Api_V1_ComposeAuthConfig) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.token != rhs.token {return false}
+    if lhs.user != rhs.user {return false}
+    if lhs.password != rhs.password {return false}
+    if lhs.key != rhs.key {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.inQuery != rhs.inQuery {return false}
+    if lhs.prefix != rhs.prefix {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_CollectionConfig: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CollectionConfig"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "name"),
+    2: .same(proto: "description"),
+    3: .same(proto: "auth"),
+    4: .same(proto: "headers"),
+    5: .same(proto: "vars"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._auth) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.headers) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.vars) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 2)
+    }
+    try { if let v = self._auth {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    if !self.headers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.headers, fieldNumber: 4)
+    }
+    if !self.vars.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.vars, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_CollectionConfig, rhs: Neko_Api_V1_CollectionConfig) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs._auth != rhs._auth {return false}
+    if lhs.headers != rhs.headers {return false}
+    if lhs.vars != rhs.vars {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposedRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposedRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "id"),
+    2: .same(proto: "name"),
+    3: .same(proto: "collection"),
+    4: .same(proto: "method"),
+    5: .same(proto: "url"),
+    6: .same(proto: "params"),
+    7: .same(proto: "headers"),
+    8: .standard(proto: "body_kind"),
+    9: .same(proto: "body"),
+    10: .same(proto: "form"),
+    11: .same(proto: "auth"),
+    12: .standard(proto: "auth_token"),
+    13: .standard(proto: "auth_user"),
+    14: .standard(proto: "auth_password"),
+    15: .standard(proto: "updated_ms"),
+    16: .standard(proto: "auth_key"),
+    17: .standard(proto: "auth_value"),
+    18: .standard(proto: "auth_in_query"),
+    19: .standard(proto: "auth_prefix"),
+    20: .same(proto: "description"),
+    21: .standard(proto: "path_vars"),
+    22: .standard(proto: "graphql_variables"),
+    23: .standard(proto: "binary_path"),
+    24: .same(proto: "tests"),
+  ]
+
+  fileprivate class _StorageClass {
+    var _id: String = String()
+    var _name: String = String()
+    var _collection: String = String()
+    var _method: String = String()
+    var _url: String = String()
+    var _params: [Neko_Api_V1_KeyValue] = []
+    var _headers: [Neko_Api_V1_KeyValue] = []
+    var _bodyKind: Neko_Api_V1_ComposeBody = .none
+    var _body: String = String()
+    var _form: [Neko_Api_V1_KeyValue] = []
+    var _auth: Neko_Api_V1_ComposeAuth = .none
+    var _authToken: String = String()
+    var _authUser: String = String()
+    var _authPassword: String = String()
+    var _updatedMs: Int64 = 0
+    var _authKey: String = String()
+    var _authValue: String = String()
+    var _authInQuery: Bool = false
+    var _authPrefix: String = String()
+    var _description_p: String = String()
+    var _pathVars: [Neko_Api_V1_KeyValue] = []
+    var _graphqlVariables: String = String()
+    var _binaryPath: String = String()
+    var _tests: [Neko_Api_V1_Assertion] = []
+
+    #if swift(>=5.10)
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+    #else
+      static let defaultInstance = _StorageClass()
+    #endif
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _id = source._id
+      _name = source._name
+      _collection = source._collection
+      _method = source._method
+      _url = source._url
+      _params = source._params
+      _headers = source._headers
+      _bodyKind = source._bodyKind
+      _body = source._body
+      _form = source._form
+      _auth = source._auth
+      _authToken = source._authToken
+      _authUser = source._authUser
+      _authPassword = source._authPassword
+      _updatedMs = source._updatedMs
+      _authKey = source._authKey
+      _authValue = source._authValue
+      _authInQuery = source._authInQuery
+      _authPrefix = source._authPrefix
+      _description_p = source._description_p
+      _pathVars = source._pathVars
+      _graphqlVariables = source._graphqlVariables
+      _binaryPath = source._binaryPath
+      _tests = source._tests
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._id) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._name) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._collection) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._method) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._url) }()
+        case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._params) }()
+        case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._headers) }()
+        case 8: try { try decoder.decodeSingularEnumField(value: &_storage._bodyKind) }()
+        case 9: try { try decoder.decodeSingularStringField(value: &_storage._body) }()
+        case 10: try { try decoder.decodeRepeatedMessageField(value: &_storage._form) }()
+        case 11: try { try decoder.decodeSingularEnumField(value: &_storage._auth) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._authToken) }()
+        case 13: try { try decoder.decodeSingularStringField(value: &_storage._authUser) }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._authPassword) }()
+        case 15: try { try decoder.decodeSingularInt64Field(value: &_storage._updatedMs) }()
+        case 16: try { try decoder.decodeSingularStringField(value: &_storage._authKey) }()
+        case 17: try { try decoder.decodeSingularStringField(value: &_storage._authValue) }()
+        case 18: try { try decoder.decodeSingularBoolField(value: &_storage._authInQuery) }()
+        case 19: try { try decoder.decodeSingularStringField(value: &_storage._authPrefix) }()
+        case 20: try { try decoder.decodeSingularStringField(value: &_storage._description_p) }()
+        case 21: try { try decoder.decodeRepeatedMessageField(value: &_storage._pathVars) }()
+        case 22: try { try decoder.decodeSingularStringField(value: &_storage._graphqlVariables) }()
+        case 23: try { try decoder.decodeSingularStringField(value: &_storage._binaryPath) }()
+        case 24: try { try decoder.decodeRepeatedMessageField(value: &_storage._tests) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      if !_storage._id.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._id, fieldNumber: 1)
+      }
+      if !_storage._name.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._name, fieldNumber: 2)
+      }
+      if !_storage._collection.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._collection, fieldNumber: 3)
+      }
+      if !_storage._method.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._method, fieldNumber: 4)
+      }
+      if !_storage._url.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._url, fieldNumber: 5)
+      }
+      if !_storage._params.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._params, fieldNumber: 6)
+      }
+      if !_storage._headers.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._headers, fieldNumber: 7)
+      }
+      if _storage._bodyKind != .none {
+        try visitor.visitSingularEnumField(value: _storage._bodyKind, fieldNumber: 8)
+      }
+      if !_storage._body.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._body, fieldNumber: 9)
+      }
+      if !_storage._form.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._form, fieldNumber: 10)
+      }
+      if _storage._auth != .none {
+        try visitor.visitSingularEnumField(value: _storage._auth, fieldNumber: 11)
+      }
+      if !_storage._authToken.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._authToken, fieldNumber: 12)
+      }
+      if !_storage._authUser.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._authUser, fieldNumber: 13)
+      }
+      if !_storage._authPassword.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._authPassword, fieldNumber: 14)
+      }
+      if _storage._updatedMs != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._updatedMs, fieldNumber: 15)
+      }
+      if !_storage._authKey.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._authKey, fieldNumber: 16)
+      }
+      if !_storage._authValue.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._authValue, fieldNumber: 17)
+      }
+      if _storage._authInQuery != false {
+        try visitor.visitSingularBoolField(value: _storage._authInQuery, fieldNumber: 18)
+      }
+      if !_storage._authPrefix.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._authPrefix, fieldNumber: 19)
+      }
+      if !_storage._description_p.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._description_p, fieldNumber: 20)
+      }
+      if !_storage._pathVars.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._pathVars, fieldNumber: 21)
+      }
+      if !_storage._graphqlVariables.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._graphqlVariables, fieldNumber: 22)
+      }
+      if !_storage._binaryPath.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._binaryPath, fieldNumber: 23)
+      }
+      if !_storage._tests.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._tests, fieldNumber: 24)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposedRequest, rhs: Neko_Api_V1_ComposedRequest) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._id != rhs_storage._id {return false}
+        if _storage._name != rhs_storage._name {return false}
+        if _storage._collection != rhs_storage._collection {return false}
+        if _storage._method != rhs_storage._method {return false}
+        if _storage._url != rhs_storage._url {return false}
+        if _storage._params != rhs_storage._params {return false}
+        if _storage._headers != rhs_storage._headers {return false}
+        if _storage._bodyKind != rhs_storage._bodyKind {return false}
+        if _storage._body != rhs_storage._body {return false}
+        if _storage._form != rhs_storage._form {return false}
+        if _storage._auth != rhs_storage._auth {return false}
+        if _storage._authToken != rhs_storage._authToken {return false}
+        if _storage._authUser != rhs_storage._authUser {return false}
+        if _storage._authPassword != rhs_storage._authPassword {return false}
+        if _storage._updatedMs != rhs_storage._updatedMs {return false}
+        if _storage._authKey != rhs_storage._authKey {return false}
+        if _storage._authValue != rhs_storage._authValue {return false}
+        if _storage._authInQuery != rhs_storage._authInQuery {return false}
+        if _storage._authPrefix != rhs_storage._authPrefix {return false}
+        if _storage._description_p != rhs_storage._description_p {return false}
+        if _storage._pathVars != rhs_storage._pathVars {return false}
+        if _storage._graphqlVariables != rhs_storage._graphqlVariables {return false}
+        if _storage._binaryPath != rhs_storage._binaryPath {return false}
+        if _storage._tests != rhs_storage._tests {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_Environment: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Environment"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "name"),
+    2: .same(proto: "vars"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.vars) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.vars.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.vars, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_Environment, rhs: Neko_Api_V1_Environment) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.vars != rhs.vars {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerHistoryEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerHistoryEntry"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "request"),
+    2: .standard(proto: "flow_id"),
+    3: .same(proto: "status"),
+    4: .standard(proto: "sent_ms"),
+    5: .standard(proto: "duration_ms"),
+    6: .same(proto: "method"),
+    7: .same(proto: "url"),
+    8: .same(proto: "error"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.flowID) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.status) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.sentMs) }()
+      case 5: try { try decoder.decodeSingularDoubleField(value: &self.durationMs) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.method) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.url) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.flowID != 0 {
+      try visitor.visitSingularUInt64Field(value: self.flowID, fieldNumber: 2)
+    }
+    if self.status != 0 {
+      try visitor.visitSingularUInt32Field(value: self.status, fieldNumber: 3)
+    }
+    if self.sentMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.sentMs, fieldNumber: 4)
+    }
+    if self.durationMs.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.durationMs, fieldNumber: 5)
+    }
+    if !self.method.isEmpty {
+      try visitor.visitSingularStringField(value: self.method, fieldNumber: 6)
+    }
+    if !self.url.isEmpty {
+      try visitor.visitSingularStringField(value: self.url, fieldNumber: 7)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerHistoryEntry, rhs: Neko_Api_V1_ComposerHistoryEntry) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.flowID != rhs.flowID {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.sentMs != rhs.sentMs {return false}
+    if lhs.durationMs != rhs.durationMs {return false}
+    if lhs.method != rhs.method {return false}
+    if lhs.url != rhs.url {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerState"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "collections"),
+    2: .same(proto: "requests"),
+    3: .same(proto: "environments"),
+    4: .standard(proto: "active_environment"),
+    5: .same(proto: "history"),
+    6: .standard(proto: "saved_id"),
+    7: .same(proto: "globals"),
+    8: .same(proto: "configs"),
+    9: .same(proto: "notice"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.collections) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.requests) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.environments) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.activeEnvironment) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.history) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.savedID) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.globals) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.configs) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.notice) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.collections.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.collections, fieldNumber: 1)
+    }
+    if !self.requests.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.requests, fieldNumber: 2)
+    }
+    if !self.environments.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.environments, fieldNumber: 3)
+    }
+    if !self.activeEnvironment.isEmpty {
+      try visitor.visitSingularStringField(value: self.activeEnvironment, fieldNumber: 4)
+    }
+    if !self.history.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.history, fieldNumber: 5)
+    }
+    if !self.savedID.isEmpty {
+      try visitor.visitSingularStringField(value: self.savedID, fieldNumber: 6)
+    }
+    if !self.globals.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.globals, fieldNumber: 7)
+    }
+    if !self.configs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.configs, fieldNumber: 8)
+    }
+    if !self.notice.isEmpty {
+      try visitor.visitSingularStringField(value: self.notice, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerState, rhs: Neko_Api_V1_ComposerState) -> Bool {
+    if lhs.collections != rhs.collections {return false}
+    if lhs.requests != rhs.requests {return false}
+    if lhs.environments != rhs.environments {return false}
+    if lhs.activeEnvironment != rhs.activeEnvironment {return false}
+    if lhs.history != rhs.history {return false}
+    if lhs.savedID != rhs.savedID {return false}
+    if lhs.globals != rhs.globals {return false}
+    if lhs.configs != rhs.configs {return false}
+    if lhs.notice != rhs.notice {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerGetRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerGetRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerGetRequest, rhs: Neko_Api_V1_ComposerGetRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerSaveRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerSaveRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "request"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerSaveRequest, rhs: Neko_Api_V1_ComposerSaveRequest) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerRemoveRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerRemoveRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "id"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerRemoveRequest, rhs: Neko_Api_V1_ComposerRemoveRequest) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerCollectionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerCollectionRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "name"),
+    2: .standard(proto: "rename_to"),
+    3: .same(proto: "remove"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.renameTo) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.remove) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.renameTo.isEmpty {
+      try visitor.visitSingularStringField(value: self.renameTo, fieldNumber: 2)
+    }
+    if self.remove != false {
+      try visitor.visitSingularBoolField(value: self.remove, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerCollectionRequest, rhs: Neko_Api_V1_ComposerCollectionRequest) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.renameTo != rhs.renameTo {return false}
+    if lhs.remove != rhs.remove {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerEnvironmentsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerEnvironmentsRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "environments"),
+    2: .same(proto: "active"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.environments) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.active) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.environments.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.environments, fieldNumber: 1)
+    }
+    if !self.active.isEmpty {
+      try visitor.visitSingularStringField(value: self.active, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerEnvironmentsRequest, rhs: Neko_Api_V1_ComposerEnvironmentsRequest) -> Bool {
+    if lhs.environments != rhs.environments {return false}
+    if lhs.active != rhs.active {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerClearHistoryRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerClearHistoryRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerClearHistoryRequest, rhs: Neko_Api_V1_ComposerClearHistoryRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerSendRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerSendRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "request"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerSendRequest, rhs: Neko_Api_V1_ComposerSendRequest) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerSent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerSent"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "flow_id"),
+    2: .same(proto: "status"),
+    3: .same(proto: "method"),
+    4: .same(proto: "url"),
+    5: .same(proto: "error"),
+    6: .standard(proto: "duration_ms"),
+    7: .same(proto: "size"),
+    8: .same(proto: "tests"),
+    9: .same(proto: "cookies"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.flowID) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.status) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.method) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.url) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      case 6: try { try decoder.decodeSingularDoubleField(value: &self.durationMs) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self.size) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.tests) }()
+      case 9: try { try decoder.decodeRepeatedMessageField(value: &self.cookies) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.flowID != 0 {
+      try visitor.visitSingularUInt64Field(value: self.flowID, fieldNumber: 1)
+    }
+    if self.status != 0 {
+      try visitor.visitSingularUInt32Field(value: self.status, fieldNumber: 2)
+    }
+    if !self.method.isEmpty {
+      try visitor.visitSingularStringField(value: self.method, fieldNumber: 3)
+    }
+    if !self.url.isEmpty {
+      try visitor.visitSingularStringField(value: self.url, fieldNumber: 4)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 5)
+    }
+    if self.durationMs.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.durationMs, fieldNumber: 6)
+    }
+    if self.size != 0 {
+      try visitor.visitSingularUInt64Field(value: self.size, fieldNumber: 7)
+    }
+    if !self.tests.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.tests, fieldNumber: 8)
+    }
+    if !self.cookies.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.cookies, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerSent, rhs: Neko_Api_V1_ComposerSent) -> Bool {
+    if lhs.flowID != rhs.flowID {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.method != rhs.method {return false}
+    if lhs.url != rhs.url {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.durationMs != rhs.durationMs {return false}
+    if lhs.size != rhs.size {return false}
+    if lhs.tests != rhs.tests {return false}
+    if lhs.cookies != rhs.cookies {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerResolveRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerResolveRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "request"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerResolveRequest, rhs: Neko_Api_V1_ComposerResolveRequest) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerResolved: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerResolved"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "method"),
+    2: .same(proto: "url"),
+    3: .same(proto: "headers"),
+    4: .same(proto: "body"),
+    5: .same(proto: "curl"),
+    6: .same(proto: "missing"),
+    7: .same(proto: "generated"),
+    8: .same(proto: "error"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.method) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.url) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.headers) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.body) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.curl) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.missing) }()
+      case 7: try { try decoder.decodeRepeatedStringField(value: &self.generated) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.method.isEmpty {
+      try visitor.visitSingularStringField(value: self.method, fieldNumber: 1)
+    }
+    if !self.url.isEmpty {
+      try visitor.visitSingularStringField(value: self.url, fieldNumber: 2)
+    }
+    if !self.headers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.headers, fieldNumber: 3)
+    }
+    if !self.body.isEmpty {
+      try visitor.visitSingularBytesField(value: self.body, fieldNumber: 4)
+    }
+    if !self.curl.isEmpty {
+      try visitor.visitSingularStringField(value: self.curl, fieldNumber: 5)
+    }
+    if !self.missing.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.missing, fieldNumber: 6)
+    }
+    if !self.generated.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.generated, fieldNumber: 7)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerResolved, rhs: Neko_Api_V1_ComposerResolved) -> Bool {
+    if lhs.method != rhs.method {return false}
+    if lhs.url != rhs.url {return false}
+    if lhs.headers != rhs.headers {return false}
+    if lhs.body != rhs.body {return false}
+    if lhs.curl != rhs.curl {return false}
+    if lhs.missing != rhs.missing {return false}
+    if lhs.generated != rhs.generated {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerImportRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerImportRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "curl"),
+    2: .standard(proto: "flow_id"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.source != nil {try decoder.handleConflictingOneOf()}
+          self.source = .curl(v)
+        }
+      }()
+      case 2: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.source != nil {try decoder.handleConflictingOneOf()}
+          self.source = .flowID(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.source {
+    case .curl?: try {
+      guard case .curl(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    }()
+    case .flowID?: try {
+      guard case .flowID(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerImportRequest, rhs: Neko_Api_V1_ComposerImportRequest) -> Bool {
+    if lhs.source != rhs.source {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerUrlRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerUrlRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "request"),
+    2: .same(proto: "edit"),
+    3: .same(proto: "text"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.edit) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.edit != false {
+      try visitor.visitSingularBoolField(value: self.edit, fieldNumber: 2)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerUrlRequest, rhs: Neko_Api_V1_ComposerUrlRequest) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.edit != rhs.edit {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerUrl: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerUrl"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "request"),
+    2: .same(proto: "display"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.display) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.display.isEmpty {
+      try visitor.visitSingularStringField(value: self.display, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerUrl, rhs: Neko_Api_V1_ComposerUrl) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.display != rhs.display {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_KeyValueList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".KeyValueList"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "rows"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.rows) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.rows.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rows, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_KeyValueList, rhs: Neko_Api_V1_KeyValueList) -> Bool {
+    if lhs.rows != rhs.rows {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerBulkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerBulkRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "text"),
+    2: .same(proto: "rows"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.source != nil {try decoder.handleConflictingOneOf()}
+          self.source = .text(v)
+        }
+      }()
+      case 2: try {
+        var v: Neko_Api_V1_KeyValueList?
+        var hadOneofValue = false
+        if let current = self.source {
+          hadOneofValue = true
+          if case .rows(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.source = .rows(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.source {
+    case .text?: try {
+      guard case .text(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    }()
+    case .rows?: try {
+      guard case .rows(let v)? = self.source else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerBulkRequest, rhs: Neko_Api_V1_ComposerBulkRequest) -> Bool {
+    if lhs.source != rhs.source {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerBulk: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerBulk"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "rows"),
+    2: .same(proto: "text"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.rows) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.rows.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rows, fieldNumber: 1)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerBulk, rhs: Neko_Api_V1_ComposerBulk) -> Bool {
+    if lhs.rows != rhs.rows {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_CodeLanguage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CodeLanguage"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "id"),
+    2: .same(proto: "label"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_CodeLanguage, rhs: Neko_Api_V1_CodeLanguage) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerCodeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerCodeRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "request"),
+    2: .same(proto: "lang"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.lang) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.lang.isEmpty {
+      try visitor.visitSingularStringField(value: self.lang, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerCodeRequest, rhs: Neko_Api_V1_ComposerCodeRequest) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.lang != rhs.lang {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerCode: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerCode"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "code"),
+    2: .same(proto: "error"),
+    3: .same(proto: "languages"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.code) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.languages) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.code.isEmpty {
+      try visitor.visitSingularStringField(value: self.code, fieldNumber: 1)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 2)
+    }
+    if !self.languages.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.languages, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerCode, rhs: Neko_Api_V1_ComposerCode) -> Bool {
+    if lhs.code != rhs.code {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.languages != rhs.languages {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerConfigRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "config"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._config) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._config {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerConfigRequest, rhs: Neko_Api_V1_ComposerConfigRequest) -> Bool {
+    if lhs._config != rhs._config {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerGlobalsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerGlobalsRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "vars"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.vars) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.vars.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.vars, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerGlobalsRequest, rhs: Neko_Api_V1_ComposerGlobalsRequest) -> Bool {
+    if lhs.vars != rhs.vars {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerExportTarget: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerExportTarget"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "environment"),
+    2: .same(proto: "name"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.environment) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.environment != false {
+      try visitor.visitSingularBoolField(value: self.environment, fieldNumber: 1)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerExportTarget, rhs: Neko_Api_V1_ComposerExportTarget) -> Bool {
+    if lhs.environment != rhs.environment {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerTransferRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerTransferRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "import_json"),
+    2: .same(proto: "export"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.action != nil {try decoder.handleConflictingOneOf()}
+          self.action = .importJson(v)
+        }
+      }()
+      case 2: try {
+        var v: Neko_Api_V1_ComposerExportTarget?
+        var hadOneofValue = false
+        if let current = self.action {
+          hadOneofValue = true
+          if case .export(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.action = .export(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.action {
+    case .importJson?: try {
+      guard case .importJson(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    }()
+    case .export?: try {
+      guard case .export(let v)? = self.action else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerTransferRequest, rhs: Neko_Api_V1_ComposerTransferRequest) -> Bool {
+    if lhs.action != rhs.action {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ComposerExport: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ComposerExport"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "json"),
+    2: .same(proto: "filename"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.json) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.filename) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.json.isEmpty {
+      try visitor.visitSingularStringField(value: self.json, fieldNumber: 1)
+    }
+    if !self.filename.isEmpty {
+      try visitor.visitSingularStringField(value: self.filename, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ComposerExport, rhs: Neko_Api_V1_ComposerExport) -> Bool {
+    if lhs.json != rhs.json {return false}
+    if lhs.filename != rhs.filename {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ImportHarRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ImportHarRequest"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "data"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.data) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.data.isEmpty {
+      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ImportHarRequest, rhs: Neko_Api_V1_ImportHarRequest) -> Bool {
+    if lhs.data != rhs.data {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ImportHarResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ImportHarResponse"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "ids"),
+    2: .same(proto: "count"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedUInt64Field(value: &self.ids) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.count) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ids.isEmpty {
+      try visitor.visitPackedUInt64Field(value: self.ids, fieldNumber: 1)
+    }
+    if self.count != 0 {
+      try visitor.visitSingularUInt32Field(value: self.count, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ImportHarResponse, rhs: Neko_Api_V1_ImportHarResponse) -> Bool {
+    if lhs.ids != rhs.ids {return false}
+    if lhs.count != rhs.count {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_DecodedField: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DecodedField"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "depth"),
+    2: .same(proto: "label"),
+    3: .same(proto: "value"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.depth) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.depth != 0 {
+      try visitor.visitSingularUInt32Field(value: self.depth, fieldNumber: 1)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 2)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_DecodedField, rhs: Neko_Api_V1_DecodedField) -> Bool {
+    if lhs.depth != rhs.depth {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ProtocolView: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProtocolView"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "title"),
+    2: .same(proto: "fields"),
+    3: .same(proto: "note"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.fields) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.note) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
+    }
+    if !self.fields.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.fields, fieldNumber: 2)
+    }
+    if !self.note.isEmpty {
+      try visitor.visitSingularStringField(value: self.note, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ProtocolView, rhs: Neko_Api_V1_ProtocolView) -> Bool {
+    if lhs.title != rhs.title {return false}
+    if lhs.fields != rhs.fields {return false}
+    if lhs.note != rhs.note {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Neko_Api_V1_ScenarioAction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ScenarioAction"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "fail_one_in"),
+    2: .standard(proto: "delay_ms"),
+    3: .standard(proto: "jitter_ms"),
+    4: .standard(proto: "flaky_one_in"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.failOneIn) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.delayMs) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.jitterMs) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.flakyOneIn) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.failOneIn != 0 {
+      try visitor.visitSingularUInt32Field(value: self.failOneIn, fieldNumber: 1)
+    }
+    if self.delayMs != 0 {
+      try visitor.visitSingularUInt32Field(value: self.delayMs, fieldNumber: 2)
+    }
+    if self.jitterMs != 0 {
+      try visitor.visitSingularUInt32Field(value: self.jitterMs, fieldNumber: 3)
+    }
+    if self.flakyOneIn != 0 {
+      try visitor.visitSingularUInt32Field(value: self.flakyOneIn, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Neko_Api_V1_ScenarioAction, rhs: Neko_Api_V1_ScenarioAction) -> Bool {
+    if lhs.failOneIn != rhs.failOneIn {return false}
+    if lhs.delayMs != rhs.delayMs {return false}
+    if lhs.jitterMs != rhs.jitterMs {return false}
+    if lhs.flakyOneIn != rhs.flakyOneIn {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

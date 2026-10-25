@@ -42,6 +42,7 @@ pub struct BodyView {
     pub image: Vec<u8>,
     pub note: String,
     pub events: Vec<crate::SseEvent>,
+    pub protocol: crate::ProtocolView,
 }
 
 impl BodyView {
@@ -63,6 +64,7 @@ impl BodyView {
             image: Vec::new(),
             note: String::new(),
             events: Vec::new(),
+            protocol: crate::ProtocolView::default(),
         }
     }
 }
@@ -142,8 +144,11 @@ pub fn build_view(
         form: Vec::new(),
         image: Vec::new(),
         note: String::new(),
-            events: Vec::new(),
+        events: Vec::new(),
+        protocol: crate::ProtocolView::default(),
     };
+
+    view.protocol = crate::protocol_view(content_type, &body);
 
     match view.kind {
         Kind::Empty => {}
@@ -166,7 +171,17 @@ pub fn build_view(
             } else {
                 &body[..]
             };
-            let text = to_text(slice, content_type);
+            let text = if content_type
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .eq_ignore_ascii_case("text/event-stream")
+            {
+                String::from_utf8_lossy(slice).into_owned()
+            } else {
+                to_text(slice, content_type)
+            };
             if cut {
                 view.preview_truncated = true;
                 notes.push(format!(
@@ -206,11 +221,19 @@ pub fn build_view(
                 }
                 _ => {}
             }
-            if content_type.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("text/event-stream") {
+            if content_type
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .eq_ignore_ascii_case("text/event-stream")
+            {
                 let (events, events_cut) = crate::parse_sse(&text, opts.json_lines);
                 view.events = events;
                 view.preview_truncated |= events_cut;
-                if events_cut { notes.push("Event limit reached.".into()); }
+                if events_cut {
+                    notes.push("Event limit reached.".into());
+                }
             }
             view.text = text;
         }
@@ -303,5 +326,22 @@ mod tests {
         assert_eq!(human_size(512), "512 B");
         assert_eq!(human_size(1536), "1.5 KB");
         assert_eq!(human_size(94210), "92 KB");
+    }
+}
+
+#[cfg(test)]
+mod sse_charset_tests {
+    #[test]
+    fn event_stream_is_always_utf8() {
+        let body = "data: café\n\n".as_bytes();
+        let view = super::build_view(
+            "text/event-stream; charset=latin1",
+            "",
+            body,
+            body.len() as u64,
+            false,
+            &super::ViewOptions::default(),
+        );
+        assert_eq!(view.events[0].data, "café");
     }
 }

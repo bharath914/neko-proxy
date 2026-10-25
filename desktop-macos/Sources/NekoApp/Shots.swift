@@ -168,6 +168,62 @@ enum Fixtures {
         ]
     }
 
+    @MainActor static func composerFixture(_ model: ComposerModel) {
+        func kv(_ n: String, _ v: String, _ d: String = "", off: Bool = false) -> KeyValue {
+            .with { $0.name = n; $0.value = v; $0.description_p = d; $0.disabled = off }
+        }
+        let draft = ComposedRequest.with {
+            $0.id = "items"; $0.name = "Search catalog"; $0.collection = "Shop API"; $0.method = "POST"
+            $0.url = "{{base_url}}/v1/items/search"
+            $0.params = [kv("page", "2", "Page number"), kv("per_page", "20"), kv("debug", "1", off: true)]
+            $0.headers = [kv("accept", "application/json"), kv("x-client", "Neko Composer", "Identifies this tool")]
+            $0.bodyKind = .json; $0.body = "{\n  \"query\": \"charger\",\n  \"in_stock\": true\n}"
+            $0.auth = .inherit
+            $0.tests = [
+                .with { $0.kind = .status; $0.op = .equals; $0.expected = "200" },
+                .with { $0.kind = .json; $0.target = "data.items[0].id"; $0.op = .exists },
+                .with { $0.kind = .time; $0.op = .lessThan; $0.expected = "200" },
+            ]
+        }
+        var saved = draft; saved.body = "{}"
+        let me = ComposedRequest.with { $0.id = "me"; $0.name = "Current user"; $0.collection = "Shop API"; $0.method = "GET"; $0.url = "{{base_url}}/v1/me"; $0.auth = .inherit }
+        let orders = ComposedRequest.with { $0.id = "orders"; $0.name = "List orders"; $0.collection = "Shop API/Orders"; $0.method = "GET"; $0.url = "{{base_url}}/v1/orders/:status"; $0.auth = .inherit; $0.pathVars = [kv("status", "open")] }
+        let create = ComposedRequest.with { $0.id = "create"; $0.name = "Create order"; $0.collection = "Shop API/Orders"; $0.method = "POST"; $0.url = "{{base_url}}/v1/orders"; $0.bodyKind = .formData; $0.form = [kv("sku", "USB-C-65W"), kv("qty", "2"), .with { $0.name = "receipt"; $0.value = "~/receipt.pdf"; $0.file = true }] }
+        let refund = ComposedRequest.with { $0.id = "refund"; $0.name = "Refund"; $0.collection = "Shop API/Orders/Admin"; $0.method = "DELETE"; $0.url = "{{base_url}}/v1/orders/:id/refund" }
+        let login = ComposedRequest.with { $0.id = "login"; $0.name = "Sign in"; $0.collection = "Authentication"; $0.method = "POST"; $0.url = "{{base_url}}/oauth/token"; $0.bodyKind = .form; $0.form = [kv("grant_type", "password")] }
+        let state = ComposerState.with {
+            $0.collections = ["Shop API", "Shop API/Orders", "Shop API/Orders/Admin", "Authentication"]
+            $0.requests = [saved, me, orders, create, refund, login]
+            $0.environments = [
+                .with { $0.name = "Staging"; $0.vars = [kv("base_url", "https://api.example.com"), .with { $0.name = "token"; $0.value = "s3cr3t"; $0.secret = true }] },
+                .with { $0.name = "Production"; $0.vars = [kv("base_url", "https://api.shop.example")] },
+            ]
+            $0.activeEnvironment = "Staging"
+            $0.globals = [kv("locale", "en-US")]
+            $0.configs = [.with { $0.name = "Shop API"; $0.auth = .with { $0.kind = .bearer; $0.token = "{{token}}" }; $0.headers = [kv("x-app", "neko")] }]
+            $0.history = [
+                .with { $0.request = draft; $0.flowID = 2; $0.method = "POST"; $0.url = "https://api.example.com/v1/items/search"; $0.status = 200; $0.durationMs = 250 },
+                .with { $0.request = me; $0.flowID = 3; $0.method = "GET"; $0.url = "https://api.example.com/v1/me"; $0.status = 401; $0.durationMs = 80 },
+            ]
+        }
+        model.fixtureResolved = .with {
+            $0.method = "POST"; $0.url = "https://api.example.com/v1/items/search?page=2&per_page=20"; $0.curl = "curl https://api.example.com/v1/items/search"
+            $0.headers = [.with { $0.name = "accept"; $0.value = "application/json" }, .with { $0.name = "Authorization"; $0.value = "Bearer s3cr3t" }, .with { $0.name = "Content-Type"; $0.value = "application/json" }]
+            $0.generated = ["Authorization", "Content-Type"]
+        }
+        model.loadFixture(state, draft: draft, response: detail(2), sent: .with {
+            $0.flowID = 2; $0.status = 200; $0.durationMs = 250; $0.size = 1840
+            $0.tests = [
+                .with { $0.name = "Status equals 200"; $0.passed = true },
+                .with { $0.name = "JSON data.items[0].id exists"; $0.passed = true },
+                .with { $0.name = "Response time less than 200 ms"; $0.passed = false; $0.message = "Got 250 ms" },
+            ]
+            $0.cookies = [.with { $0.name = "session"; $0.value = "9f2c1ab4"; $0.domain = "api.example.com"; $0.path = "/"; $0.secure = true; $0.httpOnly = true; $0.sameSite = "Lax" }]
+        }, display: "{{base_url}}/v1/items/search?page=2&per_page=20")
+        model.addFixtureTab(me)
+        model.addFixtureTab(login)
+    }
+
     @MainActor static func run(into dir: String) {
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         Theme.registerFonts()
@@ -200,6 +256,7 @@ enum Fixtures {
 
         func snap(_ name: String) {
             RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+            w.contentView?.setFrameSize(NSSize(width: 1440, height: 900))
             w.contentView?.layoutSubtreeIfNeeded()
             guard let v = w.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { return }
             v.cacheDisplay(in: v.bounds, to: rep)
@@ -226,6 +283,32 @@ enum Fixtures {
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
             wc.root.selectTab(3)
             snap("mac-timing-\(scheme)")
+            composerFixture(model.composer)
+            wc.root.setSection(.composer)
+            snap("mac-composer-\(scheme)")
+            // Every section of the editor and the response, and the sidebar tabs.
+            let cm = model.composer
+            for i in 0..<5 {
+                cm.tab.section = i
+                cm.onTab?()
+                snap("mac-composer-edit\(i)-\(scheme)")
+            }
+            cm.tab.section = 0
+            for i in 0..<5 {
+                cm.tab.responseSection = i
+                cm.onTab?()
+                snap("mac-composer-res\(i)-\(scheme)")
+            }
+            cm.tab.responseSection = 0
+            cm.onTab?()
+            wc.root.composerView.showSidebarTab(1)
+            snap("mac-composer-envs-\(scheme)")
+            wc.root.composerView.showSidebarTab(2)
+            snap("mac-composer-history-\(scheme)")
+            wc.root.composerView.showSidebarTab(0)
+            model.composer.fixtureResolved = nil
+            model.composer.loadFixture(.init(), draft: ComposerModel.blank(), response: nil, sent: nil)
+            snap("mac-composer-empty-\(scheme)")
             wc.root.setSection(.settings)
             snap("mac-settings-\(scheme)")
             wc.root.setSection(.breakpoints)

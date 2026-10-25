@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Neko scenario rule YAML (rules array entries)",
+  "type": "object",
+  "required": ["match", "action"],
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "enabled": {"type": "boolean", "default": true},
+    "match": {
+      "type": "object", "required": ["host"],
+      "properties": {
+        "host": {"type": "string", "minLength": 1, "maxLength": 253},
+        "scheme": {"enum": ["", "http", "https"]},
+        "port": {"type": "integer", "minimum": 0, "maximum": 65535},
+        "method": {"type": "string"}, "path": {"type": "string"}, "query": {"type": "string"}
+      }, "additionalProperties": false
+    },
+    "action": {
+      "type": "object", "required": ["type"],
+      "properties": {
+        "type": {"const": "scenario"},
+        "fail_one_in": {"type": "integer", "minimum": 0, "maximum": 4294967295, "default": 0},
+        "delay_ms": {"type": "integer", "minimum": 0, "maximum": 60000, "default": 0},
+        "jitter_ms": {"type": "integer", "minimum": 0, "maximum": 60000, "default": 0},
+        "flaky_one_in": {"type": "integer", "minimum": 0, "maximum": 4294967295, "default": 0}
+      }, "additionalProperties": false,
+      "description": "Core additionally validates delay_ms + jitter_ms <= 60000 and at least one nonzero setting."
+    }
+  }, "additionalProperties": false
+}

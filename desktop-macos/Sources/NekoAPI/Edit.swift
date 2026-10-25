@@ -95,7 +95,7 @@ public enum RuleKind: Int, CaseIterable {
         case .rewrite?: self = .rewrite
         case .throttle?: self = .throttle
         case .breakpoint?: self = .breakpoint
-        case nil: return nil
+        case .scenario?, nil: return nil
         }
     }
 }
@@ -145,7 +145,7 @@ public struct RuleForm: Equatable {
         case .breakpoint(let a)?:
             phase = min(max(a.phase.rawValue, 0), 2)
             timeoutS = a.timeoutS == 0 ? "" : String(a.timeoutS)
-        case nil: break
+        case .scenario?, nil: break
         }
     }
 
@@ -265,6 +265,7 @@ public func describeAction(_ r: Rule) -> String {
         case .response: return "Hold response"
         default: return "Hold request and response"
         }
+    case .scenario?: return "Scenario"
     case nil: return ""
     }
 }

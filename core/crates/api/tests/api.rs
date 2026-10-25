@@ -1,9 +1,9 @@
 use bytes::Bytes;
 use flow::{FlowEvent, FlowRecord, FlowSink, FlowState, Timings};
 use futures_util::{SinkExt, StreamExt};
-use prost::Message as _;
 use neko_api::pb::{self, client_message::Body as Req, server_message::Body as Res};
 use neko_api::{ApiContext, Control, CoreInfo, Hub};
+use prost::Message as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -121,9 +121,12 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
     let hub = Hub::new();
     let sdk = with_sdk.then(|| {
         // These tests walk through the pairing prompt, so connections from this computer must not skip it.
-        sdk::SdkSettings { auto_accept_local: false, ..Default::default() }
-            .save(&dir.path().join("sdk"))
-            .unwrap();
+        sdk::SdkSettings {
+            auto_accept_local: false,
+            ..Default::default()
+        }
+        .save(&dir.path().join("sdk"))
+        .unwrap();
         let mut o = sdk::SdkOptions::new(dir.path().join("sdk"));
         o.port = 0;
         o.bind = [127, 0, 0, 1].into();
@@ -140,12 +143,14 @@ async fn setup_with(with_sdk: bool) -> (Client, Arc<ApiContext>, tempfile::TempD
         )
     });
     let ctx = Arc::new(ApiContext {
+        ids: Arc::new(flow::IdGen::starting_after(1000)),
         store,
         hub,
         control: Arc::new(FakeControl {
             recording: AtomicBool::new(true),
         }),
         rules: Arc::new(rules::RuleSet::in_memory()),
+        composer: Arc::new(neko_api::compose::Composer::in_memory()),
         approvals: Arc::new(neko_api::Approvals::default()),
         mcp: None,
         sdk,
@@ -841,6 +846,140 @@ async fn replay_edits_a_stored_flow_and_mcp_settings_round_trip() {
 }
 
 #[tokio::test]
+async fn composer_saves_imports_resolves_and_sends() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.enqueue(record(99, "api.example.com", 200, "{}"));
+    ctx.store.flush();
+
+    let Res::Composer(s) = c
+        .call(Req::ComposerEnvironments(pb::ComposerEnvironmentsRequest {
+            environments: vec![pb::Environment {
+                name: "staging".into(),
+                vars: vec![pb::KeyValue {
+                    name: "base".into(),
+                    value: "https://staging.example.com".into(),
+                    ..Default::default()
+                }],
+            }],
+            active: "staging".into(),
+        }))
+        .await
+    else {
+        panic!("composer state")
+    };
+    assert_eq!(s.active_environment, "staging");
+
+    let Res::Composed(req) = c
+        .call(Req::ComposerImport(pb::ComposerImportRequest {
+            source: Some(pb::composer_import_request::Source::Curl(
+                "curl -X POST '{{base}}/v1/items?page=2' -H 'content-type: application/json' -d '{\"a\":1}'".into(),
+            )),
+        }))
+        .await
+    else {
+        panic!("imported request")
+    };
+    assert_eq!(req.method, "POST");
+    assert_eq!(req.params.len(), 1);
+    assert_eq!(req.body_kind, pb::ComposeBody::Json as i32);
+
+    let Res::Composed(from_flow) = c
+        .call(Req::ComposerImport(pb::ComposerImportRequest {
+            source: Some(pb::composer_import_request::Source::FlowId(99)),
+        }))
+        .await
+    else {
+        panic!("request from a flow")
+    };
+    assert_eq!(from_flow.url, "https://api.example.com/v1/me");
+
+    let Res::ComposerResolved(r) = c
+        .call(Req::ComposerResolve(pb::ComposerResolveRequest {
+            request: Some(req.clone()),
+        }))
+        .await
+    else {
+        panic!("resolved")
+    };
+    assert_eq!(r.url, "https://staging.example.com/v1/items?page=2");
+    assert!(r.missing.is_empty());
+    assert!(r.curl.starts_with("curl"));
+
+    let Res::Composer(s) = c
+        .call(Req::ComposerSave(pb::ComposerSaveRequest {
+            request: Some(pb::ComposedRequest {
+                collection: "Shop".into(),
+                ..req.clone()
+            }),
+        }))
+        .await
+    else {
+        panic!("saved")
+    };
+    assert_eq!(s.saved_id, "q1");
+    assert_eq!(s.collections, vec!["Shop".to_string()]);
+    assert_eq!(s.requests[0].name, "POST /v1/items");
+
+    let Res::ComposerSent(sent) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(req.clone()),
+        }))
+        .await
+    else {
+        panic!("sent")
+    };
+    assert_eq!((sent.flow_id, sent.status), (99, 200));
+
+    let Res::ComposerSent(failed) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(pb::ComposedRequest {
+                url: "https://fail.example.com".into(),
+                ..Default::default()
+            }),
+        }))
+        .await
+    else {
+        panic!("sent")
+    };
+    assert_eq!((failed.flow_id, failed.error.as_str()), (0, "refused"));
+
+    let Res::Error(e) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(pb::ComposedRequest {
+                url: "{{nope}}/x".into(),
+                ..Default::default()
+            }),
+        }))
+        .await
+    else {
+        panic!("error")
+    };
+    assert!(e.message.contains("{{nope}}"), "{}", e.message);
+
+    let Res::Composer(s) = c.call(Req::ComposerGet(pb::ComposerGetRequest {})).await else {
+        panic!()
+    };
+    assert_eq!(s.history.len(), 2);
+    assert_eq!(s.history[0].error, "refused");
+    assert_eq!(
+        s.history[1].url,
+        "https://staging.example.com/v1/items?page=2"
+    );
+
+    let Res::Composer(s) = c
+        .call(Req::ComposerCollection(pb::ComposerCollectionRequest {
+            name: "Shop".into(),
+            remove: true,
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert!(s.requests.is_empty() && s.collections.is_empty());
+}
+
+#[tokio::test]
 async fn sdk_calls_are_unavailable_without_a_listener() {
     let (mut c, _ctx, _dir) = setup().await;
     match c.call(Req::SdkStatus(pb::SdkStatusRequest {})).await {
@@ -874,11 +1013,17 @@ async fn devices_pairing_flow_over_the_api() {
             assert!(s.enabled);
             assert_eq!(s.fingerprint.len(), 64);
             assert!(
-                s.checks.iter().any(|c| c.id == "listener" && c.level == "ok"),
+                s.checks
+                    .iter()
+                    .any(|c| c.id == "listener" && c.level == "ok"),
                 "{:?}",
                 s.checks
             );
-            assert!(!s.health.is_empty() && s.health != "off" && s.health != "problem", "{}", s.health);
+            assert!(
+                !s.health.is_empty() && s.health != "off" && s.health != "problem",
+                "{}",
+                s.health
+            );
             s.listening[0]
                 .rsplit(':')
                 .next()
@@ -989,24 +1134,42 @@ async fn devices_pairing_flow_over_the_api() {
 async fn sdk_settings_round_trip_and_show_in_the_checks() {
     let (mut c, _ctx, _dir) = setup_with(true).await;
     let set = |lan, auto| {
-        Req::SdkSetSettings(pb::SdkSetSettingsRequest { enabled: true, lan, auto_accept_local: auto })
+        Req::SdkSetSettings(pb::SdkSetSettingsRequest {
+            enabled: true,
+            lan,
+            auto_accept_local: auto,
+        })
     };
     match c.call(set(false, true)).await {
         Res::SdkStatus(s) => {
             assert!(s.enabled && !s.lan && s.auto_accept_local);
-            assert!(s.listening.iter().all(|a| a.starts_with("127.0.0.1")), "{:?}", s.listening);
-            assert!(s.checks.iter().any(|c| c.id == "auto-accept" && c.level == "ok"));
+            assert!(
+                s.listening.iter().all(|a| a.starts_with("127.0.0.1")),
+                "{:?}",
+                s.listening
+            );
+            assert!(s
+                .checks
+                .iter()
+                .any(|c| c.id == "auto-accept" && c.level == "ok"));
             assert!(s.checks.iter().any(|c| c.id == "wifi" && c.level == "info"));
         }
         other => panic!("{other:?}"),
     }
     match c.call(set(false, false)).await {
-        Res::SdkStatus(s) => assert!(s.checks.iter().any(|c| c.id == "auto-accept" && c.level == "info")),
+        Res::SdkStatus(s) => assert!(s
+            .checks
+            .iter()
+            .any(|c| c.id == "auto-accept" && c.level == "info")),
         other => panic!("{other:?}"),
     }
     // Turning it off is "off", not a problem.
     match c
-        .call(Req::SdkSetSettings(pb::SdkSetSettingsRequest { enabled: false, lan: false, auto_accept_local: false }))
+        .call(Req::SdkSetSettings(pb::SdkSetSettingsRequest {
+            enabled: false,
+            lan: false,
+            auto_accept_local: false,
+        }))
         .await
     {
         Res::SdkStatus(s) => assert_eq!(s.health, "off"),
@@ -1017,14 +1180,364 @@ async fn sdk_settings_round_trip_and_show_in_the_checks() {
 #[tokio::test]
 async fn stored_sse_events_are_decoded_over_api() {
     let (mut c, ctx, _d) = setup().await;
-    let mut rec = (*record(77, "events.example.com", 200, "id: 2\nevent: update\ndata: first\ndata: second\n\ndata: incomplete")).clone();
-    rec.res_headers = vec![("content-type".into(), "text/event-stream; charset=utf-8".into())];
+    let mut rec = (*record(
+        77,
+        "events.example.com",
+        200,
+        "id: 2\nevent: update\ndata: first\ndata: second\n\ndata: incomplete",
+    ))
+    .clone();
+    rec.res_headers = vec![(
+        "content-type".into(),
+        "text/event-stream; charset=utf-8".into(),
+    )];
     ctx.store.enqueue(Arc::new(rec));
     ctx.store.flush();
-    let Res::Flow(d) = c.call(Req::GetFlow(pb::GetFlowRequest { id: 77, parts: 4 })).await else { panic!() };
+    let Res::Flow(d) = c
+        .call(Req::GetFlow(pb::GetFlowRequest { id: 77, parts: 4 }))
+        .await
+    else {
+        panic!()
+    };
     let body = d.response_body.unwrap();
     assert_eq!(body.events.len(), 1);
     assert_eq!(body.events[0].data, "first\nsecond");
     assert_eq!(body.events[0].id, "2");
     assert_eq!(body.events[0].event, "update");
+}
+
+#[tokio::test]
+async fn composer_postman_features() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.enqueue(record(99, "api.example.com", 200, "{}"));
+    ctx.store.flush();
+
+    // The URL text and the params table follow each other.
+    let Res::ComposerUrl(u) = c
+        .call(Req::ComposerUrl(pb::ComposerUrlRequest {
+            request: Some(pb::ComposedRequest::default()),
+            edit: true,
+            text: "https://x.dev/users/:id?page=2&q=a%20b".into(),
+        }))
+        .await
+    else {
+        panic!("url")
+    };
+    let r = u.request.unwrap();
+    assert_eq!(r.url, "https://x.dev/users/:id");
+    assert_eq!(r.params.len(), 2);
+    assert_eq!(r.path_vars[0].name, "id");
+    assert_eq!(u.display, "https://x.dev/users/:id?page=2&q=a%20b");
+
+    // Bulk edit both ways.
+    let Res::ComposerBulk(b) = c
+        .call(Req::ComposerBulk(pb::ComposerBulkRequest {
+            source: Some(pb::composer_bulk_request::Source::Text(
+                "Accept: */*\n// X-Off: 1".into(),
+            )),
+        }))
+        .await
+    else {
+        panic!("bulk")
+    };
+    assert_eq!(b.rows.len(), 2);
+    assert!(b.rows[1].disabled);
+
+    // A collection passes auth and variables down to its requests.
+    let Res::Composer(_) = c
+        .call(Req::ComposerCollection(pb::ComposerCollectionRequest {
+            name: "Shop/Orders".into(),
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!("collection")
+    };
+    let Res::Composer(s) = c
+        .call(Req::ComposerConfig(pb::ComposerConfigRequest {
+            config: Some(pb::CollectionConfig {
+                name: "Shop".into(),
+                auth: Some(pb::ComposeAuthConfig {
+                    kind: pb::ComposeAuth::Bearer as i32,
+                    token: "{{tok}}".into(),
+                    ..Default::default()
+                }),
+                vars: vec![pb::KeyValue {
+                    name: "tok".into(),
+                    value: "abc".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }),
+        }))
+        .await
+    else {
+        panic!("config")
+    };
+    assert_eq!(s.collections, vec!["Shop", "Shop/Orders"]);
+    assert_eq!(s.configs.len(), 1);
+
+    let inheriting = pb::ComposedRequest {
+        collection: "Shop/Orders".into(),
+        url: "https://api.example.com/v1/me".into(),
+        auth: pb::ComposeAuth::Inherit as i32,
+        tests: vec![pb::Assertion {
+            kind: pb::AssertKind::Status as i32,
+            expected: "200".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let Res::ComposerResolved(r) = c
+        .call(Req::ComposerResolve(pb::ComposerResolveRequest {
+            request: Some(inheriting.clone()),
+        }))
+        .await
+    else {
+        panic!("resolved")
+    };
+    assert!(r.missing.is_empty(), "{:?}", r.missing);
+    assert!(r
+        .headers
+        .iter()
+        .any(|h| h.name == "Authorization" && h.value == "Bearer abc"));
+    assert!(r.generated.contains(&"Authorization".to_string()));
+
+    // Snippets.
+    let Res::ComposerCode(code) = c
+        .call(Req::ComposerCode(pb::ComposerCodeRequest {
+            request: Some(inheriting.clone()),
+            lang: "python".into(),
+        }))
+        .await
+    else {
+        panic!("code")
+    };
+    assert!(code.error.is_empty(), "{}", code.error);
+    assert!(code.code.contains("Bearer abc"));
+    assert!(code.languages.len() >= 10);
+
+    // Tests run against the stored response.
+    let Res::ComposerSent(sent) = c
+        .call(Req::ComposerSend(pb::ComposerSendRequest {
+            request: Some(inheriting),
+        }))
+        .await
+    else {
+        panic!("sent")
+    };
+    assert_eq!(sent.flow_id, 99);
+    assert_eq!(sent.tests.len(), 1);
+    assert!(sent.tests[0].passed, "{:?}", sent.tests[0]);
+
+    // Postman files round trip.
+    let Res::ComposerExport(e) = c
+        .call(Req::ComposerTransfer(pb::ComposerTransferRequest {
+            action: Some(pb::composer_transfer_request::Action::Export(
+                pb::ComposerExportTarget {
+                    environment: false,
+                    name: "Shop".into(),
+                },
+            )),
+        }))
+        .await
+    else {
+        panic!("export")
+    };
+    assert_eq!(e.filename, "Shop.postman_collection.json");
+    let Res::Composer(s) = c
+        .call(Req::ComposerTransfer(pb::ComposerTransferRequest {
+            action: Some(pb::composer_transfer_request::Action::ImportJson(e.json)),
+        }))
+        .await
+    else {
+        panic!("import")
+    };
+    assert!(s.notice.contains("Shop (2)"), "{}", s.notice);
+}
+
+#[tokio::test]
+async fn har_import_get_and_export_roundtrip() {
+    let (mut c, ctx, _d) = setup().await;
+    let input = store::to_har(
+        &[record(12, "import.example.com", 200, "{\"ok\":true}")],
+        false,
+        "test",
+    );
+    let Res::ImportedHar(imported) = c
+        .call(Req::ImportHar(pb::ImportHarRequest {
+            data: serde_json::to_vec(&input).unwrap(),
+        }))
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(imported.count, 1);
+    let id = imported.ids[0];
+    assert!(id > 1000);
+    assert_eq!(
+        ctx.store.get(id).unwrap().unwrap().host,
+        "import.example.com"
+    );
+    let Res::Export(export) = c
+        .call(Req::Export(pb::ExportRequest {
+            ids: vec![id],
+            kind: "har".into(),
+            redact: true,
+            ..Default::default()
+        }))
+        .await
+    else {
+        panic!()
+    };
+    let har: serde_json::Value = serde_json::from_slice(&export.data).unwrap();
+    assert_eq!(
+        har["log"]["entries"][0]["response"]["content"]["text"],
+        "{\"ok\":true}"
+    );
+}
+
+#[tokio::test]
+async fn grpc_and_graphql_views_are_prepared_in_core() {
+    let (mut c, ctx, _d) = setup().await;
+    let mut rec = (*record(80, "grpc.example.com", 200, "")).clone();
+    rec.res_headers = vec![("content-type".into(), "application/grpc+proto".into())];
+    rec.res_body = Bytes::from_static(&[0, 0, 0, 0, 2, 8, 42]);
+    rec.res_size = 7;
+    ctx.store.enqueue(Arc::new(rec));
+    ctx.store.flush();
+    let Res::Flow(d) = c
+        .call(Req::GetFlow(pb::GetFlowRequest { id: 80, parts: 4 }))
+        .await
+    else {
+        panic!()
+    };
+    let p = d.response_body.unwrap().protocol.unwrap();
+    assert!(p.title.starts_with("gRPC"));
+    assert_eq!(p.fields[1].label, "Field 1");
+    assert!(p.fields[1].value.starts_with("42"));
+}
+
+#[tokio::test]
+async fn export_kinds_share_redaction_even_when_client_disables_it() {
+    let (mut c, ctx, _d) = setup().await;
+    let mut rec = (*record(
+        90,
+        "export.example.com",
+        200,
+        "{\"password\":\"never-leak-password\",\"id\":1}",
+    ))
+    .clone();
+    rec.req_headers
+        .push(("authorization".into(), "Bearer never-leak-password".into()));
+    ctx.store.enqueue(Arc::new(rec));
+    ctx.store.flush();
+    for kind in store::EXPORT_KINDS {
+        let Res::Export(r) = c
+            .call(Req::Export(pb::ExportRequest {
+                kind: kind.to_string(),
+                ids: vec![90],
+                redact: false,
+                ..Default::default()
+            }))
+            .await
+        else {
+            panic!("{kind}")
+        };
+        assert!(
+            !String::from_utf8_lossy(&r.data).contains("never-leak-password"),
+            "{kind}"
+        );
+        assert_eq!(r.count, 1);
+    }
+}
+
+#[tokio::test]
+async fn issue_labels_are_core_generated_without_captured_values() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.enqueue(record(
+        95,
+        "issues.example.com",
+        200,
+        "{\"password\":\"never-report-this-value\"}",
+    ));
+    ctx.store.flush();
+    let Res::Flow(d) = c
+        .call(Req::GetFlow(pb::GetFlowRequest { id: 95, parts: 1 }))
+        .await
+    else {
+        panic!()
+    };
+    assert!(d.issues.iter().any(|s| s.contains("sensitive")));
+    assert!(!d.issues.join(" ").contains("never-report-this-value"));
+    assert!(!d.summary.unwrap().issue_labels.is_empty());
+}
+
+#[tokio::test]
+async fn live_sse_snapshot_is_persisted_and_remains_inflight() {
+    let (mut c, ctx, _d) = setup().await;
+    ctx.store.set_analysis_sink(Arc::new(ctx.hub.clone()));
+    let mut rec = (*record(96, "events.example.com", 200, "data: live\n\n")).clone();
+    rec.state = FlowState::Receiving;
+    rec.res_headers = vec![("content-type".into(), "text/event-stream".into())];
+    flow::FlowSink::publish(&ctx.store, FlowEvent::Snapshot(Arc::new(rec.clone())));
+    ctx.store.flush();
+    assert!(ctx.hub.inflight(96).is_some());
+    let Res::Flow(detail) = c
+        .call(Req::GetFlow(pb::GetFlowRequest { id: 96, parts: 7 }))
+        .await
+    else {
+        panic!()
+    };
+    assert_eq!(
+        detail.summary.unwrap().state,
+        pb::FlowState::Receiving as i32
+    );
+    assert_eq!(detail.response_body.unwrap().events[0].data, "live");
+    rec.state = FlowState::Complete;
+    flow::FlowSink::publish(&ctx.store, FlowEvent::Finished(Arc::new(rec)));
+    ctx.store.flush();
+    assert!(ctx.hub.inflight(96).is_none());
+}
+
+#[tokio::test]
+async fn existing_socket_parent_permissions_are_preserved() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_client, ctx, _dir) = setup().await;
+    let directory = tempfile::Builder::new()
+        .prefix("neko-api-mode-")
+        .tempdir_in("/tmp")
+        .unwrap();
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let socket = directory.path().join("api.sock");
+    let path = socket.clone();
+    let (stop, wait) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        neko_api::serve(ctx, &path, async {
+            let _ = wait.await;
+        })
+        .await
+        .unwrap()
+    });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !socket.exists() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        std::fs::metadata(directory.path())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o755
+    );
+    assert_eq!(
+        std::fs::metadata(&socket).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    stop.send(()).unwrap();
+    server.await.unwrap();
 }

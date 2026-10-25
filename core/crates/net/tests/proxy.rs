@@ -430,7 +430,9 @@ async fn map_local_answers_from_the_file_and_is_recorded() {
 
     let out = get("/json?cache=bust").await;
     assert!(out.starts_with("HTTP/1.1 201"), "{out}");
-    assert!(out.to_ascii_lowercase().contains("content-type: application/json"));
+    assert!(out
+        .to_ascii_lowercase()
+        .contains("content-type: application/json"));
     assert!(out.ends_with(r#"{"mapped":1}"#), "{out}");
 
     // The file is read per request, so an edit shows at once.
@@ -632,7 +634,10 @@ async fn cert_page_explains_and_serves_every_format() {
     assert!(page.starts_with("HTTP/1.1 200"), "{page}");
     assert!(page.contains("Install the proxy certificate"));
     assert!(page.contains(h.ca.sha256()), "fingerprint is embedded");
-    assert!(!page.contains("/*INFO*/"), "template placeholder was filled");
+    assert!(
+        !page.contains("/*INFO*/"),
+        "template placeholder was filled"
+    );
 
     let pem = get("/ca.pem").await;
     assert!(pem.contains("BEGIN CERTIFICATE"));
@@ -647,7 +652,11 @@ async fn cert_page_explains_and_serves_every_format() {
     let split = cer.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
     let head = String::from_utf8_lossy(&cer[..split]).to_string();
     assert!(head.contains("application/x-x509-ca-cert"), "{head}");
-    assert_eq!(&cer[split..], h.ca.cert_der().as_ref(), "body is the DER certificate");
+    assert_eq!(
+        &cer[split..],
+        h.ca.cert_der().as_ref(),
+        "body is the DER certificate"
+    );
 
     let profile = get("/ca.mobileconfig").await;
     assert!(profile.contains("application/x-apple-aspen-config"));
@@ -655,7 +664,9 @@ async fn cert_page_explains_and_serves_every_format() {
     assert!(profile.contains("<data>"));
 
     let status = get("/status.json").await;
-    assert!(status.to_ascii_lowercase().contains("access-control-allow-origin: *"));
+    assert!(status
+        .to_ascii_lowercase()
+        .contains("access-control-allow-origin: *"));
     assert!(status.contains(&format!("\"sha256\":\"{}\"", h.ca.sha256())));
 
     assert!(get("/nope").await.starts_with("HTTP/1.1 404"));
@@ -727,7 +738,13 @@ async fn parser_survives_hostile_input() {
     let mut cfg = ProxyConfig::new("127.0.0.1:8899".parse().unwrap());
     cfg.offline = true;
     let sink = Arc::new(Collect::default());
-    let proxy = Proxy::new(cfg, ca, sink, Arc::new(IdGen::starting_after(0)), InterceptorChain::empty());
+    let proxy = Proxy::new(
+        cfg,
+        ca,
+        sink,
+        Arc::new(IdGen::starting_after(0)),
+        InterceptorChain::empty(),
+    );
 
     let seeds: [&[u8]; 8] = [
         b"GET http://example.com/a?b=c HTTP/1.1\r\nHost: example.com\r\n\r\n",
@@ -778,7 +795,11 @@ async fn parser_survives_hostile_input() {
         let _ = client.shutdown().await;
         // Drain whatever the proxy answers so it never blocks on a full pipe.
         let mut sink = Vec::new();
-        let _ = tokio::time::timeout(Duration::from_secs(2), tokio::io::AsyncReadExt::read_to_end(&mut client, &mut sink)).await;
+        let _ = tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::io::AsyncReadExt::read_to_end(&mut client, &mut sink),
+        )
+        .await;
         tokio::time::timeout(Duration::from_secs(5), handle)
             .await
             .expect("handler finished")
@@ -858,17 +879,27 @@ async fn mock_rewrite_and_throttle_apply_without_touching_the_origin() {
 
     let t = std::time::Instant::now();
     let out = send_raw(h.addr, get_req(origin, "/missing")).await;
-    assert!(t.elapsed() >= Duration::from_millis(120), "mock delay applied");
+    assert!(
+        t.elapsed() >= Duration::from_millis(120),
+        "mock delay applied"
+    );
     assert!(out.starts_with("HTTP/1.1 503"), "{out}");
     assert!(out.to_ascii_lowercase().contains("retry-after: 7"));
     assert!(out.ends_with(r#"{"down":true}"#), "{out}");
 
     let out = send_raw(h.addr, get_req(origin, "/json")).await;
     assert!(out.starts_with("HTTP/1.1 200"), "{out}");
-    assert!(out.to_ascii_lowercase().contains("x-from-rule: yes"), "{out}");
+    assert!(
+        out.to_ascii_lowercase().contains("x-from-rule: yes"),
+        "{out}"
+    );
 
     let flows = h.sink.finished(2).await;
-    assert_ne!(flows[0].flags & flags::MAPPED, 0, "mocks are answered locally");
+    assert_ne!(
+        flows[0].flags & flags::MAPPED,
+        0,
+        "mocks are answered locally"
+    );
     assert_ne!(flows[1].flags & flags::EDITED, 0, "rewrites are flagged");
     assert_eq!(flows[1].status, 200);
 }
@@ -938,7 +969,8 @@ async fn request_breakpoint_edits_reach_the_origin() {
     let mut rx = rules.pauses().subscribe();
 
     let addr = h.addr;
-    let client = tokio::spawn(async move { send_raw(addr, post_req(origin, "/echo", "original")).await });
+    let client =
+        tokio::spawn(async move { send_raw(addr, post_req(origin, "/echo", "original")).await });
 
     let paused = next_paused(&mut rx).await;
     assert_eq!(paused.phase, flow::Phase::Request);
@@ -960,7 +992,10 @@ async fn request_breakpoint_edits_reach_the_origin() {
 
     let out = client.await.unwrap();
     assert!(out.starts_with("HTTP/1.1 201"), "{out}");
-    assert!(out.ends_with("changed by a person"), "origin got the edit: {out}");
+    assert!(
+        out.ends_with("changed by a person"),
+        "origin got the edit: {out}"
+    );
 
     let f = &h.sink.finished(1).await[0];
     assert_eq!(&f.req_body[..], b"changed by a person");
@@ -1088,4 +1123,116 @@ async fn replay_sends_a_new_flow_straight_upstream() {
         .await
         .unwrap_err();
     assert!(err.contains("http"), "{err}");
+}
+
+#[tokio::test]
+async fn socks5_connect_intercepts_tls() {
+    let h = start_proxy().await;
+    let origin = start_origin_tls().await;
+    for atyp in [1, 3] {
+        let mut tcp = TcpStream::connect(h.addr).await.unwrap();
+        tcp.write_all(&[5, 1, 0]).await.unwrap();
+        let mut method = [0; 2];
+        tcp.read_exact(&mut method).await.unwrap();
+        assert_eq!(method, [5, 0]);
+        let mut req = vec![5, 1, 0, atyp];
+        if atyp == 1 {
+            req.extend_from_slice(&[127, 0, 0, 1]);
+        } else {
+            req.push(9);
+            req.extend_from_slice(b"127.0.0.1");
+        }
+        req.extend_from_slice(&origin.addr.port().to_be_bytes());
+        tcp.write_all(&req).await.unwrap();
+        let mut reply = [0; 10];
+        tcp.read_exact(&mut reply).await.unwrap();
+        assert_eq!(reply[1], 0);
+        let tls = TlsConnector::from(client_config(Some(h.ca.cert_der()), &[b"http/1.1"]))
+            .connect(ServerName::try_from("127.0.0.1").unwrap(), tcp)
+            .await
+            .unwrap();
+        let (status, body) = get_over(tls, false, "GET", "/json", b"").await;
+        assert_eq!(status, 200);
+        assert_eq!(&body[..], br#"{"ok":true,"n":1}"#);
+    }
+    assert_eq!(h.sink.finished(2).await.len(), 2);
+}
+
+#[tokio::test]
+async fn socks5_rejects_auth_and_udp() {
+    let h = start_proxy().await;
+    let mut tcp = TcpStream::connect(h.addr).await.unwrap();
+    tcp.write_all(&[5, 1, 2]).await.unwrap();
+    let mut reply = [0; 2];
+    tcp.read_exact(&mut reply).await.unwrap();
+    assert_eq!(reply, [5, 255]);
+    let mut tcp = TcpStream::connect(h.addr).await.unwrap();
+    tcp.write_all(&[5, 1, 0]).await.unwrap();
+    tcp.read_exact(&mut reply).await.unwrap();
+    tcp.write_all(&[5, 3, 0, 1]).await.unwrap();
+    let mut reply = [0; 10];
+    tcp.read_exact(&mut reply).await.unwrap();
+    assert_eq!(reply[1], 7);
+    assert_eq!(h.sink.count(), 0);
+}
+
+#[tokio::test]
+async fn sse_events_are_visible_before_the_response_closes() {
+    let h = start_proxy().await;
+    let origin = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = origin.local_addr().unwrap();
+    let (release, wait) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = origin.accept().await.unwrap();
+        let mut request = [0; 4096];
+        socket.read(&mut request).await.unwrap();
+        let event = b"id: 1\nevent: update\ndata: first\n\n";
+        socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n{:x}\r\n",event.len()).as_bytes()).await.unwrap();
+        socket.write_all(event).await.unwrap();
+        socket.write_all(b"\r\n").await.unwrap();
+        wait.await.unwrap();
+        socket.write_all(b"0\r\n\r\n").await.unwrap();
+    });
+    let socket = TcpStream::connect(h.addr).await.unwrap();
+    let client = tokio::spawn(async move {
+        get_over(socket, false, "GET", &format!("http://{addr}/events"), b"").await
+    });
+    let snapshot = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let got = h
+                .sink
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .find_map(|event| match event {
+                    FlowEvent::Snapshot(r) => Some(r.clone()),
+                    _ => None,
+                });
+            if let Some(record) = got {
+                break record;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("live snapshot before response closes");
+    assert_eq!(snapshot.state, FlowState::Receiving);
+    assert!(!client.is_finished());
+    let view = decode::build_view(
+        "text/event-stream",
+        "",
+        &snapshot.res_body,
+        snapshot.res_size,
+        false,
+        &decode::ViewOptions::default(),
+    );
+    assert_eq!(view.events.len(), 1);
+    assert_eq!(view.events[0].data, "first");
+    release.send(()).unwrap();
+    server.await.unwrap();
+    assert_eq!(client.await.unwrap().0, 200);
+    let final_record = h.sink.finished(1).await.pop().unwrap();
+    assert_eq!(final_record.res_body, snapshot.res_body);
+    assert_eq!(final_record.state, FlowState::Complete);
 }

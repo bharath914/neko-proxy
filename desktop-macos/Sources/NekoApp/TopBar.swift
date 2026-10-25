@@ -1,6 +1,6 @@
 import AppKit
 
-enum Section: Int, CaseIterable { case inspector, breakpoints, rules, devices, settings }
+enum Section: Int, CaseIterable { case inspector, composer, breakpoints, rules, devices, settings }
 
 /// A pill that shows capture state.
 final class RecordPill: NSView {
@@ -89,7 +89,9 @@ final class SearchBox: Surface, NSTextFieldDelegate {
 /// The window's top bar: navigation, capture controls, filters, search and the Proxy entry.
 @MainActor
 final class TopBar: NSView {
-    let nav = Segmented(["Inspector", "Breakpoints", "Rules", "Devices", "Settings"])
+    let workspace = Segmented(["Inspector", "Compose"])
+    let nav = Segmented(["Traffic", "Breakpoints", "Rules", "Devices", "Settings"])
+    static let inspectorSections: [Section] = [.inspector, .breakpoints, .rules, .devices, .settings]
     let record = RecordPill()
     let clear = IconButton("trash", tip: "Clear all flows (⌘K)")
     let view = Segmented(["Traffic", "Sequence"])
@@ -99,26 +101,36 @@ final class TopBar: NSView {
     let phone = IconButton("iphone", tip: "Connect a phone")
     let proxy = Chip("Proxy", symbol: "shield", style: .plain)
     private var inspectorOnly: [NSView] = []
+    private var inspectorNavigation: NSStackView!
+    private var barHeight: NSLayoutConstraint!
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { true }
 
     init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 56).isActive = true
+        barHeight = heightAnchor.constraint(equalToConstant: 132)
+        barHeight.isActive = true
 
-        let left = NSStackView.horizontal([nav, view, record, clear, filter], spacing: 8)
-        left.setCustomSpacing(12, after: nav)
+        nav.padding = 10
+        view.padding = 9
+        filter.padding = 9
+        let left = NSStackView.horizontal([view, record, clear, filter], spacing: 8)
         left.setCustomSpacing(12, after: view)
-        let right = NSStackView.horizontal([export, phone, proxy], spacing: 8)
-        for v in [left, search, right] { addSubview(v) }
-        inspectorOnly = [view, record, clear, filter, search, export]
+        let right = NSStackView.horizontal([export], spacing: 8)
+        inspectorNavigation = NSStackView.horizontal([nav, phone, proxy], spacing: 12)
+        for v: NSView in [workspace, inspectorNavigation, left, search, right] { addSubview(v) }
+        inspectorOnly = [left, search, right]
         NSLayoutConstraint.activate([
-            left.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 82),
-            left.centerYAnchor.constraint(equalTo: centerYAnchor),
+            workspace.topAnchor.constraint(equalTo: topAnchor, constant: 9),
+            workspace.centerXAnchor.constraint(equalTo: centerXAnchor),
+            inspectorNavigation.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            inspectorNavigation.topAnchor.constraint(equalTo: topAnchor, constant: 48),
+            left.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            left.topAnchor.constraint(equalTo: topAnchor, constant: 90),
             right.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            right.centerYAnchor.constraint(equalTo: centerYAnchor),
-            search.centerYAnchor.constraint(equalTo: centerYAnchor),
+            right.centerYAnchor.constraint(equalTo: left.centerYAnchor),
+            search.centerYAnchor.constraint(equalTo: left.centerYAnchor),
             search.trailingAnchor.constraint(equalTo: right.leadingAnchor, constant: -10),
             search.leadingAnchor.constraint(greaterThanOrEqualTo: left.trailingAnchor, constant: 10),
             search.widthAnchor.constraint(lessThanOrEqualToConstant: 280),
@@ -142,7 +154,10 @@ final class TopBar: NSView {
     }
 
     func setSection(_ s: Section) {
-        nav.selected = s.rawValue
+        workspace.selected = s == .composer ? 1 : 0
+        if let index = Self.inspectorSections.firstIndex(of: s) { nav.selected = index }
+        inspectorNavigation.isHidden = s == .composer
+        barHeight.constant = s == .composer ? 48 : (s == .inspector ? 132 : 90)
         for v in inspectorOnly { v.isHidden = s != .inspector }
     }
 

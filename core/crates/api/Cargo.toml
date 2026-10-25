@@ -10,6 +10,7 @@ flow.workspace = true
 store.workspace = true
 decode.workspace = true
 rules.workspace = true
+compose.workspace = true
 sdk.workspace = true
 bytes.workspace = true
 prost.workspace = true

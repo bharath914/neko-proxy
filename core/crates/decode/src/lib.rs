@@ -7,8 +7,8 @@ mod html;
 mod json;
 mod kind;
 pub mod redact;
-mod view;
 mod sse;
+mod view;
 pub use sse::{parse_sse, SseEvent};
 
 pub use codec::{decode_content, Decoded, DEFAULT_DECODE_LIMIT};
@@ -20,3 +20,9 @@ pub use html::{
 pub use json::{json_outline, JsonLine, JsonToken, JsonTokenKind};
 pub use kind::{classify, parse_form, sniff_image, Kind};
 pub use view::{build_view, BodyView, ViewOptions};
+
+mod protocol;
+pub use protocol::{protocol_view, DecodedField, ProtocolView};
+
+mod issues;
+pub use issues::{issue_labels, route_path, sensitive, static_flags, ISSUE_MASK};
