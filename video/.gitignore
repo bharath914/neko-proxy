@@ -1,0 +1,16 @@
+node_modules/
+keys/
+synth
+*.wav
+*.mp4
+package-lock.json
+hook.wav
+hook_synth*
+main.mp4
+hook.mp4
+list.txt
+keysh/
+montage.wav
+montage_synth*
+*_sheet.png
+seam.png

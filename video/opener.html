@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	* { box-sizing: border-box; margin: 0; }
+	html, body { width: 1080px; height: 1080px; overflow: hidden; background: #000; }
+	body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; color: #f5f5f7; -webkit-font-smoothing: antialiased; }
+	.abs { position: absolute; }
+	#glow { inset: 0; background: radial-gradient(50% 40% at 50% 38%, rgb(59 139 255 / 0.28), transparent 70%), radial-gradient(40% 30% at 70% 80%, rgb(255 111 156 / 0.14), transparent 70%); }
+	.head { left: 0; right: 0; top: 70px; text-align: center; font-size: 84px; line-height: 1.02; font-weight: 700; letter-spacing: -0.045em; }
+	.grad { background: linear-gradient(95deg, #3b8bff, #8b6bff 50%, #ff6f9c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+	.card { top: 330px; width: 480px; height: 330px; border-radius: 22px; overflow: hidden; background: #111; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 40px 100px rgb(0 0 0 / 0.8), 0 0 80px rgb(59 139 255 / 0.15); }
+	.card img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; object-position: 0 0; transform-origin: 30% 30%; }
+	.lab { top: 690px; width: 480px; text-align: center; }
+	.lab b { display: block; font-size: 38px; font-weight: 700; letter-spacing: -0.025em; }
+	.lab span { display: block; margin-top: 6px; font-size: 24px; color: #a1a1a6; font-weight: 500; }
+	.chip { top: 860px; padding: 13px 26px; border-radius: 999px; background: rgb(28 28 30 / 0.92); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 14px 40px rgb(0 0 0 / 0.5); font-size: 27px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+	#mcp { box-shadow: 0 0 0 2px rgb(139 107 255 / 0.7), 0 0 50px rgb(139 107 255 / 0.25); }
+	#join { left: 540px; top: 470px; margin: -22px 0 0 -22px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: #0a6cff; font-size: 30px; font-weight: 700; box-shadow: 0 8px 30px rgb(10 108 255 / 0.6); }
+</style>
+</head>
+<body>
+<div id="glow" class="abs"></div>
+<div id="h" class="abs head">Debug traffic. Test APIs.<br><span class="grad">One native Mac app.</span></div>
+<div id="c1" class="abs card" style="left:40px"><img src="inspector-dark.jpg"></div>
+<div id="c2" class="abs card" style="left:560px"><img src="shots/composer.png"></div>
+<div id="l1" class="abs lab" style="left:40px"><b>Capture and debug</b><span>Every request, rules, breakpoints</span></div>
+<div id="l2" class="abs lab" style="left:560px"><b>Compose and test</b><span>Collections, environments, tests</span></div>
+<div id="join" class="abs">+</div>
+<div id="k1" class="abs chip" style="left:90px">Native</div>
+<div id="k2" class="abs chip" style="left:244px">Open source</div>
+<div id="k3" class="abs chip" style="left:480px">Claude connects via MCP</div>
+<script>
+window.DURATION = 5;
+function spring(t, response = 0.45, damping = 1) {
+	if (t <= 0) return 0;
+	const w = (2 * Math.PI) / response;
+	if (damping >= 1) return 1 - (1 + w * t) * Math.exp(-w * t);
+	const wd = w * Math.sqrt(1 - damping * damping);
+	return 1 - Math.exp(-damping * w * t) * (Math.cos(wd * t) + ((damping * w) / wd) * Math.sin(wd * t));
+}
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const $ = (id) => document.getElementById(id);
+function set(el, o, tf = '') { el.style.opacity = o.toFixed(3); el.style.transform = tf; el.style.visibility = o < 0.002 ? 'hidden' : 'visible'; }
+$('k3').style.boxShadow = '0 0 0 2px rgb(139 107 255 / 0.7), 0 0 50px rgb(139 107 255 / 0.25)';
+window.render = function (t) {
+	const h = spring(t - 0.1, 0.5);
+	set($('h'), clamp(h * 1.3), `translateY(${lerp(30, 0, h)}px)`);
+	[['c1', 0.45, -70, 'l1', 0.75], ['c2', 0.7, 70, 'l2', 1.0]].forEach(([id, a, dx, lid, la]) => {
+		const k = spring(t - a, 0.6, 0.82);
+		const drift = Math.max(0, t - 2.5) / 2.5; // slow push-in at the end
+		set($(id), clamp(k * 1.4), `translate(${lerp(dx, 0, k)}px, ${lerp(60, 0, k)}px) scale(${lerp(0.94, 1, k) + drift * 0.02})`);
+		$(id).firstChild.style.transform = `scale(${1 + drift * 0.08})`;
+		const lk = spring(t - la, 0.45);
+		set($(lid), clamp(lk * 1.4), `translateY(${lerp(20, 0, lk)}px)`);
+	});
+	const j = spring(t - 1.3, 0.4, 0.7);
+	set($('join'), clamp(j * 1.5), `scale(${lerp(0.4, 1, j)})`);
+	[['k1', 1.9], ['k2', 2.1], ['k3', 2.4]].forEach(([id, a]) => {
+		const k = spring(t - a, 0.45, 0.75);
+		set($(id), clamp(k * 1.4), `translateY(${lerp(30, 0, k)}px) scale(${lerp(0.9, 1, k)})`);
+	});
+	$('glow').style.transform = `scale(${lerp(1, 1.08, t / 5)})`;
+};
+window.render(0);
+</script>
+</body>
+</html>
