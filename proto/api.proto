@@ -70,6 +70,7 @@ message ClientMessage {
     ComposerConfigRequest composer_config = 72;
     ComposerGlobalsRequest composer_globals = 73;
     ComposerTransferRequest composer_transfer = 74;
+    ImportHarRequest import_har = 44;
   }
 }
 
@@ -95,6 +96,7 @@ message ServerMessage {
     SdkStatus sdk_status = 25;
     DevicesSnapshot devices = 26;
     OkResponse ok = 27;
+    ImportHarResponse imported_har = 28;
     FlowBatch batch = 30;
     Resync resync = 31;
     PauseNotice pause_notice = 32;
@@ -158,6 +160,8 @@ enum FlowState {
 // 256 edited        a rule or a breakpoint edit changed the request or response
 // 512 breakpoint    the flow was held at a breakpoint
 // 1024 replayed     sent again by the proxy
+// 16384 slow, 32768 possible duplicate, 65536 large payload,
+// 131072 missing cache headers, 262144 possible N+1, 524288 sensitive data.
 message FlowSummary {
   uint64 id = 1;
   int64 started_at_ms = 2;
@@ -187,6 +191,7 @@ message FlowSummary {
   string screen = 25;
   string route_template = 26;
   string client_stack = 27;
+  repeated string issue_labels = 28;
 }
 
 enum FlowSource {
@@ -320,6 +325,7 @@ message BodyView {
   string html_title = 14;
   repeated SourceLine source = 15;  // highlighted markup lines for HTML
   repeated SseEvent events = 16;
+  ProtocolView protocol = 17;
 }
 
 // parts bit mask for GetFlowRequest.
@@ -340,6 +346,8 @@ message FlowDetail {
   string curl = 6;
   BodyView request_body = 7;
   BodyView response_body = 8;
+  string dio = 30;
+  repeated string issues = 31;
   SdkContext sdk = 9;     // set for SDK and merged flows
   FlowDetail wire = 10;   // set for merged flows: what the proxy saw
 }
@@ -627,6 +635,7 @@ message Rule {
     RewriteAction rewrite = 12;
     ThrottleAction throttle = 13;
     BreakpointAction breakpoint = 14;
+    ScenarioAction scenario = 15;
   }
 }
 
@@ -1219,3 +1228,10 @@ message ComposerExport {
   string json = 1;
   string filename = 2;
 }
+message ImportHarRequest { bytes data = 1; }
+message ImportHarResponse { repeated uint64 ids = 1; uint32 count = 2; }
+
+message DecodedField { uint32 depth = 1; string label = 2; string value = 3; }
+message ProtocolView { string title = 1; repeated DecodedField fields = 2; string note = 3; }
+
+message ScenarioAction { uint32 fail_one_in = 1; uint32 delay_ms = 2; uint32 jitter_ms = 3; uint32 flaky_one_in = 4; }

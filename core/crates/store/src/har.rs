@@ -79,11 +79,12 @@ fn body_text(kind: Kind, content_type: &str, decoded: &[u8], redact_on: bool) ->
             } else if kind == Kind::Form {
                 redact::redact_pairs(&text)
             } else {
-                redact::redact_text(&text)
+                redact::redact_body_text(&text)
             };
             let _ = content_type;
             (text, false)
         }
+        _ if redact_on => ("binary body omitted from redacted export".into(), false),
         _ => (
             base64::engine::general_purpose::STANDARD.encode(decoded),
             true,

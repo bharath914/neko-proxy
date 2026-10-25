@@ -73,10 +73,16 @@ struct Fanout {
 
 impl FlowSink for Fanout {
     fn publish(&self, event: FlowEvent) {
-        if matches!(event, FlowEvent::Finished(_)) {
-            self.store.publish(event.clone());
+        // Live previews are announced by the store after persistence so the
+        // subscriber can immediately fetch their bodies.
+        if matches!(event, FlowEvent::Snapshot(_)) {
+            self.store.publish(event);
+            return;
         }
-        self.hub.publish(event);
+        self.hub.publish(event.clone());
+        if matches!(event, FlowEvent::Finished(_)) {
+            self.store.publish(event);
+        }
     }
 }
 
@@ -140,6 +146,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     let store = store::Store::open(&data_dir).context("opening the store")?;
     let ids = Arc::new(IdGen::starting_after(store.last_id().unwrap_or(0)));
     let hub = api::Hub::new();
+    store.set_analysis_sink(Arc::new(hub.clone()));
     let fanout = Fanout {
         hub: hub.clone(),
         store: store.clone(),
@@ -166,9 +173,16 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     };
     // The listener follows the remembered setting (on by default). `--sdk` forces it on for this run.
     if let Some(s) = &sdk {
-        let started = if args.sdk { s.set_enabled(true).await } else { s.start_saved().await };
+        let started = if args.sdk {
+            s.set_enabled(true).await
+        } else {
+            s.start_saved().await
+        };
         if let Err(e) = started {
-            tracing::warn!("could not start the SDK listener on port {}: {e}", args.sdk_port);
+            tracing::warn!(
+                "could not start the SDK listener on port {}: {e}",
+                args.sdk_port
+            );
         }
     }
     let sink = Arc::new(ProxySink {
@@ -183,10 +197,11 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     // change requests through the interceptor seam, breakpoints hold them at
     // the gate, and the SSL list decides which CONNECTs are decrypted.
     let rules = Arc::new(rules::RuleSet::load(&data_dir));
+    rules.watch();
     let mut chain = InterceptorChain::empty();
     chain.push_request(rules.clone());
     chain.push_response(rules.clone());
-    let proxy = net::Proxy::new(cfg, ca.clone(), sink, ids, chain);
+    let proxy = net::Proxy::new(cfg, ca.clone(), sink, ids.clone(), chain);
     proxy.set_connect_policy(rules.clone());
     proxy.set_gate(rules.clone());
     proxy.set_recording(!args.no_record);
@@ -220,6 +235,7 @@ pub async fn run(args: RunArgs, started: Instant) -> Result<()> {
     }
 
     let ctx = Arc::new(api::ApiContext {
+        ids: ids.clone(),
         store: store.clone(),
         hub,
         control: Arc::new(ProxyControl(proxy.clone())),

@@ -45,8 +45,14 @@ pub async fn serve(
         source,
     };
     if let Some(dir) = socket.parent() {
-        std::fs::create_dir_all(dir).map_err(sock_err)?;
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        use std::os::unix::fs::DirBuilderExt;
+        // Restrict directories we create without changing a caller's existing
+        // directory (which may be a shared runtime or temporary directory).
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+            .map_err(sock_err)?;
     }
     if socket.exists() {
         // A live socket means another core owns it; a dead one is stale.
@@ -425,6 +431,35 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
             }
         }
         Req::Export(r) => export(ctx, id, r).await,
+        Req::ImportHar(r) => {
+            let result = tokio::task::spawn_blocking(move || -> Result<Vec<u64>, String> {
+                let records = store::from_har(&r.data, &ctx.ids)?;
+                let ids = records.iter().map(|r| r.id).collect();
+                for chunk in records.chunks(32) {
+                    for record in chunk {
+                        flow::FlowSink::publish(
+                            &ctx.hub,
+                            flow::FlowEvent::Finished(record.clone()),
+                        );
+                        ctx.store.enqueue(record.clone());
+                    }
+                    ctx.store.flush();
+                }
+                Ok(ids)
+            })
+            .await;
+            match result {
+                Ok(Ok(ids)) => pb::ServerMessage {
+                    id,
+                    body: Some(Res::ImportedHar(pb::ImportHarResponse {
+                        count: ids.len() as u32,
+                        ids,
+                    })),
+                },
+                Ok(Err(e)) => error(id, "import_har", e),
+                Err(e) => error(id, "internal", e.to_string()),
+            }
+        }
         Req::Clear(_) => {
             let ctx2 = ctx.clone();
             match tokio::task::spawn_blocking(move || ctx2.store.clear()).await {
@@ -653,7 +688,9 @@ async fn handle(ctx: Arc<ApiContext>, id: u64, body: Req) -> pb::ServerMessage {
         Req::McpInfo(_) => mcp_info(&ctx, id),
         Req::SdkStatus(_) => pb::ServerMessage {
             id,
-            body: Some(Res::SdkStatus(crate::sdk_api::status(ctx.sdk.as_deref()).await)),
+            body: Some(Res::SdkStatus(
+                crate::sdk_api::status(ctx.sdk.as_deref()).await,
+            )),
         },
         Req::SdkSetEnabled(r) => {
             let Some(sdk) = &ctx.sdk else {
@@ -890,9 +927,13 @@ fn build_detail(rec: &flow::FlowRecord, parts: u32) -> pb::FlowDetail {
     let mut d = pb::FlowDetail {
         summary: Some(convert::summary(&rec.summary())),
         url: rec.url(),
+        issues: decode::issue_labels(rec.flags),
         ..Default::default()
     };
     if parts & PART_OVERVIEW != 0 {
+        if let Ok(a) = store::export("dio", &[Arc::new(rec.clone())], "") {
+            d.dio = String::from_utf8_lossy(&a.data).into_owned();
+        }
         d.request_headers = rec
             .req_headers
             .iter()
@@ -978,48 +1019,45 @@ async fn get_flow(ctx: Arc<ApiContext>, id: u64, r: pb::GetFlowRequest) -> pb::S
 }
 
 async fn export(ctx: Arc<ApiContext>, id: u64, r: pb::ExportRequest) -> pb::ServerMessage {
-    if !r.kind.is_empty() && r.kind != "har" {
-        return error(
-            id,
-            "unsupported",
-            format!("unknown export kind {:?}", r.kind),
-        );
-    }
     let q = to_query(r.filter.as_ref(), 0, 0);
-    let redact = r.redact;
+    let kind = r.kind.clone();
     let ctx2 = ctx.clone();
-    let res = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u32), String> {
+    let res = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u32, String), String> {
         let ids = if r.ids.is_empty() {
             ctx2.store.ids(&q, 100_000).map_err(|e| e.to_string())?
         } else {
             r.ids.clone()
         };
+        if ids.len() > 10_000 {
+            return Err("export limited to 10,000 flows".into());
+        }
+        let mut total = 0usize;
         let mut recs = Vec::with_capacity(ids.len());
         for id in ids {
             if let Some(rec) = ctx2.store.get(id).map_err(|e| e.to_string())? {
+                total += store::export_weight(&rec);
+                if total > 32 * 1024 * 1024 {
+                    return Err("export source data exceeds 32 MiB".into());
+                }
                 recs.push(rec);
             }
         }
-        let har = store::to_har(&recs, redact, &ctx2.info.version);
-        let count = har["log"]["entries"]
-            .as_array()
-            .map(|a| a.len())
-            .unwrap_or(0) as u32;
-        let bytes = serde_json::to_vec_pretty(&har).map_err(|e| e.to_string())?;
-        Ok((bytes, count))
+        let artifact = store::export(&kind, &recs, &ctx2.info.version)?;
+        Ok((artifact.data, artifact.count, artifact.extension.into()))
     })
     .await;
     match res {
-        Ok(Ok((data, count))) => {
+        Ok(Ok((data, count, extension))) => {
             let now = time::OffsetDateTime::now_utc();
             let filename = format!(
-                "proxy-{:04}{:02}{:02}-{:02}{:02}{:02}.har",
+                "proxy-{:04}{:02}{:02}-{:02}{:02}{:02}.{}",
                 now.year(),
                 u8::from(now.month()),
                 now.day(),
                 now.hour(),
                 now.minute(),
-                now.second()
+                now.second(),
+                extension
             );
             pb::ServerMessage {
                 id,

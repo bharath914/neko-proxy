@@ -24,9 +24,10 @@ use flow::{
     RequestInterceptor, ResponseInterceptor, Retarget, Ticket, Verdict,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 /// Largest file a rule may serve.
 pub const MAX_MAPPED_BYTES: u64 = 32 * 1024 * 1024;
@@ -130,6 +131,8 @@ pub struct RuleSet {
     path: Option<PathBuf>,
     next: AtomicU64,
     pauses: Pauses,
+    scenario_counts: Mutex<HashMap<String, u64>>,
+    revision: AtomicU64,
 }
 
 impl RuleSet {
@@ -140,24 +143,37 @@ impl RuleSet {
             path: None,
             next: AtomicU64::new(1),
             pauses: Pauses::default(),
+            scenario_counts: Mutex::new(HashMap::new()),
+            revision: AtomicU64::new(0),
         }
     }
 
     /// Load `rules.json` from `dir`; a missing or unreadable file starts empty
     /// (an unreadable one is kept aside as `rules.json.bad`, never overwritten).
     pub fn load(dir: &Path) -> RuleSet {
-        let path = dir.join("rules.json");
+        let path = if dir.join("rules.yaml").exists() {
+            dir.join("rules.yaml")
+        } else {
+            dir.join("rules.json")
+        };
         let mut state = State::default();
-        match std::fs::read(&path) {
-            Ok(bytes) => match serde_json::from_slice::<State>(&bytes) {
+        match read_rule_file(&path) {
+            Ok(bytes) => match serde_yaml_ng::from_slice::<State>(&bytes) {
                 Ok(s) => state = s,
                 Err(e) => {
-                    tracing::warn!("{} is not valid ({e}); starting with no rules", path.display());
+                    tracing::warn!(
+                        "{} is not valid ({e}); starting with no rules",
+                        path.display()
+                    );
                     let _ = std::fs::rename(&path, dir.join("rules.json.bad"));
                 }
             },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => tracing::warn!("could not read {}: {e}", path.display()),
+        }
+        if state.rules.len() > 1024 || state.rules.iter_mut().any(|r| r.validate().is_err()) {
+            tracing::warn!("invalid rule configuration; starting empty");
+            state = State::default();
         }
         let num = |id: &str| id.strip_prefix('r').and_then(|n| n.parse::<u64>().ok());
         let mut max = state
@@ -183,6 +199,8 @@ impl RuleSet {
             path: Some(path),
             next: AtomicU64::new(max + 1),
             pauses: Pauses::default(),
+            scenario_counts: Mutex::new(HashMap::new()),
+            revision: AtomicU64::new(0),
         }
     }
 
@@ -190,12 +208,14 @@ impl RuleSet {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        let json = serde_json::to_vec_pretty(state)
-            .map_err(|e| RulesError::Invalid(e.to_string()))?;
+        let json =
+            serde_json::to_vec_pretty(state).map_err(|e| RulesError::Invalid(e.to_string()))?;
         // Write beside the target and rename, so a crash never leaves half a file.
         let tmp = path.with_extension("json.tmp");
         std::fs::write(&tmp, json).map_err(RulesError::Io)?;
-        std::fs::rename(&tmp, path).map_err(RulesError::Io)
+        std::fs::rename(&tmp, path).map_err(RulesError::Io)?;
+        self.revision.fetch_add(1, Ordering::Relaxed);
+        Ok(())
     }
 
     pub fn ssl(&self) -> SslSettings {
@@ -318,6 +338,10 @@ impl RuleSet {
     pub fn put_rule(&self, mut rule: Rule) -> Result<Rule, RulesError> {
         rule.validate().map_err(RulesError::Invalid)?;
         let mut st = self.state.write().unwrap();
+        if st.rules.len() >= 1024 && !st.rules.iter().any(|r| r.id == rule.id) {
+            return Err(RulesError::Invalid("rule limit reached".into()));
+        }
+
         if rule.id.is_empty() {
             rule.id = format!("r{}", self.next.fetch_add(1, Ordering::Relaxed));
         } else if st.map_local.iter().any(|r| r.id == rule.id) {
@@ -396,13 +420,7 @@ impl RuleSet {
         st.map_local
             .iter()
             .filter(|r| r.enabled && rule_matches(r, host, port, path, query))
-            .max_by_key(|r| {
-                (
-                    !r.path.ends_with('*'),
-                    !r.query.is_empty(),
-                    r.path.len(),
-                )
-            })
+            .max_by_key(|r| (!r.path.ends_with('*'), !r.query.is_empty(), r.path.len()))
             .cloned()
     }
 }
@@ -490,7 +508,9 @@ impl RequestInterceptor for RuleSet {
                     continue;
                 }
                 match &r.action {
-                    Action::Rewrite { request_headers, .. } => {
+                    Action::Rewrite {
+                        request_headers, ..
+                    } => {
                         edited |= apply_header_edits(&mut parts.headers, request_headers);
                     }
                     Action::MapRemote { scheme, host, port } if retarget.is_none() => {
@@ -503,6 +523,45 @@ impl RequestInterceptor for RuleSet {
                             host: (!host.is_empty()).then(|| host.clone()),
                             port: (*port != 0).then_some(*port),
                         });
+                    }
+                    Action::Scenario {
+                        fail_one_in,
+                        delay_ms,
+                        jitter_ms,
+                        flaky_one_in,
+                    } => {
+                        let count = {
+                            let mut counts = self.scenario_counts.lock().unwrap();
+                            if counts.len() >= 1024 && !counts.contains_key(&r.id) {
+                                counts.clear();
+                            }
+                            let count = counts.entry(r.id.clone()).or_default();
+                            *count = count.wrapping_add(1);
+                            *count
+                        };
+                        // SplitMix64: reproducible pseudo-random jitter, no shared RNG lock.
+                        let mut random =
+                            count.wrapping_add(flow.id).wrapping_add(0x9e3779b97f4a7c15);
+                        random = (random ^ (random >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+                        random = (random ^ (random >> 27)).wrapping_mul(0x94d049bb133111eb);
+                        random ^= random >> 31;
+                        let jitter = (random % (*jitter_ms as u64 + 1)) as u32;
+                        delay = delay.max(delay_ms.saturating_add(jitter).min(MAX_DELAY_MS));
+                        let flaky =
+                            *flaky_one_in > 0 && random.rotate_left(23) % *flaky_one_in as u64 == 0;
+                        let fail = *fail_one_in > 0 && count % *fail_one_in as u64 == 0;
+                        if mock.is_none() && (fail || flaky) {
+                            mock = http::Response::builder()
+                                .status(if flaky { 502 } else { 503 })
+                                .header("x-neko-scenario", r.id.as_str())
+                                .header("content-type", "text/plain")
+                                .body(Bytes::from_static(if flaky {
+                                    b"Simulated flaky upstream network"
+                                } else {
+                                    b"Simulated scenario failure"
+                                }))
+                                .ok();
+                        }
                     }
                     Action::Throttle { delay_ms } => delay = delay.max(*delay_ms),
                     Action::Mock {
@@ -579,7 +638,8 @@ impl RequestInterceptor for RuleSet {
 /// JSON when the body parses as JSON, otherwise plain text.
 fn mock_content_type(body: &str) -> &'static str {
     let t = body.trim_start();
-    if (t.starts_with('{') || t.starts_with('[')) && serde_json::from_str::<serde_json::Value>(body).is_ok()
+    if (t.starts_with('{') || t.starts_with('['))
+        && serde_json::from_str::<serde_json::Value>(body).is_ok()
     {
         "application/json"
     } else {
@@ -596,7 +656,10 @@ impl ResponseInterceptor for RuleSet {
         let (path, query) = split_path(&flow.path);
         let host = flow.host.to_ascii_lowercase();
         for r in st.rules.iter().filter(|r| r.enabled) {
-            if let Action::Rewrite { response_headers, .. } = &r.action {
+            if let Action::Rewrite {
+                response_headers, ..
+            } = &r.action
+            {
                 if r.matcher
                     .matches(&flow.scheme, &host, flow.port, &flow.method, path, query)
                 {
@@ -608,11 +671,7 @@ impl ResponseInterceptor for RuleSet {
 }
 
 impl RuleSet {
-    fn breakpoint_ticket(
-        &self,
-        flow: &FlowSummary,
-        want: Phase,
-    ) -> Option<Ticket> {
+    fn breakpoint_ticket(&self, flow: &FlowSummary, want: Phase) -> Option<Ticket> {
         let st = self.state.read().unwrap();
         let (path, query) = split_path(&flow.path);
         let host = flow.host.to_ascii_lowercase();
@@ -654,7 +713,11 @@ impl Gate for RuleSet {
         self.breakpoint_ticket(flow, Phase::Request)
     }
 
-    fn response_ticket(&self, flow: &FlowSummary, _parts: &http::response::Parts) -> Option<Ticket> {
+    fn response_ticket(
+        &self,
+        flow: &FlowSummary,
+        _parts: &http::response::Parts,
+    ) -> Option<Ticket> {
         if self.state.read().unwrap().rules.is_empty() {
             return None;
         }
@@ -856,7 +919,8 @@ mod tests {
     #[test]
     fn missing_file_is_loud() {
         let r = RuleSet::in_memory();
-        r.put_map_local(rule(Path::new("/no/such/file.json"))).unwrap();
+        r.put_map_local(rule(Path::new("/no/such/file.json")))
+            .unwrap();
         let mut p = parts("/v1/me");
         let Intercept::Respond(res) = r.on_request(&summary("api.example.com", 443), &mut p) else {
             panic!()
@@ -930,6 +994,33 @@ mod tests {
     }
 
     #[test]
+    fn scenario_frequency_jitter_and_yaml_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("rules.yaml");
+        std::fs::write(&file, "rules:\n  - id: r20\n    match: {host: api.example.com}\n    action: {type: scenario, fail_one_in: 3, delay_ms: 10, jitter_ms: 20}\n").unwrap();
+        let r = RuleSet::load(dir.path());
+        let mut previous = Vec::new();
+        assert!(r.reload_if_changed(&mut previous).unwrap());
+        let mut failures = 0;
+        for _ in 0..9 {
+            let mut p = parts("/");
+            if let Intercept::Respond(res) = r.on_request(&summary("api.example.com", 443), &mut p)
+            {
+                assert_eq!(res.status(), 503);
+                failures += 1;
+            }
+            let delay = p.extensions.get::<Delay>().unwrap().0.as_millis();
+            assert!((10..=30).contains(&delay));
+        }
+        assert_eq!(failures, 3);
+        std::fs::write(&file, "rules: [invalid").unwrap();
+        assert!(r.reload_if_changed(&mut previous).is_err());
+        assert_eq!(r.rules().len(), 1);
+        std::fs::write(&file, "rules: []").unwrap();
+        assert!(r.reload_if_changed(&mut previous).unwrap());
+        assert!(r.rules().is_empty());
+    }
+    #[test]
     fn mock_answers_and_beats_map_local() {
         let r = RuleSet::in_memory();
         put(
@@ -987,7 +1078,11 @@ mod tests {
                 port: 3000,
             },
         );
-        put(&r, m("api.example.com", ""), Action::Throttle { delay_ms: 800 });
+        put(
+            &r,
+            m("api.example.com", ""),
+            Action::Throttle { delay_ms: 800 },
+        );
 
         let mut p = parts("/v1/me");
         let out = r.on_request(&summary("api.example.com", 443), &mut p);
@@ -1023,9 +1118,7 @@ mod tests {
     fn disabled_rules_do_nothing_and_ids_are_shared() {
         let r = RuleSet::in_memory();
         let a = put(&r, m("a.test", ""), Action::Throttle { delay_ms: 10 });
-        let b = r
-            .put_map_local(rule(Path::new("/f.json")))
-            .unwrap();
+        let b = r.put_map_local(rule(Path::new("/f.json"))).unwrap();
         assert_ne!(a.id, b.id);
         assert!(r.set_enabled(&a.id, false).unwrap());
         assert!(!r.set_enabled("nope", false).unwrap());
@@ -1089,9 +1182,8 @@ mod tests {
         let mut events = r.pauses().subscribe();
         let r2 = r.clone();
         let f2 = flow.clone();
-        let task = tokio::spawn(async move {
-            r2.hold(&f2, Phase::Request, ticket, held_request()).await
-        });
+        let task =
+            tokio::spawn(async move { r2.hold(&f2, Phase::Request, ticket, held_request()).await });
         let PauseEvent::Paused(pf) = events.recv().await.unwrap() else {
             panic!("expected a pause")
         };
@@ -1155,5 +1247,83 @@ mod tests {
         task.abort();
         let _ = task.await;
         assert!(pauses.list().is_empty());
+    }
+}
+
+fn read_rule_file(path: &Path) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(8 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err(std::io::Error::other("rule file exceeds 8 MiB"));
+    }
+    Ok(bytes)
+}
+impl RuleSet {
+    /// Poll on a blocking worker; never parse files on the capture path.
+    pub fn reload_if_changed(&self, previous: &mut Vec<u8>) -> Result<bool, RulesError> {
+        let Some(path) = &self.path else {
+            return Ok(false);
+        };
+        let revision = self.revision.load(Ordering::Relaxed);
+        let bytes = read_rule_file(path).map_err(RulesError::Io)?;
+        if bytes == *previous {
+            return Ok(false);
+        }
+        let mut state: State =
+            serde_yaml_ng::from_slice(&bytes).map_err(|e| RulesError::Invalid(e.to_string()))?;
+        if state.rules.len() > 1024 {
+            return Err(RulesError::Invalid("rule limit reached".into()));
+        }
+        let mut ids = std::collections::HashSet::new();
+        for rule in &mut state.rules {
+            rule.validate().map_err(RulesError::Invalid)?;
+            if rule.id.is_empty() {
+                rule.id = format!("r{}", self.next.fetch_add(1, Ordering::Relaxed));
+            }
+            if !ids.insert(rule.id.clone()) {
+                return Err(RulesError::Invalid("duplicate rule ID".into()));
+            }
+        }
+        let mut current = self.state.write().unwrap();
+        if revision != self.revision.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
+        for id in &ids {
+            if let Some(n) = id.strip_prefix('r').and_then(|s| s.parse::<u64>().ok()) {
+                self.next.fetch_max(n.saturating_add(1), Ordering::Relaxed);
+            }
+        }
+        *current = state;
+        *previous = bytes;
+        Ok(true)
+    }
+    pub fn watch(self: &std::sync::Arc<Self>) {
+        let weak = std::sync::Arc::downgrade(self);
+        tokio::spawn(async move {
+            let mut previous = Vec::new();
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let Some(rules) = weak.upgrade() else {
+                    break;
+                };
+                let result = tokio::task::spawn_blocking(move || {
+                    let result = rules.reload_if_changed(&mut previous);
+                    (previous, result)
+                })
+                .await;
+                match result {
+                    Ok((bytes, result)) => {
+                        previous = bytes;
+                        if let Err(e) = result {
+                            tracing::debug!("rules reload: {e}");
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
     }
 }

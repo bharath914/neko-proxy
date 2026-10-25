@@ -164,8 +164,7 @@ async fn manage(
                         }
                     } else if attempt >= 3 {
                         emit(Event::Conn(ConnState::Failed(
-                            "nekod was not found and nothing is listening on the API socket"
-                                .into(),
+                            "nekod was not found and nothing is listening on the API socket".into(),
                         )));
                     }
                 }
@@ -988,6 +987,8 @@ fn demo_proxy_flow(id: u64) -> pb::FlowDetail {
     };
     let url = format!("https://{h}{p}");
     pb::FlowDetail {
+        dio: String::new(),
+        issues: Vec::new(),
         curl: format!("curl \\\n  '{url}' \\\n  -H 'Accept: application/json' \\\n  -H 'User-Agent: okhttp/4.12.0' \\\n  --compressed"),
         url,
         request_headers: vec![
@@ -1195,7 +1196,13 @@ fn demo_checks(s: &DemoState) -> Vec<pb::SdkCheck> {
         )];
     }
     let mut v = vec![
-        c("listener", "ok", "Accepting SDK connections", "Listening on port 8897.", ""),
+        c(
+            "listener",
+            "ok",
+            "Accepting SDK connections",
+            "Listening on port 8897.",
+            "",
+        ),
         c(
             "auto-accept",
             if s.sdk_auto_accept { "ok" } else { "info" },
@@ -1480,6 +1487,10 @@ impl Backend for DemoBackend {
                 pem: String::new(),
                 key_storage: "keyring".into(),
                 spki_sha256: "qYb1x1vQ0n6y1p2x0cV3m3o1f9wq3b3m1k1F5pQ0v9k=".into(),
+            }),
+            Req::ImportHar(_) => Res::Error(pb::ErrorResponse {
+                code: "demo".into(),
+                message: "Import requires a running core".into(),
             }),
             Req::Export(_) => Res::Export(pb::ExportResponse {
                 data: b"{\"log\":{\"version\":\"1.2\",\"entries\":[]}}".to_vec(),
@@ -1774,11 +1785,8 @@ mod e2e {
         let dir = std::env::temp_dir().join(format!("neko-e2e-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let socket = PathBuf::from(format!(
-            "/run/user/{}/neko-e2e-{}/api.sock",
-            unsafe { libc::getuid() },
-            std::process::id()
-        ));
+        // Keep the Unix socket short and writable on both Linux and macOS.
+        let socket = PathBuf::from(format!("/tmp/neko-e2e-{}/api.sock", std::process::id()));
         std::env::set_var("NEKO_DATA_DIR", &dir);
 
         // A tiny origin.
@@ -1818,7 +1826,15 @@ mod e2e {
         });
 
         let status = std::process::Command::new("curl")
-            .args(["-s", "-o", "/dev/null", "-x", &format!("http://{listen}")])
+            .args([
+                "-s",
+                "--noproxy",
+                "",
+                "-o",
+                "/dev/null",
+                "-x",
+                &format!("http://{listen}"),
+            ])
             .arg(format!("http://127.0.0.1:{origin_port}/hello?x=1"))
             .status()
             .unwrap();
@@ -1860,5 +1876,6 @@ mod e2e {
 
         drop(be);
         let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(socket.parent().unwrap());
     }
 }

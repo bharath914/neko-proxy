@@ -184,11 +184,7 @@ struct Collected {
 }
 
 /// Read a whole body, up to `cap`, and undo content encoding when possible.
-async fn collect_for_hold<B>(
-    body: B,
-    headers: &HeaderMap,
-    cap: usize,
-) -> Result<Collected, String>
+async fn collect_for_hold<B>(body: B, headers: &HeaderMap, cap: usize) -> Result<Collected, String>
 where
     B: hyper::body::Body<Data = Bytes> + Unpin,
     B::Error: Into<BoxError>,
@@ -314,7 +310,10 @@ impl Inner {
         }
         let method = Method::from_bytes(r.method.trim().to_ascii_uppercase().as_bytes())
             .map_err(|_| format!("\"{}\" is not an HTTP method", r.method))?;
-        let uri: Uri = r.url.parse().map_err(|_| format!("\"{}\" is not a URL", r.url))?;
+        let uri: Uri = r
+            .url
+            .parse()
+            .map_err(|_| format!("\"{}\" is not a URL", r.url))?;
         if uri.scheme().is_none() {
             return Err("the URL must start with http:// or https://".into());
         }
@@ -366,11 +365,9 @@ impl Inner {
             m
         })?;
         flow.dispatched();
-        let sent = tokio::time::timeout(
-            std::time::Duration::from_secs(60),
-            self.client.request(req),
-        )
-        .await;
+        let sent =
+            tokio::time::timeout(std::time::Duration::from_secs(60), self.client.request(req))
+                .await;
         let res = match sent {
             Ok(Ok(res)) => res,
             Ok(Err(e)) => {
@@ -387,17 +384,16 @@ impl Inner {
         let status = res.status().as_u16();
         let summary = flow.summary();
         let flow_id = summary.id;
-        let forwarded = self.forward_response(Some(flow.clone()), summary, res).await;
+        let forwarded = self
+            .forward_response(Some(flow.clone()), summary, res)
+            .await;
         // Drain the body so the flow finishes with everything captured.
         let _ = tokio::time::timeout(
             std::time::Duration::from_secs(60),
             forwarded.into_body().collect(),
         )
         .await;
-        Ok(crate::ReplayOutcome {
-            flow_id,
-            status,
-        })
+        Ok(crate::ReplayOutcome { flow_id, status })
     }
 
     fn is_self(&self, t: &Target, kind: &ConnKind) -> bool {
@@ -626,9 +622,7 @@ impl Inner {
 
         let req_body: ProxyBody = match (held_body, body, &flow) {
             (Some(b), _, _) => full(b),
-            (None, Some(body), Some(f)) => {
-                Tee::new(body, f.req_cap.clone(), |_| {}).boxed_unsync()
-            }
+            (None, Some(body), Some(f)) => Tee::new(body, f.req_cap.clone(), |_| {}).boxed_unsync(),
             (None, Some(body), None) => body.map_err(|e| Box::new(e) as BoxError).boxed_unsync(),
             (None, None, _) => empty(),
         };
@@ -758,6 +752,20 @@ impl Inner {
                 claimed.map(|i| &**i),
                 ws | extra,
             );
+            if parts
+                .headers
+                .get(CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|ct| {
+                    ct.split(';')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .eq_ignore_ascii_case("text/event-stream")
+                })
+            {
+                f.start_event_snapshots();
+            }
         }
         strip_hop_by_hop(&mut parts.headers, false);
         let body: ProxyBody = match (held_body, body, flow) {
@@ -851,7 +859,9 @@ impl Inner {
             let (mut rparts, body) = res.into_parts();
             rparts.extensions.insert(info);
             let summary = summary_for(&target, &Method::GET);
-            return self.forward_response(flow, summary, Response::from_parts(rparts, body)).await;
+            return self
+                .forward_response(flow, summary, Response::from_parts(rparts, body))
+                .await;
         }
 
         let on_upstream = hyper::upgrade::on(&mut res);

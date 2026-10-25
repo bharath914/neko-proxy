@@ -132,7 +132,10 @@ fn ct_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.bytes()
+        .zip(b.bytes())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 fn loopback_host(h: &str, port: u16) -> bool {
@@ -167,9 +170,14 @@ async fn handle(state: Arc<State>, req: Request<Incoming>) -> Response<Full<Byte
         .map(|t| ct_eq(t.trim(), &state.token))
         .unwrap_or(false);
     if !authed {
-        let mut r = reply(StatusCode::UNAUTHORIZED, r#"{"error":"missing or wrong token"}"#);
-        r.headers_mut()
-            .insert(header::WWW_AUTHENTICATE, "Bearer".parse().expect("static header"));
+        let mut r = reply(
+            StatusCode::UNAUTHORIZED,
+            r#"{"error":"missing or wrong token"}"#,
+        );
+        r.headers_mut().insert(
+            header::WWW_AUTHENTICATE,
+            "Bearer".parse().expect("static header"),
+        );
         return r;
     }
     if req.method() != Method::POST {
@@ -182,16 +190,15 @@ async fn handle(state: Arc<State>, req: Request<Incoming>) -> Response<Full<Byte
         Ok(b) => b.to_bytes(),
         Err(_) => return reply(StatusCode::PAYLOAD_TOO_LARGE, r#"{"error":"too large"}"#),
     };
-    let msg: Value = match serde_json::from_slice(&body) {
-        Ok(v) => v,
-        Err(_) => {
-            return reply(
+    let msg: Value =
+        match serde_json::from_slice(&body) {
+            Ok(v) => v,
+            Err(_) => return reply(
                 StatusCode::BAD_REQUEST,
                 json!({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"parse error"}})
                     .to_string(),
-            )
-        }
-    };
+            ),
+        };
     // A batch answers with a batch; notifications alone get 202.
     let out = match msg {
         Value::Array(items) => {
@@ -238,7 +245,10 @@ async fn rpc(state: &State, msg: Value) -> Option<Value> {
                 .get("protocolVersion")
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let version = PROTOCOLS.iter().find(|v| **v == asked).unwrap_or(&PROTOCOLS[0]);
+            let version = PROTOCOLS
+                .iter()
+                .find(|v| **v == asked)
+                .unwrap_or(&PROTOCOLS[0]);
             json!({
                 "protocolVersion": version,
                 "capabilities": {"tools": {"listChanged": false}},
@@ -250,14 +260,17 @@ async fn rpc(state: &State, msg: Value) -> Option<Value> {
         "tools/list" => json!({"tools": tools::definitions()}),
         "tools/call" => {
             let name = params.get("name").and_then(Value::as_str).unwrap_or("");
-            let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            let args = params
+                .get("arguments")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
             match tools::call(&state.ctx, name, args).await {
                 Ok(text) => json!({"content":[{"type":"text","text":text}]}),
                 Err(tools::ToolError::Unknown) => {
                     return Some(rpc_error(id, -32602, &format!("unknown tool {name}")))
                 }
                 Err(tools::ToolError::Failed(msg)) => {
-                    json!({"content":[{"type":"text","text":msg}],"isError":true})
+                    json!({"content":[{"type":"text","text":decode::redact::redact_text(&msg)}],"isError":true})
                 }
             }
         }

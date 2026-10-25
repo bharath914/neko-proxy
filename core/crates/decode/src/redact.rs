@@ -24,7 +24,7 @@ pub fn is_sensitive_header(name: &str) -> bool {
 
 /// Field names (JSON keys, form fields, query params) that carry secrets.
 pub fn is_sensitive_key(key: &str) -> bool {
-    let k = key.to_ascii_lowercase().replace(['-', '.'], "_");
+    let k = key.to_ascii_lowercase().replace(['-', '.', ' '], "_");
     [
         "password",
         "passwd",
@@ -104,7 +104,12 @@ pub fn redact_text(s: &str) -> String {
         if *after_scheme || looks_like_secret(token) {
             out.push_str(MASK);
         } else {
-            out.push_str(token);
+            for (i, part) in token.split('/').enumerate() {
+                if i > 0 {
+                    out.push('/');
+                }
+                out.push_str(if looks_like_secret(part) { MASK } else { part });
+            }
         }
         *after_scheme = token.eq_ignore_ascii_case("bearer") || token.eq_ignore_ascii_case("basic");
         token.clear();
@@ -140,7 +145,12 @@ pub fn redact_pairs(s: &str) -> String {
         .map(|p| match p.split_once('=') {
             Some((k, v)) => {
                 let name = k.replace('+', " ");
-                if is_sensitive_key(&name) || looks_like_secret(v) {
+                let name = percent_encoding::percent_decode_str(&name).decode_utf8_lossy();
+                let value = percent_encoding::percent_decode_str(v).decode_utf8_lossy();
+                if is_sensitive_header(&name)
+                    || looks_like_secret(&value)
+                    || redact_text(&value) != value
+                {
                     format!("{k}={MASK}")
                 } else {
                     format!("{k}={v}")
@@ -153,31 +163,120 @@ pub fn redact_pairs(s: &str) -> String {
 }
 
 pub fn redact_json_value(v: &mut Value) {
+    redact_value(v, 0);
+}
+fn redact_value(v: &mut Value, depth: usize) {
+    if depth > 32 {
+        *v = Value::String(MASK.into());
+        return;
+    }
     match v {
         Value::Object(map) => {
+            let sensitive_header = map
+                .get("name")
+                .or_else(|| map.get("key"))
+                .and_then(Value::as_str)
+                .is_some_and(is_sensitive_header);
+            if sensitive_header && map.contains_key("value") {
+                map.insert("value".into(), Value::String(MASK.into()));
+            }
             for (k, item) in map.iter_mut() {
-                if is_sensitive_key(k) && !item.is_object() && !item.is_array() && !item.is_null() {
+                if k.eq_ignore_ascii_case("cookies") && item.is_array() {
+                    for cookie in item.as_array_mut().unwrap() {
+                        if let Some(fields) = cookie.as_object_mut() {
+                            fields.insert("value".into(), Value::String(MASK.into()));
+                        } else {
+                            *cookie = Value::String(MASK.into());
+                        }
+                    }
+                    continue;
+                }
+                if is_sensitive_header(k) && !item.is_null() {
                     *item = Value::String(MASK.into());
+                } else if matches!(k.as_str(), "body" | "text" | "raw") && item.is_string() {
+                    let text = item.as_str().unwrap();
+                    let redacted = if let Ok(mut embedded) = serde_json::from_str::<Value>(text) {
+                        redact_value(&mut embedded, depth + 1);
+                        embedded.to_string()
+                    } else {
+                        redact_body_text(text)
+                    };
+                    *item = Value::String(redacted);
+                } else if k == "query" && item.is_string() {
+                    *item = Value::String(redact_text(&redact_pairs(item.as_str().unwrap())));
                 } else {
-                    redact_json_value(item);
+                    redact_value(item, depth + 1);
                 }
             }
         }
-        Value::Array(items) => items.iter_mut().for_each(redact_json_value),
-        Value::String(s) if looks_like_secret(s) => *s = MASK.into(),
+        Value::Array(items) => {
+            if items.len() == 2 && items[0].as_str().is_some_and(is_sensitive_header) {
+                items[1] = Value::String(MASK.into());
+            }
+            for item in items {
+                redact_value(item, depth + 1);
+            }
+        }
+        Value::String(s) => {
+            let text = if (s.starts_with("http://") || s.starts_with("https://"))
+                && !s.chars().any(char::is_whitespace)
+            {
+                s.split_once('?')
+                    .map(|(path, q)| format!("{path}?{}", redact_pairs(q)))
+                    .unwrap_or_else(|| s.clone())
+            } else {
+                s.clone()
+            };
+            *s = redact_text(&text);
+        }
         _ => {}
     }
 }
 
+/// Redact captured text, including malformed JSON and event-stream data.
+/// This is separate from metadata/code strings so generated schemas stay valid.
+pub fn redact_body_text(text: &str) -> String {
+    let trimmed = text.trim_start();
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        return redact_json_text(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let newline = if line.ends_with('\n') { "\n" } else { "" };
+        if let Some((key, value)) = line.trim_end_matches(['\r', '\n']).split_once(':') {
+            if is_sensitive_header(key.trim().trim_matches(['\"', '\''])) {
+                out.push_str(&format!("{key}: {MASK}{newline}"));
+                continue;
+            }
+            if key.trim() == "data" {
+                let data = value.trim_start();
+                if data.starts_with('{') || data.starts_with('[') {
+                    out.push_str(&format!("{key}: {}{newline}", redact_json_text(data)));
+                    continue;
+                }
+                if let Some((field, _)) = data.split_once(':').or_else(|| data.split_once('=')) {
+                    if is_sensitive_header(field.trim().trim_matches(['\"', '\''])) {
+                        out.push_str(&format!("{key}: {MASK}{newline}"));
+                        continue;
+                    }
+                }
+            }
+        }
+        out.push_str(line);
+    }
+    redact_text(&redact_pairs(&out))
+}
+
 /// Redact a JSON document, keeping its shape. Non-JSON text falls back to
-/// token scrubbing.
+/// conservative body redaction.
 pub fn redact_json_text(text: &str) -> String {
     match serde_json::from_str::<Value>(text) {
         Ok(mut v) => {
             redact_json_value(&mut v);
             serde_json::to_string(&v).unwrap_or_else(|_| redact_text(text))
         }
-        Err(_) => redact_text(text),
+        Err(_) if text.trim_start().starts_with(['{', '[']) => MASK.into(),
+        Err(_) => redact_body_text(text),
     }
 }
 
@@ -237,5 +336,61 @@ mod tests {
             redact_pairs("q=charger&access_token=abc&page=2"),
             format!("q=charger&access_token={MASK}&page=2")
         );
+    }
+}
+
+#[cfg(test)]
+mod structured_tests {
+    use super::*;
+    #[test]
+    fn encoded_keys_headers_and_embedded_json() {
+        assert_eq!(
+            redact_pairs("%61pi_key=short&ok=1"),
+            format!("%61pi_key={MASK}&ok=1")
+        );
+        let mut v = serde_json::json!({"headers":[["Cookie","short-cookie"]],"header":{"key":"X-Api-Key","value":"short-key"},"body":"{\"password\":{\"nested\":\"short-password\"}}","url":"https://api.test/sk-abcdefghijklmnopqrstuvwxyz?token=short-query"});
+        redact_json_value(&mut v);
+        let text = v.to_string();
+        for secret in [
+            "short-cookie",
+            "short-key",
+            "short-password",
+            "short-query",
+            "sk-abcdefghijklmnopqrstuvwxyz",
+        ] {
+            assert!(!text.contains(secret), "{text}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod partial_body_tests {
+    use super::*;
+    #[test]
+    fn malformed_json_and_sse_do_not_expose_short_secrets() {
+        for body in [
+            "{\"password\":\"tiny-secret",
+            "api_key=tiny-secret",
+            "Cookie: a=tiny-secret; b=also-secret",
+            "data: {\"api_key\":\"tiny-secret\"}\n\n",
+        ] {
+            let result = redact_body_text(body);
+            assert!(!result.contains("tiny-secret"), "{result}");
+            assert!(!result.contains("also-secret"), "{result}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod cookie_body_tests {
+    use super::*;
+    #[test]
+    fn cookie_representations_keep_structure_without_values() {
+        assert!(!redact_pairs("Cookie=short-cookie").contains("short-cookie"));
+        assert!(!redact_body_text("data: Cookie=short-cookie\n\n").contains("short-cookie"));
+        let mut value = serde_json::json!({"cookies":[{"name":"sid","value":"short-cookie"}]});
+        redact_json_value(&mut value);
+        assert!(value["cookies"].is_array());
+        assert_eq!(value["cookies"][0]["value"], MASK);
     }
 }

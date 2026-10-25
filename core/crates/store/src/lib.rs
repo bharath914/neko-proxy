@@ -2,6 +2,7 @@
 //! zstd blobs next to it. Writes happen on one dedicated thread so the data
 //! path only ever pushes onto a queue.
 
+mod audit;
 mod blobs;
 mod har;
 mod query;
@@ -73,6 +74,8 @@ struct Shared {
     blobs: BlobStore,
     pending: Mutex<HashMap<FlowId, Arc<FlowRecord>>>,
     reader: Mutex<Connection>,
+    audit: Mutex<audit::Audit>,
+    analysis_sink: Mutex<Option<Arc<dyn FlowSink>>>,
 }
 
 #[derive(Clone)]
@@ -102,6 +105,8 @@ impl Store {
             blobs,
             pending: Mutex::new(HashMap::new()),
             reader: Mutex::new(reader),
+            audit: Mutex::new(audit::Audit::default()),
+            analysis_sink: Mutex::new(None),
         });
         let (tx, rx) = mpsc::channel();
         let s2 = shared.clone();
@@ -114,6 +119,10 @@ impl Store {
             tx,
             writer: Arc::new(Mutex::new(Some(handle))),
         })
+    }
+
+    pub fn set_analysis_sink(&self, sink: Arc<dyn FlowSink>) {
+        *self.shared.analysis_sink.lock().unwrap() = Some(sink);
     }
 
     pub fn dir(&self) -> &Path {
@@ -258,7 +267,7 @@ impl Store {
 /// Plug the store into the data path.
 impl FlowSink for Store {
     fn publish(&self, event: FlowEvent) {
-        if let FlowEvent::Finished(rec) = event {
+        if let FlowEvent::Finished(rec) | FlowEvent::Snapshot(rec) = event {
             self.enqueue(rec);
         }
     }
@@ -494,10 +503,10 @@ fn writer_loop(mut conn: Connection, shared: Arc<Shared>, rx: mpsc::Receiver<Msg
         if !flows.is_empty() {
             if let Err(e) = write_batch(&mut conn, &shared, &flows) {
                 tracing::error!("store write failed: {e}");
-            }
-            let mut p = shared.pending.lock().unwrap();
-            for f in &flows {
-                p.remove(&f.id);
+                let mut p = shared.pending.lock().unwrap();
+                for f in &flows {
+                    p.remove(&f.id);
+                }
             }
         }
         for m in control {
@@ -558,6 +567,22 @@ fn sort_msg(m: Msg, flows: &mut Vec<Arc<FlowRecord>>, control: &mut Vec<Msg>, sh
 }
 
 fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]) -> Result<()> {
+    let analyzed: Vec<_> = {
+        let mut audit = shared.audit.lock().unwrap();
+        flows
+            .iter()
+            .map(|f| {
+                let mut rec = (**f).clone();
+                rec.flags |= if rec.state == FlowState::Receiving {
+                    decode::static_flags(&rec)
+                } else {
+                    audit.inspect(&rec)
+                };
+                Arc::new(rec)
+            })
+            .collect()
+    };
+    let flows = &analyzed;
     // Blobs first, outside the transaction.
     let mut prepared = Vec::with_capacity(flows.len());
     for f in flows {
@@ -677,6 +702,22 @@ fn write_batch(conn: &mut Connection, shared: &Shared, flows: &[Arc<FlowRecord>]
         }
     }
     tx.commit()?;
+    {
+        let mut pending = shared.pending.lock().unwrap();
+        for rec in flows {
+            pending.remove(&rec.id);
+        }
+    }
+    let sink = shared.analysis_sink.lock().unwrap().clone();
+    if let Some(sink) = sink {
+        for rec in flows {
+            sink.publish(if rec.state == FlowState::Receiving {
+                FlowEvent::Snapshot(rec.clone())
+            } else {
+                FlowEvent::Finished(rec.clone())
+            });
+        }
+    }
     Ok(())
 }
 
@@ -688,6 +729,7 @@ fn clear_all(conn: &mut Connection, shared: &Shared) -> Result<u64> {
     tx.execute("DELETE FROM flow_sdk_fts", [])?;
     tx.commit()?;
     shared.pending.lock().unwrap().clear();
+    *shared.audit.lock().unwrap() = audit::Audit::default();
     shared.blobs.wipe()?;
     let _ = conn.pragma_update(None, "wal_checkpoint", "TRUNCATE");
     Ok(removed as u64)
@@ -758,3 +800,10 @@ fn apply_merge(conn: &Connection, id: FlowId, other: FlowId) -> Result<()> {
     )?;
     Ok(())
 }
+
+mod import;
+pub use import::{from_har, HAR_IMPORT_LIMIT};
+
+mod export;
+mod models;
+pub use export::{export, export_weight, Artifact, EXPORT_KINDS};

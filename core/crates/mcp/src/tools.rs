@@ -14,7 +14,7 @@ pub enum ToolError {
 }
 
 fn fail<T>(msg: impl Into<String>) -> Result<T, ToolError> {
-    Err(ToolError::Failed(msg.into()))
+    Err(ToolError::Failed(redact::redact_text(&msg.into())))
 }
 
 type Out = Result<String, ToolError>;
@@ -82,10 +82,21 @@ pub fn definitions() -> Vec<Value> {
                 "max_body_chars":{"type":"integer","description":"Per body, default 4000, max 50000"}}), &["id"]), true),
         tool("diff_flows", "What differs between two flows: status, URL, headers and body lines.",
             schema(json!({"a":{"type":"integer"},"b":{"type":"integer"}}), &["a","b"]), true),
-        tool("export_har", "Write flows to a redacted HAR file in the data directory and return its path.",
+        tool("export_har", "Write flows to a redacted HAR file in the data directory and return its path. Needs app approval.",
             schema(json!({
                 "ids":{"type":"array","items":{"type":"integer"},"description":"Omit to export everything matching query"},
-                "query":{"type":"string"}}), &[]), true),
+                "query":{"type":"string"}}), &[]), false),
+        tool("export_traffic", "Return a redacted artifact inline; no file writes. kind: har, postman, k6, wiremock, msw, mockoon, openapi, dart, kotlin, swift, typescript, dio. Max 1 MiB output.", schema(json!({"kind":{"type":"string"},"ids":{"type":"array","items":{"type":"integer"}},"query":{"type":"string"}}), &["kind"]), true),
+        tool("save_export", "Save a redacted artifact in the data directory. Needs app approval.", schema(json!({"kind":{"type":"string"},"ids":{"type":"array","items":{"type":"integer"}},"query":{"type":"string"}}), &["kind"]), false),
+        tool("list_issues", "Flows with core-detected heuristic issues. Findings contain no captured values.", schema(json!({"query":{"type":"string"},"limit":{"type":"integer"},"offset":{"type":"integer"}}), &[]), true),
+        tool("scan_sensitive_data", "Read flows flagged by the bounded core sensitive-data scanner; no secret values returned.", schema(json!({"query":{"type":"string"},"limit":{"type":"integer"},"offset":{"type":"integer"}}), &[]), true),
+        tool("route_catalog", "Observed routes grouped by SDK route template or inferred numeric/UUID path. Counts/status/latency; bounded to 10000 recent flows and 500 routes.", schema(json!({"query":{"type":"string"}}), &[]), true),
+        tool("sdk_status", "SDK listener availability and aggregate counters. No pairing credentials.", schema(json!({}), &[]), true),
+        tool("list_sdk_devices", "Paired SDK device/app metadata and capture settings, redacted. No pairing codes or tokens.", schema(json!({}), &[]), true),
+        tool("list_sdk_flows", "SDK and merged traffic, with redacted SDK context.", schema(json!({"query":{"type":"string"},"limit":{"type":"integer"},"offset":{"type":"integer"}}), &[]), true),
+        tool("get_sdk_flow", "Read an SDK flow's headers, bodies and app context, redacted.", schema(json!({"id":{"type":"integer"},"bodies":{"type":"boolean"},"max_body_chars":{"type":"integer"}}), &["id"]), true),
+        tool("fetch_sdk_body", "Ask a paired SDK device for a lazy body and persist it locally. Needs approval. Returned content is redacted.", schema(json!({"id":{"type":"integer"},"part":{"type":"string","enum":["request","response"]}}), &["id","part"]), false),
+        tool("set_sdk_enabled", "Enable or disable SDK ingest. Needs approval.", schema(json!({"enabled":{"type":"boolean"}}), &["enabled"]), false),
         tool("list_rules", "SSL proxying, Map Local, and mock, map remote, rewrite, throttle and breakpoint rules.", schema(json!({}), &[]), true),
         tool("list_breakpoints", "Requests and responses held at breakpoints right now, with their content.", schema(json!({}), &[]), true),
 
@@ -109,6 +120,7 @@ pub fn definitions() -> Vec<Value> {
                 "to_port":{"type":"integer"}})), &["host"]), false),
         tool("create_rewrite", "Add, set or remove headers on matching requests and/or responses. Needs approval.",
             schema(with_match(json!({"request_headers":edit,"response_headers":edit})), &["host"]), false),
+        tool("create_scenario", "Create every-N failures, delay/jitter and simulated flaky upstream 502s. Needs approval.", schema(with_match(json!({"fail_one_in":{"type":"integer"},"delay_ms":{"type":"integer"},"jitter_ms":{"type":"integer"},"flaky_one_in":{"type":"integer"}})), &["host"]), false),
         tool("create_throttle", "Delay matching requests before they go upstream. Needs approval.",
             schema(with_match(json!({"delay_ms":{"type":"integer"}})), &["host","delay_ms"]), false),
         tool("add_breakpoint", "Hold matching requests and/or responses until resumed. Needs approval.",
@@ -235,7 +247,7 @@ fn describe_match(m: &rules::Match) -> String {
     out.push_str(if m.path.is_empty() { "/*" } else { &m.path });
     if !m.query.is_empty() {
         out.push('?');
-        out.push_str(&m.query);
+        out.push_str(&redact::redact_pairs(&m.query));
     }
     out
 }
@@ -255,6 +267,12 @@ fn flag_names(f: u32) -> Vec<&'static str> {
         (flags::EDITED, "edited"),
         (flags::BREAKPOINT, "breakpoint"),
         (flags::REPLAYED, "replayed"),
+        (flags::SLOW, "slow"),
+        (flags::DUPLICATE, "duplicate"),
+        (flags::LARGE_PAYLOAD, "large_payload"),
+        (flags::MISSING_CACHE, "missing_cache"),
+        (flags::N_PLUS_ONE, "n_plus_one"),
+        (flags::SENSITIVE, "sensitive"),
     ]
     .iter()
     .filter(|(bit, _)| f & bit != 0)
@@ -307,6 +325,9 @@ fn row(f: &FlowSummary) -> Value {
         "state": state_name(f.state),
         "ms": f.duration_ms.round(),
         "bytes": f.res_size,
+        "issues": decode::issue_labels(f.flags),
+        "source": format!("{:?}",f.source),
+        "sdk": {"device_id":f.device_id,"app_id":f.app_id,"name":f.name,"owner":f.owner,"screen":f.screen,"route_template":f.route_template,"client_stack":f.client_stack},
     });
     let m = o.as_object_mut().expect("object");
     if !f.content_type.is_empty() {
@@ -367,7 +388,7 @@ fn body_json(rec: &FlowRecord, request: bool, max_chars: usize) -> Value {
                 .collect::<Vec<_>>()
                 .join("&"),
         ),
-        decode::Kind::Text | decode::Kind::Html => redact::redact_text(&view.text),
+        decode::Kind::Text | decode::Kind::Html => redact::redact_body_text(&view.text),
         decode::Kind::Image => String::new(),
         _ => String::new(),
     };
@@ -406,6 +427,9 @@ async fn load(ctx: &ApiContext, id: u64) -> Result<std::sync::Arc<FlowRecord>, T
 // ------------------------------------------------------------- dispatch
 
 pub async fn call(ctx: &ApiContext, name: &str, args: Value) -> Out {
+    if !args.is_object() {
+        return fail("arguments must be an object");
+    }
     match name {
         "status" => status(ctx),
         "list_flows" => list(ctx, &args, false).await,
@@ -413,6 +437,27 @@ pub async fn call(ctx: &ApiContext, name: &str, args: Value) -> Out {
         "get_flow" => get_flow(ctx, &args).await,
         "diff_flows" => diff_flows(ctx, &args).await,
         "export_har" => export_har(ctx, &args).await,
+        "export_traffic" => artifact(ctx, &args, false, "export_traffic").await,
+        "save_export" => artifact(ctx, &args, true, "save_export").await,
+        "list_issues" => issue_list(ctx, &args, false).await,
+        "scan_sensitive_data" => issue_list(ctx, &args, true).await,
+        "route_catalog" => route_catalog(ctx, &args).await,
+        "sdk_status" => sdk_status(ctx),
+        "list_sdk_devices" => sdk_devices(ctx),
+        "list_sdk_flows" => {
+            let mut a = args.clone();
+            a["query"] = json!(format!("source:sdk {}", s(&args, "query").unwrap_or("")));
+            list(ctx, &a, false).await
+        }
+        "get_sdk_flow" => {
+            let id = n(&args, "id").ok_or_else(|| ToolError::Failed("id required".into()))?;
+            if load(ctx, id).await?.sdk.is_none() {
+                return fail("flow has no SDK context");
+            }
+            get_flow(ctx, &args).await
+        }
+        "fetch_sdk_body" => fetch_sdk_body(ctx, &args).await,
+        "set_sdk_enabled" => set_sdk_enabled(ctx, &args).await,
         "list_rules" => list_rules(ctx),
         "list_breakpoints" => list_breakpoints(ctx),
 
@@ -420,6 +465,7 @@ pub async fn call(ctx: &ApiContext, name: &str, args: Value) -> Out {
         "create_map_local" => create_map_local(ctx, &args).await,
         "create_map_remote" => create_map_remote(ctx, &args).await,
         "create_rewrite" => create_rewrite(ctx, &args).await,
+        "create_scenario" => create_scenario(ctx, &args).await,
         "create_throttle" => create_throttle(ctx, &args).await,
         "add_breakpoint" => add_breakpoint(ctx, &args).await,
         "set_rule_enabled" => set_rule_enabled(ctx, &args).await,
@@ -433,7 +479,12 @@ pub async fn call(ctx: &ApiContext, name: &str, args: Value) -> Out {
 }
 
 /// Apply the person's policy to a change. Returns when it may proceed.
-async fn authorize(ctx: &ApiContext, tool: &str, title: String, args: &Value) -> Result<(), ToolError> {
+async fn authorize(
+    ctx: &ApiContext,
+    tool: &str,
+    title: String,
+    args: &Value,
+) -> Result<(), ToolError> {
     match ctx.rules.mcp_writes() {
         rules::McpWrites::Off => fail(
             "The proxy is read-only for AI clients. The person can allow changes in the Proxy \
@@ -455,7 +506,11 @@ async fn authorize(ctx: &ApiContext, tool: &str, title: String, args: &Value) ->
 }
 
 fn to_text(v: Value) -> Out {
-    Ok(v.to_string())
+    let text = redact::redact_json_text(&v.to_string());
+    if text.len() > 1024 * 1024 {
+        return fail("result exceeds 1 MiB; narrow the query");
+    }
+    Ok(text)
 }
 
 // ------------------------------------------------------------- read tools
@@ -505,8 +560,8 @@ async fn list(ctx: &ApiContext, a: &Value, search: bool) -> Out {
         store.search(&q, offset, limit)
     })
     .await
-        .map_err(|e| ToolError::Failed(e.to_string()))?
-        .map_err(|e| ToolError::Failed(e.to_string()))?;
+    .map_err(|e| ToolError::Failed(e.to_string()))?
+    .map_err(|e| ToolError::Failed(e.to_string()))?;
     to_text(json!({
         "total": page.total,
         "offset": offset,
@@ -533,6 +588,8 @@ async fn get_flow(ctx: &ApiContext, a: &Value) -> Out {
         "protocol": rec.protocol,
         "app": rec.app,
         "flags": flag_names(rec.flags),
+        "issues": decode::issue_labels(rec.flags),
+        "sdk": rec.sdk.as_ref().map(|sdk|json!({"device_id":sdk.device_id,"app_id":sdk.app_id,"device_name":sdk.device_name,"app_name":sdk.app_name,"name":sdk.name,"owner":sdk.owner,"screen":sdk.screen,"route_template":sdk.route_template,"client_stack":sdk.client_stack})),
         "timings_ms": {
             "dns": ms(t.dns_us), "connect": ms(t.connect_us), "tls": ms(t.tls_us),
             "send": ms(t.send_us), "wait": ms(t.wait_us), "receive": ms(t.receive_us),
@@ -626,7 +683,11 @@ async fn diff_flows(ctx: &ApiContext, a: &Value) -> Out {
             &r.scheme,
             &r.host,
             r.port,
-            &if r.query.is_empty() { r.path.clone() } else { format!("{}?{}", r.path, r.query) },
+            &if r.query.is_empty() {
+                r.path.clone()
+            } else {
+                format!("{}?{}", r.path, r.query)
+            },
         )
     };
     to_text(json!({
@@ -641,59 +702,9 @@ async fn diff_flows(ctx: &ApiContext, a: &Value) -> Out {
 }
 
 async fn export_har(ctx: &ApiContext, a: &Value) -> Out {
-    let ids: Option<Vec<u64>> = a.get("ids").and_then(Value::as_array).map(|v| {
-        v.iter().filter_map(Value::as_u64).collect()
-    });
-    let q = Query {
-        text: s(a, "query").unwrap_or("").to_string(),
-        ..Default::default()
-    };
-    let store = ctx.store.clone();
-    let version = ctx.info.version.clone();
-    let dir = std::path::PathBuf::from(&ctx.info.data_dir).join("exports");
-    let res = tokio::task::spawn_blocking(move || -> Result<(String, usize, usize), String> {
-        store.flush();
-        let ids = match ids {
-            Some(v) if !v.is_empty() => v,
-            _ => store.ids(&q, 100_000).map_err(|e| e.to_string())?,
-        };
-        let mut recs = Vec::new();
-        for id in ids {
-            if let Some(r) = store.get(id).map_err(|e| e.to_string())? {
-                recs.push(r);
-            }
-        }
-        // Always redacted: this file is meant for an AI client to read.
-        let har = store::to_har(&recs, true, &version);
-        let count = har["log"]["entries"].as_array().map(|v| v.len()).unwrap_or(0);
-        let bytes = serde_json::to_vec_pretty(&har).map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        let path = dir.join(format!("proxy-{stamp}.har"));
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            let mut f = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&path)
-                .map_err(|e| e.to_string())?;
-            std::io::Write::write_all(&mut f, &bytes).map_err(|e| e.to_string())?;
-        }
-        Ok((path.display().to_string(), count, bytes.len()))
-    })
-    .await
-    .map_err(|e| ToolError::Failed(e.to_string()))?;
-    match res {
-        Ok((path, entries, bytes)) => to_text(json!({
-            "path": path, "entries": entries, "bytes": bytes, "redacted": true,
-        })),
-        Err(e) => fail(e),
-    }
+    let mut args = a.clone();
+    args["kind"] = json!("har");
+    artifact(ctx, &args, true, "export_har").await
 }
 
 fn list_rules(ctx: &ApiContext) -> Out {
@@ -742,7 +753,7 @@ fn list_breakpoints(ctx: &ApiContext) -> Out {
             } else if ct.contains("json") {
                 json!(clip(&redact::redact_json_text(&body_text), 8000))
             } else if std::str::from_utf8(&p.held.body).is_ok() {
-                json!(clip(&redact::redact_text(&body_text), 8000))
+                json!(clip(&redact::redact_body_text(&body_text), 8000))
             } else {
                 json!(format!("binary, {} bytes", p.held.body.len()))
             };
@@ -791,11 +802,15 @@ fn rule(a: &Value, action: rules::Action) -> Result<rules::Rule, ToolError> {
 
 async fn create_mock(ctx: &ApiContext, a: &Value) -> Out {
     let status = n(a, "status").unwrap_or(200);
-    let status = u16::try_from(status).map_err(|_| ToolError::Failed("status out of range".into()))?;
+    let status =
+        u16::try_from(status).map_err(|_| ToolError::Failed("status out of range".into()))?;
     let mut headers = header_pairs(a.get("headers"))?.unwrap_or_default();
     let body = match (a.get("json"), s(a, "body")) {
         (Some(v), _) if !v.is_null() => {
-            if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-type")) {
+            if !headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            {
                 headers.push(("content-type".into(), "application/json".into()));
             }
             v.to_string()
@@ -855,7 +870,9 @@ async fn create_map_local(ctx: &ApiContext, a: &Value) -> Out {
     )
     .await?;
     match ctx.rules.put_map_local(rule) {
-        Ok(r) => to_text(json!({"created": {"id": r.id, "kind": "map_local", "file": r.file.display().to_string()}})),
+        Ok(r) => to_text(
+            json!({"created": {"id": r.id, "kind": "map_local", "file": r.file.display().to_string()}}),
+        ),
         Err(e) => fail(e.to_string()),
     }
 }
@@ -873,7 +890,9 @@ async fn create_map_remote(ctx: &ApiContext, a: &Value) -> Out {
         "{}{}{}",
         s(a, "to_host").unwrap_or("(same host)"),
         n(a, "to_port").map(|p| format!(":{p}")).unwrap_or_default(),
-        s(a, "to_scheme").map(|x| format!(" over {x}")).unwrap_or_default()
+        s(a, "to_scheme")
+            .map(|x| format!(" over {x}"))
+            .unwrap_or_default()
     );
     authorize(
         ctx,
@@ -928,7 +947,11 @@ async fn add_breakpoint(ctx: &ApiContext, a: &Value) -> Out {
         "request" => rules::BreakpointPhase::Request,
         "response" => rules::BreakpointPhase::Response,
         "both" => rules::BreakpointPhase::Both,
-        other => return fail(format!("phase must be request, response or both, not {other:?}")),
+        other => {
+            return fail(format!(
+                "phase must be request, response or both, not {other:?}"
+            ))
+        }
     };
     let r = rule(
         a,
@@ -988,14 +1011,21 @@ async fn resume_breakpoint(ctx: &ApiContext, a: &Value) -> Out {
     }
     let abort = b(a, "abort").unwrap_or(false);
     let verdict = if abort {
-        flow::Verdict::Abort(s(a, "reason").unwrap_or("stopped by an AI client").to_string())
+        flow::Verdict::Abort(
+            s(a, "reason")
+                .unwrap_or("stopped by an AI client")
+                .to_string(),
+        )
     } else {
         flow::Verdict::Continue(flow::Edits {
             method: s(a, "method").map(str::to_string),
             path_and_query: s(a, "path").map(str::to_string),
             status: n(a, "status").map(|v| v.min(599) as u16),
             headers: header_pairs(a.get("headers"))?,
-            body: a.get("body").and_then(Value::as_str).map(|t| bytes::Bytes::from(t.to_string())),
+            body: a
+                .get("body")
+                .and_then(Value::as_str)
+                .map(|t| bytes::Bytes::from(t.to_string())),
         })
     };
     let edited = matches!(&verdict, flow::Verdict::Continue(e) if !e.is_empty());
@@ -1011,9 +1041,13 @@ async fn resume_breakpoint(ctx: &ApiContext, a: &Value) -> Out {
     )
     .await?;
     if ctx.rules.pauses().resume(id, verdict) {
-        to_text(json!({"flow_id": id, "result": if abort { "aborted" } else if edited { "edited" } else { "resumed" }}))
+        to_text(
+            json!({"flow_id": id, "result": if abort { "aborted" } else if edited { "edited" } else { "resumed" }}),
+        )
     } else {
-        fail(format!("flow {id} is no longer held (it may have timed out)"))
+        fail(format!(
+            "flow {id} is no longer held (it may have timed out)"
+        ))
     }
 }
 
@@ -1025,7 +1059,10 @@ async fn replay_request(ctx: &ApiContext, a: &Value) -> Out {
         method: s(a, "method").map(str::to_string),
         url: s(a, "url").map(str::to_string),
         headers: header_pairs(a.get("headers"))?,
-        body: a.get("body").and_then(Value::as_str).map(|t| bytes::Bytes::from(t.to_string())),
+        body: a
+            .get("body")
+            .and_then(Value::as_str)
+            .map(|t| bytes::Bytes::from(t.to_string())),
     };
     authorize(ctx, "replay_request", format!("Replay flow {id}"), a).await?;
     match api::replay_flow(ctx, id, edits).await {
@@ -1042,7 +1079,11 @@ async fn capture(ctx: &ApiContext, on: bool) -> Out {
     authorize(
         ctx,
         if on { "start_capture" } else { "stop_capture" },
-        if on { "Start recording".into() } else { "Pause recording".into() },
+        if on {
+            "Start recording".into()
+        } else {
+            "Pause recording".into()
+        },
         &json!({}),
     )
     .await?;
@@ -1051,4 +1092,181 @@ async fn capture(ctx: &ApiContext, on: bool) -> Out {
     }
     ctx.control.set_recording(on);
     to_text(json!({"recording": ctx.control.recording()}))
+}
+
+async fn create_scenario(ctx: &ApiContext, a: &Value) -> Out {
+    let get = |key| n(a, key).unwrap_or(0).min(u32::MAX as u64) as u32;
+    let r = rule(
+        a,
+        rules::Action::Scenario {
+            fail_one_in: get("fail_one_in"),
+            delay_ms: get("delay_ms"),
+            jitter_ms: get("jitter_ms"),
+            flaky_one_in: get("flaky_one_in"),
+        },
+    )?;
+    authorize(
+        ctx,
+        "create_scenario",
+        format!("Simulate failures for {}", describe_match(&r.matcher)),
+        a,
+    )
+    .await?;
+    put(ctx, r)
+}
+
+async fn artifact(ctx: &ApiContext, a: &Value, save: bool, tool_name: &str) -> Out {
+    let kind = s(a, "kind").unwrap_or("har").to_string();
+    if !store::EXPORT_KINDS.contains(&kind.as_str()) {
+        return fail("unsupported export kind");
+    }
+    if a.get("ids").is_some_and(|v| {
+        !v.is_array() || v.as_array().unwrap().iter().any(|id| id.as_u64().is_none())
+    }) {
+        return fail("ids must be an array of unsigned integers");
+    }
+    let selected: Vec<u64> = a["ids"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_u64)
+        .collect();
+    if selected.len() > 10000 {
+        return fail("select at most 10000 flows");
+    }
+    if save {
+        authorize(ctx, tool_name, format!("Save redacted {kind} export"), a).await?;
+    }
+    let query = Query {
+        text: s(a, "query").unwrap_or("").into(),
+        ..Default::default()
+    };
+    let store = ctx.store.clone();
+    let version = ctx.info.version.clone();
+    let dir = std::path::PathBuf::from(&ctx.info.data_dir).join("exports");
+    let result=tokio::task::spawn_blocking(move || -> Result<Value,String> {
+        store.flush();let ids=if selected.is_empty(){store.ids(&query,10001).map_err(|e|e.to_string())?}else{selected};
+        if ids.len()>10000{return Err("select at most 10000 flows".into());}
+        let mut records=Vec::with_capacity(ids.len());let mut total=0;
+        for id in ids{if let Some(r)=store.get(id).map_err(|e|e.to_string())?{total+=store::export_weight(&r);if total>32*1024*1024{return Err("source data exceeds 32 MiB".into());}records.push(r);}}
+        let artifact=store::export(&kind,&records,&version)?;
+        if save {
+            use std::{io::Write,os::unix::fs::OpenOptionsExt};
+            std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
+            let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e|e.to_string())?.as_nanos();
+            let path=dir.join(format!("neko-{kind}-{stamp}.{}",artifact.extension));
+            let mut file=std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path).map_err(|e|e.to_string())?;
+            file.write_all(&artifact.data).map_err(|e|e.to_string())?;
+            Ok(json!({"path":path.display().to_string(),"entries":artifact.count,"bytes":artifact.data.len(),"redacted":true,"note":UNTRUSTED}))
+        }else{
+            if artifact.data.len()>1024*1024{return Err("inline artifact exceeds 1 MiB; narrow the selection or use save_export with approval".into());}
+            Ok(json!({"kind":kind,"entries":artifact.count,"content":String::from_utf8_lossy(&artifact.data),"redacted":true,"note":UNTRUSTED}))
+        }
+    }).await;
+    match result {
+        Ok(Ok(v)) => to_text(v),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(e.to_string()),
+    }
+}
+async fn issue_list(ctx: &ApiContext, a: &Value, sensitive: bool) -> Out {
+    let mut args = a.clone();
+    args["query"] = json!(format!(
+        "is:{} {}",
+        if sensitive { "sensitive" } else { "issues" },
+        s(a, "query").unwrap_or("")
+    ));
+    list(ctx, &args, false).await
+}
+async fn route_catalog(ctx: &ApiContext, a: &Value) -> Out {
+    let store = ctx.store.clone();
+    let query = Query {
+        text: s(a, "query").unwrap_or("").into(),
+        ..Default::default()
+    };
+    let result=tokio::task::spawn_blocking(move ||->Result<Value,String>{
+        store.flush();let page=store.search(&query,0,10000).map_err(|e|e.to_string())?;
+        let mut catalog=std::collections::BTreeMap::<(String,String,String),Value>::new();
+        for flow in &page.items{
+            let path=flow.path.split('?').next().unwrap_or("");let route=if flow.route_template.is_empty(){decode::route_path(path)}else{flow.route_template.clone()};
+            let origin=format!("{}://{}:{}",flow.scheme,flow.host,flow.port);
+            let key=(origin.clone(),flow.method.clone(),route.clone());
+            if catalog.len()>=500&&!catalog.contains_key(&key){continue;}
+            let row=catalog.entry(key).or_insert_with(||json!({"origin":origin,"host":flow.host,"method":flow.method,"route":route,"count":0,"errors":0,"total_ms":0.0,"statuses":{},"sdk":!flow.app_id.is_empty()}));
+            let count=row["count"].as_u64().unwrap()+1;row["count"]=json!(count);
+            row["total_ms"]=json!(row["total_ms"].as_f64().unwrap()+flow.duration_ms);
+            if flow.status>=400||flow.state==flow::FlowState::Failed{row["errors"]=json!(row["errors"].as_u64().unwrap()+1);}
+            let status=flow.status.to_string();row["statuses"][&status]=json!(row["statuses"][&status].as_u64().unwrap_or(0)+1);
+        }
+        for row in catalog.values_mut(){row["mean_ms"]=json!(row["total_ms"].as_f64().unwrap()/row["count"].as_u64().unwrap() as f64);row.as_object_mut().unwrap().remove("total_ms");}
+        Ok(json!({"routes":catalog.into_values().collect::<Vec<_>>(),"sampled_flows":page.items.len(),"matching_flows":page.total,"note":UNTRUSTED}))
+    }).await;
+    match result {
+        Ok(Ok(v)) => to_text(v),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(e.to_string()),
+    }
+}
+fn sdk_status(ctx: &ApiContext) -> Out {
+    let Some(sdk) = &ctx.sdk else {
+        return to_text(json!({"available":false,"note":UNTRUSTED}));
+    };
+    let status = sdk.status();
+    let stats = sdk.stats();
+    to_text(
+        json!({"available":true,"enabled":status.enabled,"port":status.port,"sessions":status.sessions,"calls":stats.calls,"dropped_calls":stats.dropped_calls,"dropped_chunks":stats.dropped_chunks,"incomplete_calls":stats.incomplete_calls,"settings":sdk.settings(),"note":UNTRUSTED}),
+    )
+}
+fn sdk_devices(ctx: &ApiContext) -> Out {
+    let Some(sdk) = &ctx.sdk else {
+        return to_text(json!({"available":false,"devices":[],"note":UNTRUSTED}));
+    };
+    let snapshot = sdk.snapshot();
+    let devices:Vec<_>=snapshot.devices.iter().take(1000).map(|d|json!({"device_id":d.facts.device_id,"app_id":d.facts.app_id,"device_name":d.facts.device_name,"model":d.facts.device_model,"app_name":d.facts.app_name,"app_version":d.facts.app_version,"sdk_name":d.facts.sdk_name,"sdk_version":d.facts.sdk_version,"status":format!("{:?}",d.status),"connection":d.connection,"flows":d.flows,"dropped":d.dropped,"capture":d.config})).collect();
+    to_text(
+        json!({"available":true,"devices":devices,"pending_count":snapshot.pending.len(),"note":UNTRUSTED}),
+    )
+}
+async fn set_sdk_enabled(ctx: &ApiContext, a: &Value) -> Out {
+    let enabled = b(a, "enabled").ok_or_else(|| ToolError::Failed("enabled is required".into()))?;
+    let Some(sdk) = &ctx.sdk else {
+        return fail("SDK listener unavailable");
+    };
+    authorize(
+        ctx,
+        "set_sdk_enabled",
+        format!("{} SDK capture", if enabled { "Enable" } else { "Disable" }),
+        a,
+    )
+    .await?;
+    sdk.set_enabled(enabled)
+        .await
+        .map_err(|e| ToolError::Failed(e.to_string()))?;
+    sdk_status(ctx)
+}
+async fn fetch_sdk_body(ctx: &ApiContext, a: &Value) -> Out {
+    let id = n(a, "id").ok_or_else(|| ToolError::Failed("id is required".into()))?;
+    let part = match s(a, "part") {
+        Some("request") => store::BodyPart::Request,
+        Some("response") => store::BodyPart::Response,
+        _ => return fail("part must be request or response"),
+    };
+    let Some(sdk) = &ctx.sdk else {
+        return fail("SDK listener unavailable");
+    };
+    authorize(
+        ctx,
+        "fetch_sdk_body",
+        format!("Fetch SDK body for flow {id}"),
+        a,
+    )
+    .await?;
+    sdk.fetch_body(id, part)
+        .await
+        .map_err(|e| ToolError::Failed(e.to_string()))?;
+    let store = ctx.store.clone();
+    tokio::task::spawn_blocking(move || store.flush())
+        .await
+        .map_err(|e| ToolError::Failed(e.to_string()))?;
+    get_flow(ctx, &json!({"id":id,"bodies":true})).await
 }

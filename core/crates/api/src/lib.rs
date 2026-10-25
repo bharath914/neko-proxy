@@ -80,6 +80,7 @@ pub struct CoreInfo {
 }
 
 pub struct ApiContext {
+    pub ids: Arc<flow::IdGen>,
     pub store: store::Store,
     pub hub: Hub,
     pub control: Arc<dyn Control>,
