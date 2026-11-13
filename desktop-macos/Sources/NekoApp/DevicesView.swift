@@ -5,6 +5,7 @@ import NekoAPI
 @MainActor
 final class DevicesView: Page {
     let model: FlowModel
+    var onGuide: (() -> Void)?
     private var hintsOpen = false
     private var drawer: DeviceForm?
     private var drawerError: String?
@@ -31,7 +32,9 @@ final class DevicesView: Page {
         let accept = label("Accept SDK connections", .bodyMedium, Theme.text)
         let master = Switch(on: sdk?.enabled ?? false)
         master.onToggle = { [weak self] on in Task { await self?.admin.setSdk(enabled: on) } }
-        views.append(NSStackView.horizontal([title, NSView(), accept, master], spacing: 10))
+        let guide = Chip("How to connect a phone", symbol: "iphone", style: .accent)
+        guide.onClick = { [weak self] in self?.onGuide?() }
+        views.append(NSStackView.horizontal([title, NSView(), guide, accept, master], spacing: 10))
 
         let auto = Switch(on: sdk?.autoAcceptLocal ?? true)
         auto.onToggle = { [weak self] on in Task { await self?.admin.setSdk(autoAccept: on) } }
@@ -100,7 +103,7 @@ final class DevicesView: Page {
         let hdr = NSStackView.horizontal(Self.cols.map { cell(label($0.0, .caption, Theme.text3), $0.1) } + [NSView(), cell({ let l = label("Flows", .caption, Theme.text3); l.alignment = .right; return l }(), 64)], spacing: 10)
         var rows: [NSView] = [hdr]
         if model.devices.isEmpty {
-            rows.append(label("No devices have paired yet. Add the SDK to a debug build and run it.", .callout, Theme.text2))
+            rows.append(label("No devices have paired yet. Use “How to connect a phone” above, or add the SDK to a debug build and run it.", .callout, Theme.text2))
         }
         for d in model.devices { rows.append(deviceRow(d)) }
         return groupCard(rows, padding: NSEdgeInsets(top: 12, left: 16, bottom: 12, right: 16))

@@ -19,7 +19,7 @@ let package = Package(
         .executableTarget(
             name: "NekoApp",
             dependencies: ["NekoAPI"],
-            resources: [.copy("Resources/Fonts")]
+            resources: [.copy("Resources/Fonts"), .copy("Resources/Guide")]
         ),
         .testTarget(name: "NekoAPITests", dependencies: ["NekoAPI", "NekoApp"]),
     ]

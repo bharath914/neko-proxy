@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Connect a phone</title>
+<style>
+:root {
+  --bg: #ffffff; --card: #f5f5f7; --ink: #1c1c1e; --muted: #58585d; --faint: #8a8a90;
+  --line: rgba(60,60,67,.16); --accent: #007aff; --accent-soft: rgba(0,122,255,.12); --accent-ink: #fff;
+  --ok: #1f8a3c; --ok-soft: rgba(31,138,60,.12); --warn: #b85400; --warn-soft: rgba(210,95,0,.12);
+  --code: #f3f3f6; --ease: cubic-bezier(.22,.9,.28,1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e; --card: #242427; --ink: #f5f5f7; --muted: #b0b0b8; --faint: #80808a;
+    --line: rgba(84,84,88,.5); --accent: #0a84ff; --accent-soft: rgba(10,132,255,.22);
+    --ok: #32d74b; --ok-soft: rgba(50,215,75,.16); --warn: #ff9f0a; --warn-soft: rgba(255,159,10,.16);
+    --code: #0e0e10;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 1040px; margin: 0 auto; padding: 8px 20px 56px; }
+h1 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 0 0 6px; }
+p { margin: 0 0 8px; }
+.lede { color: var(--muted); margin-bottom: 18px; max-width: 60ch; }
+.mono, code { font: 12.5px/1.45 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace; }
+code { background: var(--code); padding: 1px 6px; border-radius: 5px; }
+button { font: inherit; color: inherit; }
+
+/* Mac status strip */
+.mac { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.pill b { color: var(--ink); font-weight: 600; }
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.pill.ok i { background: var(--ok); } .pill.warn i { background: var(--warn); }
+
+/* value chips: the things you type on the phone */
+.val { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 7px; padding: 5px 8px; cursor: pointer;
+  transition: background .2s, transform .2s var(--ease); }
+.val:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.val:active { transform: scale(.96); }
+.val svg { width: 11px; height: 11px; opacity: .7; }
+.val.done { color: var(--ok); background: var(--ok-soft); }
+
+/* path tabs */
+.tabs { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); margin-bottom: 18px; }
+.tabs button { border: 0; background: transparent; padding: 7px 16px; border-radius: 8px; font-weight: 500; color: var(--muted); cursor: pointer; transition: all .25s var(--ease); }
+.tabs button[aria-selected=true] { background: var(--bg); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+.tabnote { color: var(--muted); margin: -6px 0 16px; max-width: 70ch; }
+
+/* player */
+.player { display: grid; grid-template-columns: 330px 1fr; gap: 24px; align-items: start; }
+@media (max-width: 860px) { .player { grid-template-columns: 1fr; } }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+.step { position: relative; display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  border: 1px solid transparent; transition: background .3s var(--ease), border-color .3s; }
+.step + .step { margin-top: 2px; }
+.step::before { content: ""; position: absolute; left: 25px; top: 44px; bottom: -14px; width: 2px; background: var(--line); }
+.step:last-child::before { display: none; }
+.step .n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600;
+  background: var(--card); color: var(--muted); border: 1px solid var(--line); transition: all .3s var(--ease); z-index: 1; }
+.step .t { font-weight: 600; transition: color .3s; color: var(--muted); }
+.step .d { color: var(--muted); font-size: 13px; max-height: 0; opacity: 0; overflow: hidden; transition: max-height .45s var(--ease), opacity .3s; }
+.step.on { background: var(--card); border-color: var(--line); }
+.step.on .t { color: var(--ink); }
+.step.on .d { max-height: 260px; opacity: 1; margin-top: 4px; }
+.step.on .n { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); transform: scale(1.08); }
+.step.done .n { background: var(--ok); color: #fff; border-color: var(--ok); }
+.step.done .n span { display: none; } .step.done .n::after { content: "\2713"; }
+.step .d .val { margin: 2px 2px 2px 0; }
+.step .d b { color: var(--ink); font-weight: 600; }
+.warnbox { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12.5px; }
+
+.stagewrap { position: sticky; top: 8px; }
+.stage { position: relative; min-height: 640px; border-radius: 18px; background: var(--card); border: 1px solid var(--line);
+  display: grid; place-items: center; padding: 24px; overflow: hidden; }
+.ctl { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+.ctl button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 5px 12px; cursor: pointer; transition: transform .2s var(--ease), background .2s; }
+.ctl button:hover { background: var(--card); } .ctl button:active { transform: scale(.96); }
+.ctl .sp { flex: 1; }
+
+/* phone */
+.phone { width: 286px; height: 590px; border-radius: 44px; padding: 10px; background: #111; box-shadow: 0 24px 60px rgba(0,0,0,.28), inset 0 0 0 2px #333;
+  animation: rise .7s var(--ease) both; }
+.phone.and { border-radius: 30px; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: #f2f2f7; color: #111;
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+.and .screen { border-radius: 22px; background: #f7f7fa; font-family: "Roboto", system-ui, sans-serif; }
+.screen::before { content: ""; position: absolute; top: 8px; left: 50%; width: 76px; height: 22px; margin-left: -38px; border-radius: 12px; background: #111; z-index: 20; }
+.and .screen::before { width: 14px; height: 14px; margin-left: -7px; top: 10px; border-radius: 50%; }
+.sbar { height: 44px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 22px 5px; font-size: 12px; font-weight: 600; }
+.sub { position: absolute; inset: 0; padding-top: 0; background: inherit; opacity: 0; transform: translateX(18px); pointer-events: none;
+  transition: opacity .35s var(--ease), transform .45s var(--ease); }
+.sub.on { opacity: 1; transform: none; }
+.sub.before { transform: translateX(-18px); }
+.nav { display: flex; align-items: center; justify-content: space-between; padding: 4px 14px 8px; font-size: 15px; }
+.nav .ttl { font-weight: 600; } .nav .l, .nav .r { color: #007aff; min-width: 56px; }
+.nav .r { text-align: right; }
+.and .nav { justify-content: flex-start; gap: 14px; padding: 10px 16px; } .and .nav .l { color: #111; min-width: 0; } .and .nav .ttl { font-size: 18px; font-weight: 500; }
+.hdr { padding: 16px 16px 5px; font-size: 11px; color: #6c6c70; text-transform: uppercase; letter-spacing: .02em; }
+.grp { margin: 0 12px; background: #fff; border-radius: 10px; overflow: hidden; }
+.and .grp { margin: 0; background: transparent; border-radius: 0; }
+.rw { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 14px; border-bottom: .5px solid rgba(60,60,67,.18); font-size: 14px; min-height: 42px; }
+.rw:last-child { border-bottom: 0; } .rw .v { color: #8a8a90; display: flex; align-items: center; gap: 6px; }
+.and .rw { padding: 13px 18px; font-size: 15px; border: 0; }
+.chev::after { content: "\203A"; font-size: 18px; color: #c4c4c8; line-height: 1; margin-left: 2px; }
+.check { color: #007aff; font-weight: 700; opacity: 0; transition: opacity .25s; } .check.on { opacity: 1; }
+.field { flex: 1; text-align: right; min-height: 18px; color: #111; font-weight: 500; }
+.field:empty::before { content: attr(data-ph); color: #c4c4c8; font-weight: 400; }
+.and .field { text-align: left; flex: none; width: 100%; padding: 8px 0 4px; border-bottom: 2px solid #c4c4c8; }
+.and .fld { display: block; padding: 8px 18px; font-size: 12px; color: #6c6c70; } .and .fld .field { font-size: 15px; margin-top: 2px; }
+.typed { color: #007aff !important; font-weight: 600 !important; }
+.caret::after { content: ""; display: inline-block; width: 1.5px; height: 14px; background: #007aff; margin-left: 1px; vertical-align: -2px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.reveal { max-height: 0; overflow: hidden; transition: max-height .5s var(--ease); } .reveal.on { max-height: 260px; }
+.sw { width: 44px; height: 26px; border-radius: 13px; background: #d1d1d6; position: relative; transition: background .3s; flex: none; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .35s var(--ease); }
+.sw.on { background: #34c759; } .sw.on::after { transform: translateX(18px); }
+.btn { display: inline-block; padding: 10px 18px; border-radius: 10px; background: #007aff; color: #fff; font-weight: 600; font-size: 14px; }
+.and .btn { border-radius: 20px; background: #1a73e8; }
+.btn.sec { background: rgba(0,122,255,.12); color: #007aff; }
+.sheet { position: absolute; left: 20px; right: 20px; top: 40%; background: rgba(255,255,255,.96); border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.3); z-index: 12;
+  opacity: 0; transform: scale(.94); pointer-events: none; transition: all .3s var(--ease); text-align: center; overflow: hidden; }
+.sheet.on { opacity: 1; transform: none; }
+.sheet p { padding: 16px 16px 12px; margin: 0; font-size: 13px; }
+.sheet .acts { display: flex; border-top: .5px solid rgba(60,60,67,.25); } .sheet .acts span { flex: 1; padding: 12px; color: #007aff; font-weight: 600; }
+.sheet .acts span + span { border-left: .5px solid rgba(60,60,67,.25); }
+.and .sheet { border-radius: 24px; text-align: left; } .and .sheet .acts { border: 0; justify-content: flex-end; padding: 0 10px 10px; } .and .sheet .acts span { flex: none; padding: 8px 14px; border: 0 !important; color: #1a73e8; }
+.toast { position: absolute; left: 14px; right: 14px; bottom: 22px; background: #202124; color: #fff; padding: 11px 14px; border-radius: 10px; font-size: 13px; z-index: 12; opacity: 0; transform: translateY(10px); transition: all .4s var(--ease); }
+.toast.on { opacity: 1; transform: none; }
+.urlbar { position: absolute; left: 12px; right: 12px; bottom: 16px; height: 40px; border-radius: 12px; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.14); display: flex; align-items: center; padding: 0 12px; font-size: 14px; z-index: 6; }
+.and .urlbar { top: 40px; bottom: auto; border-radius: 20px; background: #eceff4; box-shadow: none; }
+.page { padding: 10px 16px; opacity: 0; transform: translateY(8px); transition: all .5s var(--ease); } .page.on { opacity: 1; transform: none; }
+.page h3 { font-size: 17px; margin: 14px 0 6px; letter-spacing: -.01em; } .page p { color: #58585d; font-size: 12.5px; }
+.stat { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; background: #e8f6ec; color: #17642d; font-size: 12.5px; margin: 4px 0; }
+.stat i { width: 8px; height: 8px; border-radius: 50%; background: #1f8a3c; }
+.file { display: flex; gap: 12px; align-items: center; padding: 12px 18px; } .file .ic { width: 32px; height: 36px; border-radius: 6px; background: #dfe3ea; }
+
+/* tags that explain a highlighted element */
+[data-tag] { position: relative; }
+.hl { outline: 2px solid #007aff; outline-offset: 2px; border-radius: 8px; animation: ring .9s var(--ease) 1; }
+@keyframes ring { 0% { outline-offset: 12px; outline-color: transparent; } 100% { outline-offset: 2px; } }
+.hl[data-tag]::after { content: attr(data-tag); position: absolute; right: 4px; top: calc(100% + 7px); z-index: 14; white-space: nowrap; background: #007aff; color: #fff;
+  font: 600 11px/1 -apple-system, system-ui, sans-serif; padding: 5px 8px; border-radius: 6px; animation: pop .45s var(--ease) both; }
+.hl[data-tag]::before { content: ""; position: absolute; right: 18px; top: calc(100% + 3px); width: 8px; height: 8px; background: #007aff; transform: rotate(45deg); z-index: 13; }
+@keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
+.hl.up[data-tag]::after { top: auto; bottom: calc(100% + 7px); } .hl.up[data-tag]::before { top: auto; bottom: calc(100% + 3px); }
+.hl.left[data-tag]::after { right: auto; left: 4px; } .hl.left[data-tag]::before { right: auto; left: 18px; }
+
+.finger { position: absolute; z-index: 30; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: rgba(120,120,128,.45);
+  border: 2px solid rgba(255,255,255,.9); pointer-events: none; opacity: 0; left: 50%; top: 80%;
+  transition: left .65s var(--ease), top .65s var(--ease), opacity .3s, transform .15s; }
+.finger.on { opacity: 1; } .finger.press { transform: scale(.78); background: rgba(120,120,128,.7); }
+
+/* wide scenes */
+.wide { position: relative; width: 100%; min-height: 590px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; animation: rise .7s var(--ease) both; }
+.wide .cap { color: var(--muted); font-size: 12.5px; text-align: center; max-width: 46ch; }
+.net { display: flex; align-items: center; justify-content: center; gap: 0; width: 100%; max-width: 600px; }
+.node { flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.node > svg { width: 120px; height: auto; }
+.link { flex: 1; height: 2px; position: relative; margin: 0 10px 56px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px); }
+.link .fill { position: absolute; inset: 0; background: var(--accent); transform-origin: left; transform: scaleX(0); transition: transform 1.2s var(--ease); }
+.link.on .fill { transform: scaleX(1); }
+.link .net-name { position: absolute; left: 50%; top: -34px; transform: translateX(-50%) scale(.9); opacity: 0; white-space: nowrap; padding: 6px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-weight: 600; font-size: 12.5px; transition: all .5s var(--ease) .5s; }
+.link.on .net-name { opacity: 1; transform: translateX(-50%); }
+.show { opacity: 0; transform: translateY(8px); transition: all .5s var(--ease); } .show.on { opacity: 1; transform: none; }
+
+.win { width: 100%; max-width: 640px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.14); }
+.win .bar { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--card); font-size: 12px; color: var(--muted); }
+.win .bar i { width: 10px; height: 10px; border-radius: 50%; background: #ff5f57; } .win .bar i:nth-child(2) { background: #febc2e; } .win .bar i:nth-child(3) { background: #28c840; }
+.win .bar span { margin-left: 8px; }
+.win .rows { min-height: 214px; }
+.fr { display: grid; grid-template-columns: 52px 1fr 48px auto; gap: 10px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.fr .m { font-weight: 600; font-size: 11px; color: var(--accent); } .fr .h { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .fr .s { color: var(--ok); font-weight: 600; }
+.fr .h small { color: var(--faint); margin-left: 6px; }
+.badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+.fr.hl2 { background: var(--accent-soft); }
+.ok-tag { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-weight: 600; font-size: 12.5px; }
+
+.ed { width: 100%; max-width: 560px; background: var(--code); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ed .tab { padding: 8px 14px; font: 12px ui-monospace, Menlo, monospace; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--card); display: flex; justify-content: space-between; align-items: center; }
+.ed pre { margin: 0; padding: 12px 14px; font: 12.5px/1.7 ui-monospace, "SF Mono", Menlo, monospace; min-height: 66px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ed .kw { color: #af52de; } .ed .st { color: #1f8a3c; } .ed .cm { color: var(--faint); }
+@media (prefers-color-scheme: dark) { .ed .kw { color: #bf5af2; } .ed .st { color: #32d74b; } }
+.ed .ln { display: inline-block; border-radius: 5px; padding: 0 4px; margin: 0 -4px; }
+.ed .ln.hl { outline: 0; background: var(--accent-soft); animation: none; }
+.mini { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; width: 100%; max-width: 560px; }
+.code6 { font: 700 26px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .12em; padding: 8px 12px; border-radius: 10px; display: inline-block; }
+.code6.hl { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+.twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; max-width: 620px; }
+@media (max-width: 560px) { .twocol { grid-template-columns: 1fr; } }
+.log { background: #111; color: #d6d6da; border-radius: 12px; padding: 12px 14px; font: 11.5px/1.6 ui-monospace, Menlo, monospace; }
+.log .t { color: #7b7b84; } .log b { color: #fff; }
+.mbtn { display: inline-block; padding: 7px 16px; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; font-size: 13px; }
+.toast-mac { position: absolute; top: 14px; right: 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.18);
+  display: flex; gap: 10px; align-items: center; min-width: 250px; transform: translateX(40px); opacity: 0; transition: all .55s var(--ease); z-index: 3; }
+.toast-mac.on { transform: none; opacity: 1; }
+
+/* help */
+.help { margin-top: 30px; }
+.help h2 { font-size: 17px; margin-bottom: 10px; }
+details { border-top: 1px solid var(--line); padding: 12px 0; } details:last-of-type { border-bottom: 1px solid var(--line); }
+summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+summary::after { content: "+"; color: var(--faint); font-weight: 400; font-size: 18px; line-height: 1; transition: transform .3s var(--ease); }
+details[open] summary::after { transform: rotate(45deg); }
+details p, details ul { color: var(--muted); margin: 8px 0 0; } details ul { padding-left: 18px; } details li { margin-bottom: 4px; }
+
+.reduce *, .reduce *::before, .reduce *::after { transition-duration: 0s !important; animation-duration: 0s !important; transition-delay: 0s !important; }
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0s !important; animation-duration: 0s !important; transition-delay: 0s !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Connect a phone</h1>
+  <p class="lede">Watch a phone's traffic in Neko in about two minutes. Pick what you want to debug, then follow the steps. Each one plays as a short animation, and the values you need are highlighted and one click to copy.</p>
+
+  <div class="mac" id="mac"></div>
+
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <p class="tabnote" id="tabnote"></p>
+
+  <div class="player">
+    <ol class="steps" id="steps"></ol>
+    <div class="stagewrap">
+      <div class="stage" id="stage" aria-live="polite"></div>
+      <div class="ctl">
+        <button id="prev" type="button">Back</button>
+        <button id="play" type="button">Pause</button>
+        <button id="next" type="button">Next</button>
+        <span class="sp"></span>
+        <span id="count"></span>
+      </div>
+    </div>
+  </div>
+
+  <section class="help">
+    <h2>If something doesn't work</h2>
+    <details><summary>The phone says it can't connect, or pages stop loading</summary>
+      <ul>
+        <li>The phone and this Mac must be on the same Wi-Fi. Guest networks and some office networks block devices from talking to each other.</li>
+        <li>Check the address you typed. It must be exactly the one shown at the top of this page, and the port <b data-fill="port">8899</b>.</li>
+        <li>macOS firewall: in System Settings, Network, Firewall, allow incoming connections for <b>Neko</b> and <b>nekod</b>.</li>
+        <li>Turn the proxy back to <b>Off</b> on the phone when you finish, or it will keep trying to reach this Mac.</li>
+      </ul></details>
+    <details><summary>Safari says "cannot open the page" for neko.local</summary>
+      <p>The phone isn't using the proxy yet. <code>neko.local</code> is a made-up name that only the proxy answers. Redo the Wi-Fi proxy step, then try again.</p></details>
+    <details><summary>HTTPS pages show a certificate warning</summary>
+      <p>On iPhone, installing the profile isn't enough. Turn on <b>Settings, General, About, Certificate Trust Settings</b>. On Android, install it as a <b>CA certificate</b>, not as a VPN or app certificate.</p></details>
+    <details><summary>One app still shows nothing, while Safari or Chrome work</summary>
+      <p>Android apps only trust certificates you install if they opt in, and some apps pin their own. Neko flags these connections. For your own app, use the <b>Your own app (SDK)</b> tab: it needs no certificate and no Wi-Fi settings.</p></details>
+    <details><summary>How do I undo all of this?</summary>
+      <p>Set the Wi-Fi proxy back to Off. To remove the certificate: iPhone, Settings, General, VPN &amp; Device Management, remove the profile. Android, Settings, search "credentials", User, remove it.</p></details>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var q = new URLSearchParams(location.search);
+  var D = { ip: q.get("ip") || "", port: q.get("port") || "8899", host: "neko.local", sdkPort: q.get("sdk") || "8897",
+            lan: q.has("lan") ? q.get("lan") === "1" : null, listening: q.get("ip") ? true : null, devices: 0, code: "482 913" };
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) document.documentElement.classList.add("reduce");
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var ipShown = function () { return D.ip || "your Mac's IP"; };
+  var COPY_ICON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="4" width="7" height="7" rx="1.5"/><path d="M8 2.5V2A1 1 0 0 0 7 1H2.5A1.5 1.5 0 0 0 1 2.5V7a1 1 0 0 0 1 1h.5"/></svg>';
+  function val(text, copy) { return '<button class="val" type="button" data-copy="' + esc(copy || text) + '">' + esc(text) + COPY_ICON + '</button>'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // ---- copy: through the app when embedded, else the browser
+  function copyText(text, btn) {
+    var done = function () { if (!btn) return; btn.classList.add("done"); setTimeout(function () { btn.classList.remove("done"); }, 1200); };
+    try { if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.neko) { webkit.messageHandlers.neko.postMessage({ copy: text }); done(); return; } } catch (e) {}
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+    var ta = document.createElement("textarea"); ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (e) {} document.body.removeChild(ta);
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-copy]"); if (b) copyText(b.getAttribute("data-copy"), b);
+  });
+
+  // ---- this Mac
+  function renderMac() {
+    var p = [];
+    if (D.ip) p.push('<span class="pill ok"><i></i>Proxy <b class="mono">' + esc(D.ip + ":" + D.port) + '</b></span>');
+    else p.push('<span class="pill warn"><i></i><b>No network address found.</b> Connect this Mac to Wi-Fi.</span>');
+    if (D.listening === false) p.push('<span class="pill warn"><i></i><b>Proxy isn\'t listening</b></span>');
+    if (D.lan === true) p.push('<span class="pill ok"><i></i>Phones on Wi-Fi <b>on</b></span>');
+    if (D.lan === false) p.push('<span class="pill warn"><i></i>Phones on Wi-Fi <b>off</b> (turn on in Devices for the SDK)</span>');
+    $("#mac").innerHTML = p.join("");
+    $$("[data-fill=port]").forEach(function (e) { e.textContent = D.port; });
+  }
+
+  // ---- scene helpers
+  var S = { tok: 0 };
+  function helper(tok, root) {
+    var h = {};
+    function live() { if (tok !== S.tok) throw "cancel"; }
+    h.sleep = function (ms) { return new Promise(function (r) { setTimeout(r, reduce ? 0 : ms); }).then(live); };
+    h.$ = function (s) { return $(s, root); };
+    h.on = function (s, on) { var e = typeof s === "string" ? $(s, root) : s; if (e) e.classList.toggle("on", on !== false); return e; };
+    h.go = function (id) {
+      var all = $$(".sub", root), hit = false;
+      all.forEach(function (s) { var is = s.id === id; if (is) hit = true; s.classList.toggle("on", is); s.classList.toggle("before", !is && !hit); });
+      return h.sleep(420);
+    };
+    h.type = function (el, text, ms) {
+      el = typeof el === "string" ? $(el, root) : el;
+      return (async function () {
+        el.classList.add("caret");
+        for (var i = 1; i <= text.length; i++) { el.textContent = text.slice(0, i); await h.sleep(ms || 42); }
+        el.classList.remove("caret"); el.classList.add("typed");
+      })();
+    };
+    h.hl = function (el, tag, cls) {
+      el = typeof el === "string" ? $(el, root) : el;
+      $$(".hl[data-tag]", root).forEach(function (o) { if (o !== el) o.classList.remove("hl"); });
+      if (tag) el.setAttribute("data-tag", tag); if (cls) el.classList.add(cls);
+      el.classList.remove("hl"); void el.offsetWidth; el.classList.add("hl"); return h.sleep(450);
+    };
+    h.unhl = function (el) { el = typeof el === "string" ? $(el, root) : el; el.classList.remove("hl"); };
+    h.tap = async function (el) {
+      el = typeof el === "string" ? $(el, root) : el;
+      var f = $(".finger", root); if (!f || !el) return;
+      var rr = root.getBoundingClientRect(), er = el.getBoundingClientRect();
+      f.classList.add("on");
+      f.style.left = (er.left - rr.left + Math.min(er.width / 2, 120)) + "px";
+      f.style.top = (er.top - rr.top + er.height / 2) + "px";
+      await h.sleep(750); f.classList.add("press"); await h.sleep(170); f.classList.remove("press"); await h.sleep(200);
+    };
+    h.hideFinger = function () { var f = $(".finger", root); if (f) f.classList.remove("on"); };
+    return h;
+  }
+
+  var FINGER = '<div class="finger"></div>';
+  function phone(os, subs) {
+    var t = '<span>9:41</span><span>' + (os === "and" ? "5G" : "●●●") + '</span>';
+    return '<div class="phone ' + os + '"><div class="screen">' + FINGER + subs + '</div></div>';
+  }
+  function sub(id, inner, first) { return '<div class="sub' + (first ? " on" : "") + '" id="' + id + '"><div class="sbar"><span>9:41</span><span>' + '●●●' + '</span></div>' + inner + '</div>'; }
+  function toast(id) { return '<div class="toast" id="' + id + '"></div>'; }
+
+  // ---- scenes: shared
+  function netScene() {
+    return '<div class="wide"><div class="net">' +
+      '<div class="node"><svg viewBox="0 0 120 84" fill="none" stroke="currentColor" stroke-width="2"><rect x="18" y="6" width="84" height="54" rx="7" fill="var(--bg)"/><path d="M6 68h108l-8 10H14z" fill="var(--bg)"/><circle cx="60" cy="33" r="9" stroke="var(--accent)"/><path d="M56 33l3 3 6-7" stroke="var(--accent)"/></svg>' +
+      '<span class="show" id="macip">' + (D.ip ? val(D.ip) : '<span class="pill warn">no address</span>') + '</span></div>' +
+      '<div class="link" id="lk"><div class="fill"></div><span class="net-name">Same Wi-Fi network</span></div>' +
+      '<div class="node"><svg viewBox="0 0 60 100" fill="none" stroke="currentColor" stroke-width="2" style="width:64px"><rect x="8" y="4" width="44" height="92" rx="10" fill="var(--bg)"/><circle cx="30" cy="86" r="3"/><path d="M20 40c6-6 14-6 20 0M24 46c4-4 8-4 12 0" stroke="var(--accent)"/><circle cx="30" cy="52" r="1.5" fill="var(--accent)" stroke="none"/></svg>' +
+      '<span class="show" id="phip"><span class="pill"><i></i>Your phone</span></span></div></div>' +
+      '<div class="cap show" id="ncap">Join the same Wi-Fi on both. The proxy on this Mac answers on ' + (D.ip ? val(D.ip + ":" + D.port) : "port " + D.port) + '.</div></div>';
+  }
+  async function netPlay(h) {
+    await h.sleep(300); h.on("#lk"); await h.sleep(900); h.on("#macip"); await h.sleep(250); h.on("#phip"); await h.sleep(500); h.on("#ncap");
+    if (D.ip) await h.hl($("#macip .val"));
+  }
+
+  var SAMPLE = [
+    ["GET", "api.example.com", "/v1/feed", "200"], ["POST", "api.example.com", "/v1/login", "200"], ["GET", "cdn.example.com", "/img/hero.webp", "200"],
+    ["GET", "api.example.com", "/v1/me", "200"], ["PUT", "api.example.com", "/v1/cart/42", "204"], ["GET", "maps.example.com", "/tiles/12/8/5", "200"]
+  ];
+  function trafficScene(sdk) {
+    var rows = SAMPLE.map(function (r, i) {
+      return '<div class="fr show" data-i="' + i + '"><span class="m">' + r[0] + '</span><span class="h">' + r[1] + '<small>' + r[2] + '</small>' +
+        (sdk ? ' <span class="badge">SDK</span>' + (i % 2 ? ' <span class="badge" style="background:var(--ok-soft);color:var(--ok)">Checkout</span>' : ' <span class="badge" style="background:var(--ok-soft);color:var(--ok)">Home</span>') : '') +
+        '</span><span class="s">' + r[3] + '</span><span class="mono" style="color:var(--faint)">' + (30 + i * 17) + ' ms</span></div>';
+    }).join("");
+    return '<div class="wide"><div class="win"><div class="bar"><i></i><i></i><i></i><span>Neko &middot; Traffic &middot; example</span></div><div class="rows" id="rows">' + rows + '</div></div>' +
+      '<div class="show" id="done"><span class="ok-tag">&#10003; ' + (sdk ? "Calls show up with the screen and route name" : "HTTPS is decrypted and readable") + '</span></div></div>';
+  }
+  async function trafficPlay(h) {
+    for (var i = 0; i < SAMPLE.length; i++) { h.on('[data-i="' + i + '"]'); await h.sleep(330); }
+    $('[data-i="1"]', $("#rows")).classList.add("hl2"); await h.sleep(500); h.on("#done");
+  }
+  function trafficRowsInit(stage) { $$(".fr[data-i]", stage).forEach(function (r) { r.classList.remove("on"); }); }
+
+  // ---- iPhone
+  function iosProxy() {
+    return phone("ios",
+      sub("w", '<div class="nav"><span class="l">&lsaquo; Wi-Fi</span><span class="ttl">Home Wi-Fi</span><span class="r"></span></div>' +
+        '<div class="hdr">&nbsp;</div><div class="grp"><div class="rw"><span>Auto-Join</span><span class="sw on"></span></div><div class="rw"><span>Private Wi-Fi Address</span><span class="v">Fixed</span></div></div>' +
+        '<div class="hdr">IPv4 address</div><div class="grp"><div class="rw chev"><span>Configure IP</span><span class="v">Automatic</span></div></div>' +
+        '<div class="hdr">HTTP proxy</div><div class="grp"><div class="rw" id="cfg"><span>Configure Proxy</span><span class="v">Off <span class="chev"></span></span></div></div>', true) +
+      sub("p", '<div class="nav"><span class="l">Cancel</span><span class="ttl">Configure Proxy</span><span class="r" id="save">Save</span></div><div class="hdr">&nbsp;</div>' +
+        '<div class="grp"><div class="rw"><span>Off</span><span class="check on" id="c0">&#10003;</span></div><div class="rw" id="man"><span>Manual</span><span class="check" id="c1">&#10003;</span></div><div class="rw"><span>Automatic</span><span class="check">&#10003;</span></div></div>' +
+        '<div class="reveal" id="rv"><div class="hdr">&nbsp;</div><div class="grp"><div class="rw" id="srv"><span>Server</span><span class="field" id="fsrv" data-ph="Required"></span></div><div class="rw" id="prt"><span>Port</span><span class="field" id="fprt" data-ph="Required"></span></div><div class="rw"><span>Authentication</span><span class="sw"></span></div></div></div>') +
+      toast("tt"));
+  }
+  async function iosProxyPlay(h) {
+    await h.sleep(400); await h.tap("#cfg"); await h.go("p"); await h.sleep(250);
+    await h.tap("#man"); h.on("#c1"); h.$("#c0").classList.remove("on"); h.on("#rv"); await h.sleep(500);
+    await h.tap("#srv"); await h.type("#fsrv", ipShown()); await h.hl("#srv", "Your Mac's address");
+    await h.tap("#prt"); await h.type("#fprt", D.port); await h.hl("#prt", "The proxy port");
+    await h.sleep(500); await h.tap("#save"); h.hideFinger();
+    var t = h.on("#tt"); t.textContent = "Proxy saved. Traffic now goes through this Mac."; await h.sleep(300);
+  }
+
+  function iosSafari() {
+    return phone("ios",
+      sub("sf", '<div class="page" id="pg"><h3>Install the proxy certificate</h3><p>Your device is talking to a debugging proxy.</p>' +
+        '<div class="stat"><i></i><span><b>Proxy</b> is receiving this device\'s traffic</span></div>' +
+        '<p style="margin-top:12px"><span class="btn" id="dl" data-tag="Tap to download">Download profile</span></p></div>' +
+        '<div class="urlbar"><span id="url" data-ph="" data-tag="Type this address"></span></div>' +
+        '<div class="sheet" id="al"><p><b>This website is trying to download a configuration profile.</b><br>Do you want to allow this?</p><div class="acts"><span>Ignore</span><span id="allow">Allow</span></div></div>', true) +
+      toast("tt"));
+  }
+  async function iosSafariPlay(h) {
+    var u = h.$("#url"); u.style.fontWeight = "500";
+    await h.sleep(500); await h.tap(".urlbar"); await h.type(u, "http://" + D.host, 55); await h.hl(u, "Type this address", "up");
+    h.hideFinger(); await h.sleep(400); h.on("#pg"); await h.sleep(900);
+    await h.tap("#dl"); await h.hl("#dl"); await h.sleep(500); h.unhl("#dl"); h.on("#al"); await h.sleep(500);
+    await h.tap("#allow"); h.on("#al", false); var t = h.on("#tt"); t.textContent = "Profile Downloaded. Open Settings to install it."; h.hideFinger();
+  }
+
+  function iosTrust() {
+    return phone("ios",
+      sub("st", '<div class="nav"><span class="l"></span><span class="ttl">Settings</span><span class="r"></span></div><div class="grp" style="margin-top:6px"><div class="rw chev" id="pd" style="color:#007aff;font-weight:500"><span>Profile Downloaded</span></div></div>' +
+        '<div class="grp" style="margin-top:14px"><div class="rw chev"><span>General</span></div><div class="rw chev"><span>Wi-Fi</span></div><div class="rw chev"><span>Privacy &amp; Security</span></div></div>', true) +
+      sub("in", '<div class="nav"><span class="l">Cancel</span><span class="ttl">Install Profile</span><span class="r" id="inst">Install</span></div>' +
+        '<div class="grp" style="margin-top:14px"><div class="rw" style="flex-direction:column;align-items:flex-start;gap:4px"><b>Neko Local CA</b><span style="color:#8a8a90">Not Signed</span></div><div class="rw"><span>Contains</span><span class="v">Certificate</span></div></div>') +
+      sub("tr", '<div class="nav"><span class="l">&lsaquo; About</span><span class="ttl">Certificate Trust</span><span class="r"></span></div><div class="hdr">Enable full trust for root certificates</div>' +
+        '<div class="grp"><div class="rw" id="row"><span>Neko Local CA</span><span class="sw" id="sw"></span></div></div>' +
+        '<div class="sheet" id="al" style="top:34%"><p><b>Root Certificate</b><br>Turn on trust for this certificate so HTTPS can be read.</p><div class="acts"><span>Cancel</span><span id="cont">Continue</span></div></div>') +
+      toast("tt"));
+  }
+  async function iosTrustPlay(h) {
+    await h.sleep(400); await h.tap("#pd"); await h.go("in"); await h.sleep(300);
+    await h.tap("#inst"); h.hideFinger(); await h.go("st");
+    var t = h.on("#tt"); t.textContent = "Profile installed. One more switch to flip."; await h.sleep(900); h.on("#tt", false);
+    await h.go("tr"); await h.sleep(300);
+    await h.tap("#sw"); h.on("#al"); await h.sleep(500); await h.tap("#cont"); h.on("#al", false); h.on("#sw");
+    await h.hl("#row", "Don't skip this one", "up"); h.hideFinger();
+  }
+
+  // ---- Android
+  function andProxy() {
+    return phone("and",
+      sub("n", '<div class="nav"><span class="l">&larr;</span><span class="ttl">Home Wi-Fi</span></div>' +
+        '<div class="grp"><div class="rw"><span>Signal strength</span><span class="v">Excellent</span></div><div class="rw"><span>Link speed</span><span class="v">433 Mbps</span></div>' +
+        '<div class="rw" id="adv"><span style="color:#1a73e8">Advanced options</span><span class="v">&#9662;</span></div></div>' +
+        '<div class="reveal" id="rv"><div class="rw" id="pxy" style="flex-direction:column;align-items:flex-start;gap:2px;padding-top:6px"><span style="font-size:12px;color:#6c6c70">Proxy</span><span id="pv" style="font-weight:500">None &#9662;</span></div>' +
+        '<div class="reveal" id="rv2"><label class="fld" id="srv">Proxy hostname<div class="field" id="fsrv" data-ph="proxy.example.com"></div></label><label class="fld" id="prt">Proxy port<div class="field" id="fprt" data-ph="8080"></div></label></div></div>' +
+        '<div style="position:absolute;right:18px;bottom:20px"><span class="btn" id="save">Save</span></div>', true) + toast("tt"));
+  }
+  async function andProxyPlay(h) {
+    await h.sleep(400); await h.tap("#adv"); h.on("#rv"); await h.sleep(500);
+    await h.tap("#pxy"); h.$("#pv").innerHTML = "Manual &#9662;"; h.on("#rv2"); await h.sleep(500);
+    await h.tap("#srv"); await h.type("#fsrv", ipShown()); await h.hl("#srv", "Your Mac's address", "left");
+    await h.tap("#prt"); await h.type("#fprt", D.port); await h.hl("#prt", "The proxy port", "left");
+    await h.sleep(400); await h.tap("#save"); h.hideFinger(); var t = h.on("#tt"); t.textContent = "Saved. Traffic now goes through this Mac.";
+  }
+  function andChrome() {
+    return phone("and",
+      sub("c", '<div class="urlbar"><span id="url"></span></div><div class="page" id="pg" style="padding-top:60px"><h3>Install the proxy certificate</h3><p>Your device is talking to a debugging proxy.</p>' +
+        '<div class="stat"><i></i><span><b>Proxy</b> is receiving this device\'s traffic</span></div>' +
+        '<p style="margin-top:12px"><span class="btn" id="dl" data-tag="Tap to download">Download certificate</span></p></div>', true) + toast("tt"));
+  }
+  async function andChromePlay(h) {
+    await h.sleep(500); await h.tap(".urlbar"); await h.type("#url", D.host, 60); await h.hl(".urlbar", "Type this address", "left");
+    h.hideFinger(); await h.sleep(300); h.on("#pg"); await h.sleep(800);
+    await h.tap("#dl"); await h.hl("#dl"); var t = h.on("#tt"); t.textContent = "neko-ca.crt downloaded"; h.hideFinger();
+  }
+  function andInstall() {
+    return phone("and",
+      sub("s1", '<div class="nav"><span class="ttl">Settings</span></div><div style="padding:0 16px"><div id="sr" style="background:#eceff4;border-radius:22px;padding:12px 16px;font-size:14px;min-height:44px"><span id="sq" data-tag="Search for this"></span></div></div>' +
+        '<div class="reveal" id="rs"><div class="rw" id="hit" style="flex-direction:column;align-items:flex-start;gap:2px"><span>CA certificate</span><span style="font-size:12px;color:#6c6c70">Security &rsaquo; Encryption &amp; credentials &rsaquo; Install a certificate</span></div></div>', true) +
+      sub("s2", '<div class="nav"><span class="l">&larr;</span><span class="ttl">CA certificate</span></div><div style="padding:8px 22px"><p style="font-size:16px;margin-bottom:6px">Your data won\'t be private</p><p style="color:#58585d">CA certificates are used to identify websites. Only install them from sources you trust.</p></div>' +
+        '<div style="position:absolute;right:20px;bottom:30px"><span class="btn" id="any">Install anyway</span></div>') +
+      sub("s3", '<div class="nav"><span class="l">&larr;</span><span class="ttl">Recent</span></div><div class="file" id="f"><div class="ic"></div><div><b>neko-ca.crt</b><div style="color:#6c6c70;font-size:12px">1 KB &middot; Downloads</div></div></div>') +
+      toast("tt"));
+  }
+  async function andInstallPlay(h) {
+    await h.sleep(400); await h.tap("#sr"); await h.type("#sq", "CA certificate", 55); await h.hl("#sq", "Search for this", "left");
+    h.on("#rs"); await h.sleep(500); await h.tap("#hit"); await h.go("s2"); await h.sleep(300);
+    await h.tap("#any"); await h.go("s3"); await h.sleep(300); await h.tap("#f"); h.hideFinger();
+    var t = h.on("#tt"); t.textContent = "CA certificate installed"; t.style.bottom = "60px";
+  }
+
+  // ---- SDK
+  function sdkCode() {
+    return '<div class="wide"><div class="ed"><div class="tab"><span>settings.gradle.kts</span><button class="val" type="button" data-copy="' + esc(SET) + '">Copy' + COPY_ICON + '</button></div><pre id="c1"></pre></div>' +
+      '<div class="ed"><div class="tab"><span>app/build.gradle.kts</span><button class="val" type="button" data-copy="' + esc(PLG) + '">Copy' + COPY_ICON + '</button></div><pre id="c2"></pre></div>' +
+      '<div class="cap">The plugin id and version are placeholders until the SDK is published.</div></div>';
+  }
+  var MAVEN = "https://bharath914.github.io/neko-proxy-sdk-maven/";
+  var SET = 'pluginManagement { repositories { maven(url = "' + MAVEN + '"); google(); mavenCentral(); gradlePluginPortal() } }\ndependencyResolutionManagement { repositories { maven(url = "' + MAVEN + '"); google(); mavenCentral() } }';
+  var PLG = 'plugins {\n    id("com.android.application")\n    id("dev.nekoproxy.inspector") version "0.1.0"\n}';
+  async function sdkCodePlay(h) {
+    var c1 = h.$("#c1"), c2 = h.$("#c2");
+    c1.innerHTML = 'pluginManagement { repositories { maven(url = "<span class="ln hl st" id="murl">' + "" + '</span>"); ... } }';
+    var url = h.$("#murl"); await h.sleep(300);
+    await h.type(url, MAVEN, 14); await h.hl(url);
+    c2.innerHTML = 'plugins {\n    id("com.android.application")\n    <span class="ln" id="pl"></span>\n}'; var pl = h.$("#pl");
+    await h.sleep(300); await h.type(pl, 'id("dev.nekoproxy.inspector") version "0.1.0"', 20); await h.hl(pl);
+    pl.classList.add("hl");
+  }
+  function sdkRun() {
+    return '<div class="wide"><div class="toast-mac" id="tm"><span class="ok-tag" style="padding:5px 9px">&#10003;</span><div><b>Pixel 8 connected</b><div style="color:var(--muted);font-size:12px">USB &middot; no approval needed</div></div></div>' +
+      '<div class="win" style="max-width:520px"><div class="bar"><i></i><i></i><i></i><span>Neko &middot; Devices</span></div><div class="rows" id="rows" style="min-height:130px">' +
+      '<div class="fr show on" style="grid-template-columns:1fr auto auto"><span class="h"><b>Pixel 8</b><small>Emulator, USB phones connect on their own</small></span><span class="badge" id="dv" style="opacity:0;transition:opacity .4s">Connected</span><span></span></div></div></div>' +
+      '<div class="twocol"><div class="mini"><b>Emulator or USB phone</b><p style="color:var(--muted);margin:4px 0 0">Run the app. It connects automatically.</p></div><div class="mini"><b>Phone on Wi-Fi</b><p style="color:var(--muted);margin:4px 0 0">Needs <i>Phones on Wi-Fi</i> on, and one approval (next step).</p></div></div></div>';
+  }
+  async function sdkRunPlay(h) { await h.sleep(500); h.on("#tm"); await h.sleep(500); h.$("#dv").style.opacity = 1; await h.hl(h.$("#dv")); }
+  function sdkPair() {
+    return '<div class="wide">' + FINGER +
+      '<div class="twocol"><div><div class="cap" style="text-align:left;margin-bottom:6px">On the phone (Logcat, tag Inspector)</div><div class="log"><span class="t">I/Inspector</span> Found desktop <b>My Mac</b><br><span class="t">I/Inspector</span> Pairing code <span class="code6" id="c1" style="font-size:13px;padding:1px 6px;color:#fff;letter-spacing:.06em">' + D.code + '</span><br><span class="t">I/Inspector</span> <span id="wt">Waiting for approval</span></div></div>' +
+      '<div><div class="cap" style="text-align:left;margin-bottom:6px">On this Mac (Devices)</div><div class="mini"><span class="badge">Pairing request</span><p style="margin:8px 0 6px">Pixel 8 wants to connect</p><span class="code6" id="c2" style="background:var(--code)">' + D.code + '</span><p style="margin:10px 0 0"><span class="mbtn" id="al">Allow</span></p></div></div></div>' +
+      '<div class="cap show" id="pc">If the two codes match, press Allow. If they don\'t, press Deny.</div></div>';
+  }
+  async function sdkPairPlay(h) {
+    h.$("#c1").style.outline = "0"; await h.sleep(400); h.on("#pc"); await h.hl(h.$("#c1"));
+    await h.sleep(300); h.$("#c2").classList.add("hl"); await h.sleep(900);
+    await h.tap("#al"); h.$("#wt").innerHTML = "<b>Paired</b>"; h.$("#al").textContent = "Allowed"; h.hideFinger();
+  }
+
+  // ---- paths
+  function makeTraffic(sdk) { return function () { return trafficScene(sdk); }; }
+  var PATHS = [
+    { id: "ios", title: "iPhone", note: "Any iPhone or iPad. You set the Wi-Fi proxy once, then install a certificate so HTTPS can be read. Works for every app and Safari.",
+      steps: [
+        { t: "Join the same Wi-Fi", d: function () { return "Put your iPhone on the same Wi-Fi as this Mac. This Mac's address is " + (D.ip ? val(D.ip) : "shown at the top once it has one") + "."; }, scene: netScene, play: netPlay },
+        { t: "Set the Wi-Fi proxy", d: function () { return "Settings, Wi-Fi, tap the <b>i</b> next to your network, <b>Configure Proxy</b>, <b>Manual</b>. Server " + val(ipShown(), D.ip) + " Port " + val(D.port) + " then <b>Save</b>."; }, scene: iosProxy, play: iosProxyPlay },
+        { t: "Open neko.local in Safari", d: function () { return "In <b>Safari</b> (other browsers can't install profiles) go to " + val("http://" + D.host) + " and tap <b>Download profile</b>, then <b>Allow</b>."; }, scene: iosSafari, play: iosSafariPlay },
+        { t: "Install and trust it", d: function () { return "Open <b>Settings</b>, tap <b>Profile Downloaded</b>, then <b>Install</b>. Then go to <b>General, About, Certificate Trust Settings</b> and switch on <b>Neko Local CA</b>." + '<div class="warnbox">Without that last switch, HTTPS still fails.</div>'; }, scene: iosTrust, play: iosTrustPlay },
+        { t: "Watch the traffic", d: function () { return "Open any app or website on the phone. Requests appear in the <b>Traffic</b> screen on this Mac."; }, scene: makeTraffic(false), play: trafficPlay }
+      ] },
+    { id: "android", title: "Android", note: "Browsers like Chrome work with this. Many apps ignore certificates you install, so for your own app use the SDK tab, which needs no certificate.",
+      steps: [
+        { t: "Join the same Wi-Fi", d: function () { return "Put your phone on the same Wi-Fi as this Mac. This Mac's address is " + (D.ip ? val(D.ip) : "shown at the top once it has one") + "."; }, scene: netScene, play: netPlay },
+        { t: "Set the Wi-Fi proxy", d: function () { return "Settings, Network, Wi-Fi, tap the gear next to your network, <b>Advanced options</b>, Proxy <b>Manual</b>. Hostname " + val(ipShown(), D.ip) + " Port " + val(D.port) + " then <b>Save</b>."; }, scene: andProxy, play: andProxyPlay },
+        { t: "Open neko.local in Chrome", d: function () { return "In Chrome go to " + val(D.host) + " and tap <b>Download certificate</b>."; }, scene: andChrome, play: andChromePlay },
+        { t: "Install it as a CA certificate", d: function () { return "Open Settings and search for " + val("CA certificate") + ". Choose it, tap <b>Install anyway</b> and pick <code>neko-ca.crt</code>." + '<div class="warnbox">Set a screen lock first if the phone has none.</div>'; }, scene: andInstall, play: andInstallPlay },
+        { t: "Watch the traffic", d: function () { return "Open Chrome or any app that trusts user certificates. Requests appear in the <b>Traffic</b> screen on this Mac."; }, scene: makeTraffic(false), play: trafficPlay }
+      ] },
+    { id: "sdk", title: "Your own app (SDK)", note: "For an app you build. No proxy, no certificate, no Wi-Fi settings. Debug builds only, and the release build contains none of it. Android is ready; the iOS package exists but hasn't been run on a device yet.",
+      steps: [
+        { t: "Add the Gradle plugin", d: function () { return "Add the Maven repository to <code>settings.gradle.kts</code> and the plugin to your app module. Nothing else to configure."; }, scene: sdkCode, play: sdkCodePlay },
+        { t: "Run the app", d: function () { return "Start it on an <b>emulator</b> or a <b>USB phone</b>. It connects on its own and a toast appears here."; }, scene: sdkRun, play: sdkRunPlay },
+        { t: "Phone on Wi-Fi? Match the code", d: function () { return "Turn on <b>Phones on Wi-Fi</b> in Devices. The phone shows a six-digit code in Logcat. If it matches the one here, press <b>Allow</b>."; }, scene: sdkPair, play: sdkPairPlay },
+        { t: "See every call", d: function () { return "Calls appear in <b>Traffic</b> with an <b>SDK</b> badge, the screen they came from and, for Retrofit, the route."; }, scene: makeTraffic(true), play: trafficPlay }
+      ] }
+  ];
+
+  // ---- player
+  var path = 0, cur = 0, auto = !reduce, timer = null;
+  function renderTabs() {
+    var t = $("#tabs"); t.innerHTML = "";
+    PATHS.forEach(function (p, i) {
+      var b = document.createElement("button"); b.type = "button"; b.role = "tab"; b.textContent = p.title;
+      b.setAttribute("aria-selected", String(i === path));
+      b.onclick = function () { path = i; renderTabs(); renderSteps(); play(0); };
+      t.appendChild(b);
+    });
+    $("#tabnote").textContent = PATHS[path].note;
+  }
+  function renderSteps() {
+    var ol = $("#steps"); ol.innerHTML = "";
+    PATHS[path].steps.forEach(function (s, i) {
+      var li = document.createElement("li"); li.className = "step"; li.dataset.i = i;
+      li.innerHTML = '<span class="n"><span>' + (i + 1) + '</span></span><div><div class="t">' + esc(s.t) + '</div><div class="d">' + s.d() + '</div></div>';
+      li.onclick = function (e) { if (e.target.closest("[data-copy]")) return; play(i); };
+      ol.appendChild(li);
+    });
+  }
+  function mark() {
+    $$(".step").forEach(function (li, i) { li.classList.toggle("on", i === cur); li.classList.toggle("done", i < cur); });
+    $("#count").textContent = "Step " + (cur + 1) + " of " + PATHS[path].steps.length;
+    $("#prev").disabled = cur === 0; $("#next").disabled = cur === PATHS[path].steps.length - 1;
+    $("#play").textContent = auto ? "Pause" : "Play";
+  }
+  async function play(i) {
+    clearTimeout(timer); cur = i; var tok = ++S.tok; mark();
+    var st = $("#stage"), step = PATHS[path].steps[i];
+    st.innerHTML = step.scene(); trafficRowsInit(st);
+    var root = $(".screen", st) || $(".wide", st); var h = helper(tok, root);
+    try {
+      await h.sleep(250); await step.play(h);
+      if (tok !== S.tok) return;
+      if (auto && cur < PATHS[path].steps.length - 1) timer = setTimeout(function () { if (tok === S.tok) play(cur + 1); }, reduce ? 0 : 2400);
+      else if (cur === PATHS[path].steps.length - 1) { auto = false; mark(); }
+    } catch (e) { if (e !== "cancel") throw e; }
+  }
+  $("#prev").onclick = function () { auto = false; if (cur > 0) play(cur - 1); };
+  $("#next").onclick = function () { auto = false; if (cur < PATHS[path].steps.length - 1) play(cur + 1); };
+  $("#play").onclick = function () {
+    if (auto) { auto = false; clearTimeout(timer); mark(); }
+    else { auto = true; play(cur === PATHS[path].steps.length - 1 ? 0 : cur); }
+  };
+
+  // The app calls this when the address or settings change.
+  window.nekoUpdate = function (d) {
+    var was = D.ip + D.port + D.lan; Object.assign(D, d || {});
+    renderMac();
+    if (was !== D.ip + D.port + D.lan) { var keep = cur; renderSteps(); mark(); if (!window.__started) return; play(keep); }
+  };
+  if (window.NEKO) Object.assign(D, window.NEKO);
+  renderMac(); renderTabs(); renderSteps(); window.__started = true; play(0);
+})();
+</script>
+</body>
+</html>

@@ -310,6 +310,12 @@ enum Fixtures {
             model.composer.loadFixture(.init(), draft: ComposerModel.blank(), response: nil, sent: nil)
             snap("mac-composer-empty-\(scheme)")
             wc.root.setSection(.settings)
+            for t in SettingsView.Tab.allCases where t != .phone {  // the web page is not captured by cacheDisplay
+                wc.root.settings.showTab(t)
+                snap("mac-settings-\(t)-\(scheme)")
+            }
+            wc.root.settings.snapshotGuide(to: dir + "/mac-settings-phone-\(scheme).png", after: 9)
+            wc.root.settings.showTab(.general)
             snap("mac-settings-\(scheme)")
             wc.root.setSection(.breakpoints)
             wc.root.approval.update(approvalFixture())

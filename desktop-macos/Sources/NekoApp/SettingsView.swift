@@ -9,12 +9,71 @@ final class SettingsView: NSView {
     private let scroll = NSScrollView()
     private let doc = FlippedView()
     private let column = NSStackView()
+    private let body = NSView()
+    private let tabs = Segmented(Tab.allCases.map(\.title), selected: 0)
+    private lazy var phone = ConnectPhoneView(model: model)
     override var isFlipped: Bool { true }
+
+    /// One topic per screen, so nothing is buried in a long scroll.
+    enum Tab: Int, CaseIterable {
+        case general, certificate, ai, phone
+        var title: String {
+            switch self {
+            case .general: return "General"
+            case .certificate: return "Certificate"
+            case .ai: return "AI clients"
+            case .phone: return "Connect a phone"
+            }
+        }
+    }
+    private(set) var tab: Tab = .general
+
+    /// Screenshot harness only: the guide page after `seconds` of playing.
+    func snapshotGuide(to path: String, after seconds: Double) {
+        showTab(.phone)
+        let end = Date().addingTimeInterval(seconds)
+        while Date() < end { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+        phone.snapshot(to: path)
+    }
+
+    func showTab(_ t: Tab) {
+        tab = t
+        tabs.selected = t.rawValue
+        rebuild()
+    }
 
     init(model: FlowModel) {
         self.model = model
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
+        let header = FlippedView()
+        header.translatesAutoresizingMaskIntoConstraints = false
+        let title = label("Settings", .largeTitle, Theme.text)
+        tabs.onChange = { [weak self] i in self?.showTab(Tab(rawValue: i) ?? .general) }
+        let hs = NSStackView.horizontal([title, NSView(), tabs], spacing: 12)
+        hs.alignment = .centerY
+        hs.translatesAutoresizingMaskIntoConstraints = false
+        header.addSubview(hs)
+        let hw = hs.widthAnchor.constraint(equalToConstant: 700)
+        hw.priority = .defaultHigh
+        body.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(header)
+        addSubview(body)
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: topAnchor),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor),
+            header.heightAnchor.constraint(equalToConstant: 84),
+            hs.centerXAnchor.constraint(equalTo: header.centerXAnchor),
+            hs.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -10),
+            hs.leadingAnchor.constraint(greaterThanOrEqualTo: header.leadingAnchor, constant: 24),
+            hs.trailingAnchor.constraint(lessThanOrEqualTo: header.trailingAnchor, constant: -24),
+            hw,
+            body.topAnchor.constraint(equalTo: header.bottomAnchor),
+            body.leadingAnchor.constraint(equalTo: leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: trailingAnchor),
+            body.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
@@ -27,8 +86,8 @@ final class SettingsView: NSView {
         column.spacing = 14
         column.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(column)
-        addSubview(scroll)
-        scroll.pin(to: self)
+        body.addSubview(scroll)
+        scroll.pin(to: body)
         let clip = scroll.contentView
         let w = column.widthAnchor.constraint(equalToConstant: 700)
         w.priority = .defaultHigh
@@ -36,7 +95,7 @@ final class SettingsView: NSView {
             doc.topAnchor.constraint(equalTo: clip.topAnchor),
             doc.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
             doc.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
-            column.topAnchor.constraint(equalTo: doc.topAnchor, constant: 32),
+            column.topAnchor.constraint(equalTo: doc.topAnchor, constant: 8),
             column.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -40),
             column.centerXAnchor.constraint(equalTo: doc.centerXAnchor),
             column.leadingAnchor.constraint(greaterThanOrEqualTo: doc.leadingAnchor, constant: 24),
@@ -119,9 +178,25 @@ final class SettingsView: NSView {
     }
 
     func rebuild() {
+        let onPhone = tab == .phone
+        scroll.isHidden = onPhone
+        if onPhone {
+            if phone.superview == nil { body.addSubview(phone); phone.pin(to: body) }
+            phone.isHidden = false
+            phone.update()
+            return
+        }
+        if phone.superview != nil { phone.isHidden = true }
         column.arrangedSubviews.forEach { column.removeArrangedSubview($0); $0.removeFromSuperview() }
-        column.addArrangedSubview(label("Settings", .largeTitle, Theme.text))
-        column.setCustomSpacing(22, after: column.arrangedSubviews.last!)
+        switch tab {
+        case .general: appearanceSection()
+        case .certificate: certificateSection()
+        case .ai: aiSection()
+        case .phone: break
+        }
+    }
+
+    private func appearanceSection() {
         column.addArrangedSubview(label("Appearance", .headline, Theme.text))
         column.setCustomSpacing(3, after: column.arrangedSubviews.last!)
         column.addArrangedSubview(label("Follow the system, or always use light or dark.", .callout, Theme.text2))
@@ -130,7 +205,22 @@ final class SettingsView: NSView {
         let themeRow = NSStackView.horizontal([label("Theme", .body, Theme.text), NSView(), theme], spacing: 12)
         themeRow.alignment = .centerY
         full(card([themeRow]))
+
+        // Pointers to the other screens, so General is never a dead end.
         column.setCustomSpacing(20, after: column.arrangedSubviews.last!)
+        column.addArrangedSubview(label("Set up", .headline, Theme.text))
+        func jump(_ t: Tab, _ sub: String) -> NSView {
+            let go = Chip("Open", symbol: "arrow.right", style: .text); go.onClick = { [weak self] in self?.showTab(t) }
+            return row(t.title, sub, trailing: [go])
+        }
+        full(card([
+            jump(.certificate, "Trust the Neko certificate so HTTPS traffic can be read."),
+            jump(.phone, "Step-by-step animated guide for iPhone, Android and your own app."),
+            jump(.ai, "Let Claude Code or another AI client read captured traffic."),
+        ]))
+    }
+
+    private func certificateSection() {
         column.addArrangedSubview(label("Certificate", .headline, Theme.text))
         column.setCustomSpacing(3, after: column.arrangedSubviews.last!)
         column.addArrangedSubview(label("HTTPS traffic is decrypted with a certificate made for this computer. Trust it once so apps accept it.", .callout, Theme.text2))
@@ -193,13 +283,14 @@ final class SettingsView: NSView {
 
         column.setCustomSpacing(20, after: column.arrangedSubviews.last!)
         full(card([installBlock, browsers, envBlock]))
-        aiSection()
+        let phoneNote = Chip("Phone certificate: open the guide", symbol: "iphone", style: .text)
+        phoneNote.onClick = { [weak self] in self?.showTab(.phone) }
+        column.addArrangedSubview(phoneNote)
     }
 
     private func aiSection() {
         let head = label("AI clients", .headline, Theme.text)
         column.addArrangedSubview(head)
-        column.setCustomSpacing(20, after: column.arrangedSubviews[column.arrangedSubviews.count - 2])
         column.setCustomSpacing(3, after: head)
         column.addArrangedSubview(label("Let a local AI client such as Claude Code read captured traffic and, with your approval, change it.", .callout, Theme.text2))
         guard let mcp = model.admin.mcp, mcp.enabled else {
