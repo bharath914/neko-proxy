@@ -56,6 +56,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 install -m 0755 "$SWIFT_BIN/Neko" "$APP/Contents/MacOS/Neko"
 install -m 0755 "$NEKOD" "$APP/Contents/MacOS/nekod"
 cp -R desktop-macos/Sources/NekoApp/Resources/Fonts "$APP/Contents/Resources/Fonts"
+cp -R desktop-macos/Sources/NekoApp/Resources/Guide "$APP/Contents/Resources/Guide"
 sed "s/@VERSION@/$VERSION/g" packaging/macos/Info.plist.in > "$APP/Contents/Info.plist"
 
 echo "==> icon"

@@ -190,6 +190,7 @@ final class RootViewController: NSViewController, NSSplitViewDelegate {
             Task { await self?.model.replay(id) }
         }
         detail.onCertSettings = { [weak self] in self?.setSection(.settings) }
+        devicesView.onGuide = { [weak self] in self?.settings.showTab(.phone); self?.setSection(.settings) }
         settings.onInstall = { [weak self] in self?.installCA() }
         settings.onShow = { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) }
         detail.onMock = { [weak self] in self?.newRule(.mock) }
